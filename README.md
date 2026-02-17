@@ -32,22 +32,11 @@ NFC(Near Field Communication) 기반 사용자 인증을 개발하여 인가된 
 
 ## 프로젝트 개략도
 
-### 프로젝트 시나리오
+### 시나리오
 <img width="1355" height="932" alt="Image" src="https://github.com/user-attachments/assets/b1d5a2c2-7f9a-4134-b2aa-58194057f0b5" />
 
 ### Deployment Diagram
 <img width="1734" height="1342" alt="Image" src="https://github.com/user-attachments/assets/a56becdf-aa3d-44c9-96e6-cf5442977b93" />
-
-## 시스템 구조
-
-```text
-[BLE Beacon / RTLS] ----\
-                         +--> [Backend API] --> [PostgreSQL]
-[NFC 인증 단말] --------/           |
-                                +--> [Hyperledger Besu]
-                                        (이력 해시 저장)
-```
-
 
 ## 기술 스택
 
