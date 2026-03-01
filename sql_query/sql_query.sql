@@ -18,13 +18,14 @@ CREATE TABLE IF NOT EXISTS users (
   display_name   TEXT NOT NULL,
   role           TEXT NOT NULL CHECK (role IN ('admin', 'staff')),
   department     TEXT,
+  position       TEXT,
   password_hash  TEXT NOT NULL,
   is_active      BOOLEAN NOT NULL DEFAULT TRUE,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 3) Tag / equipment master
--- Keep column names aligned with back/registration.py.
+-- Keep column names aligned with backend/registration.py.
 CREATE TABLE IF NOT EXISTS tags (
   tag_id          TEXT PRIMARY KEY,
   equipment_name  TEXT,

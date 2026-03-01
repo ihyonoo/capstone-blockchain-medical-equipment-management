@@ -66,7 +66,7 @@ uvicorn app.main:app --reload
 실행:
 
 ```bash
-cd front
+cd frontend
 npm install
 npm run dev
 ```
