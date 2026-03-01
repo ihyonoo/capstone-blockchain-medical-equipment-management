@@ -34,6 +34,11 @@ type LiveLocationItem = {
   is_stale: boolean;
 };
 
+type LiveReaderItem = {
+  reader_id: string;
+  location: string;
+};
+
 type EquipmentViewItem = {
   id: string;
   name: string;
@@ -96,6 +101,7 @@ export default function EquipmentSearch() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [lastSyncTs, setLastSyncTs] = useState<number | null>(null);
+  const [readerLocations, setReaderLocations] = useState<string[]>([]);
 
   const equipment = useMemo<EquipmentViewItem[]>(() => {
     return liveItems.map((item) => ({
@@ -121,8 +127,8 @@ export default function EquipmentSearch() {
   }, [equipment]);
 
   const locationPanels = useMemo(
-    () => locations.filter((loc) => loc !== '전체'),
-    [locations],
+    () => Array.from(new Set([...readerLocations, ...locations.filter((loc) => loc !== '전체')])),
+    [readerLocations, locations],
   );
 
   const filteredEquipment = useMemo(() => {
@@ -157,6 +163,12 @@ export default function EquipmentSearch() {
 
         if (cancelled) return;
         setLiveItems(Array.isArray(payload.items) ? payload.items : []);
+        const locationsFromReaders = Array.isArray(payload.readers)
+          ? (payload.readers as LiveReaderItem[])
+              .map((reader) => reader.location)
+              .filter((location): location is string => typeof location === 'string' && location.length > 0)
+          : [];
+        setReaderLocations(Array.from(new Set(locationsFromReaders)));
         setLastSyncTs((payload.ts ?? Math.floor(Date.now() / 1000)) * 1000);
         setFetchError('');
       } catch (err) {

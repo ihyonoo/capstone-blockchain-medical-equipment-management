@@ -430,10 +430,18 @@ def rtls_live():
     LEFT JOIN readers r ON r.reader_id = c.reader_id
     ORDER BY c.updated_at DESC
     """
+    readers_sql = """
+    SELECT reader_id, COALESCE(location_name, reader_id) AS location
+    FROM readers
+    WHERE is_active = TRUE
+    ORDER BY reader_id
+    """
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
             cur.execute(sql)
             rows = cur.fetchall()
+            cur.execute(readers_sql)
+            reader_rows = cur.fetchall()
     except Exception:
         raise HTTPException(500, "실시간 위치 조회 중 데이터베이스 오류가 발생했습니다.")
 
@@ -465,9 +473,20 @@ def rtls_live():
             }
         )
 
+    readers = [
+        {"reader_id": reader_id, "location": location}
+        for (reader_id, location) in reader_rows
+    ]
+    if not readers:
+        readers = [
+            {"reader_id": reader_id, "location": location}
+            for reader_id, location in READER_LOCATION.items()
+        ]
+
     return {
         "ok": True,
         "count": len(items),
         "ts": now,
         "items": items,
+        "readers": readers,
     }
