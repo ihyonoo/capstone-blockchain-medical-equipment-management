@@ -122,19 +122,14 @@ def upsert_readers_from_ingest(reader_ids: set[str]) -> None:
         pass
 
 
-def upsert_current_locations(updates: Dict[str, tuple[str, int | None, int]]) -> None:
+def insert_location_history(updates: Dict[str, tuple[str, int | None, int]]) -> None:
     if not updates:
         return
 
+    # 현재 위치 스냅샷 테이블을 사용하지 않고, 위치 변화 이력만 누적 저장한다.
     sql = """
-    INSERT INTO tag_state_current (tag_id, reader_id, last_rssi, updated_at)
+    INSERT INTO tag_state_history (tag_id, reader_id, rssi, decided_at)
     VALUES (%s, %s, %s, to_timestamp(%s))
-    ON CONFLICT (tag_id) DO UPDATE
-    SET
-      reader_id = EXCLUDED.reader_id,
-      last_rssi = EXCLUDED.last_rssi,
-      updated_at = EXCLUDED.updated_at
-    WHERE tag_state_current.reader_id IS DISTINCT FROM EXCLUDED.reader_id
     """
     try:
         rows = [
@@ -352,7 +347,7 @@ def ingest(payload: Payload):
                 state["candidate_since"] = None
                 db_updates[tag_id] = (best_rid, best_rssi, now)
 
-    upsert_current_locations(db_updates)
+    insert_location_history(db_updates)
 
     # 디버그 출력
     if last_tag_id is not None:
@@ -378,13 +373,15 @@ def ingest(payload: Payload):
 def where(tag_id: str):
     sql = """
     SELECT
-      c.reader_id,
-      COALESCE(r.location_name, c.reader_id) AS location,
-      c.last_rssi,
-      EXTRACT(EPOCH FROM c.updated_at)::BIGINT AS updated_at_epoch
-    FROM tag_state_current c
-    LEFT JOIN readers r ON r.reader_id = c.reader_id
-    WHERE c.tag_id = %s
+      h.reader_id,
+      COALESCE(r.location_name, h.reader_id) AS location,
+      h.rssi,
+      EXTRACT(EPOCH FROM h.decided_at)::BIGINT AS updated_at_epoch
+    FROM tag_state_history h
+    LEFT JOIN readers r ON r.reader_id = h.reader_id
+    WHERE h.tag_id = %s
+    ORDER BY h.decided_at DESC
+    LIMIT 1
     """
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
@@ -416,19 +413,28 @@ def where(tag_id: str):
 def rtls_live():
     now = int(time.time())
     sql = """
+    WITH latest AS (
+      SELECT DISTINCT ON (h.tag_id)
+        h.tag_id,
+        h.reader_id,
+        h.rssi,
+        h.decided_at
+      FROM tag_state_history h
+      ORDER BY h.tag_id, h.decided_at DESC
+    )
     SELECT
-      c.tag_id,
+      l.tag_id,
       t.equipment_name,
       t.equipment_type,
       t.serial_number,
-      c.reader_id,
-      COALESCE(r.location_name, c.reader_id) AS location,
-      c.last_rssi,
-      EXTRACT(EPOCH FROM c.updated_at)::BIGINT AS updated_at_epoch
-    FROM tag_state_current c
-    LEFT JOIN tags t ON t.tag_id = c.tag_id
-    LEFT JOIN readers r ON r.reader_id = c.reader_id
-    ORDER BY c.updated_at DESC
+      l.reader_id,
+      COALESCE(r.location_name, l.reader_id) AS location,
+      l.rssi,
+      EXTRACT(EPOCH FROM l.decided_at)::BIGINT AS updated_at_epoch
+    FROM latest l
+    LEFT JOIN tags t ON t.tag_id = l.tag_id
+    LEFT JOIN readers r ON r.reader_id = l.reader_id
+    ORDER BY l.decided_at DESC
     """
     readers_sql = """
     SELECT reader_id, COALESCE(location_name, reader_id) AS location
