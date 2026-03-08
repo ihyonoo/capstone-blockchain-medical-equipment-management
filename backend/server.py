@@ -66,13 +66,14 @@ class Payload(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    role: str
 
 
 class RegisterRequest(BaseModel):
     username: str
     display_name: str
     password: str
-    position: str
+    position: str | None = None
     role: str = "staff"
     department: str | None = None
     is_active: bool = True
@@ -147,15 +148,18 @@ def insert_location_history(updates: Dict[str, tuple[str, int | None, int]]) -> 
 def register(body: RegisterRequest):
     username = body.username.strip()
     display_name = body.display_name.strip()
-    position = body.position.strip()
     role = body.role.strip().lower()
     password = body.password
+    position = body.position.strip() if body.position else None
+    department = body.department.strip() if body.department else None
 
-    if not username or not display_name or not password or not position:
-        raise HTTPException(400, "username, display_name, password, position은 필수입니다.")
+    if not username or not display_name or not password:
+        raise HTTPException(400, "username, display_name, password는 필수입니다.")
 
     if role not in ("admin", "staff"):
         raise HTTPException(400, "role은 admin 또는 staff여야 합니다.")
+    if role == "staff" and not position:
+        raise HTTPException(400, "staff 계정은 position이 필수입니다.")
 
     if len(password) < 8:
         raise HTTPException(400, "비밀번호는 8자 이상이어야 합니다.")
@@ -175,7 +179,7 @@ def register(body: RegisterRequest):
                     username,
                     display_name,
                     role,
-                    body.department,
+                    department,
                     position,
                     password_hash,
                     body.is_active,
@@ -204,8 +208,11 @@ def register(body: RegisterRequest):
 @app.post("/auth/login")
 def login(body: LoginRequest):
     username = body.username.strip()
-    if not username or not body.password:
-        raise HTTPException(400, "username과 password는 필수입니다.")
+    requested_role = body.role.strip().lower()
+    if not username or not body.password or not requested_role:
+        raise HTTPException(400, "username, password, role은 필수입니다.")
+    if requested_role not in ("admin", "staff"):
+        raise HTTPException(400, "role은 admin 또는 staff여야 합니다.")
 
     sql = """
     SELECT user_id, username, display_name, role, department, position, password_hash, is_active
@@ -229,6 +236,8 @@ def login(body: LoginRequest):
 
     if not pwd.verify(body.password, password_hash):
         raise HTTPException(401, "아이디 또는 비밀번호가 올바르지 않습니다.")
+    if role != requested_role:
+        raise HTTPException(403, "선택한 권한과 계정 권한이 일치하지 않습니다.")
 
     return {
         "ok": True,

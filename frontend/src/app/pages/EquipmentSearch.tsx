@@ -16,7 +16,6 @@ import {
   ScanLine,
   LogOut,
   Navigation,
-  Shield,
   RefreshCw,
 } from 'lucide-react';
 
@@ -95,6 +94,7 @@ export default function EquipmentSearch() {
   const [selectedType, setSelectedType] = useState('전체');
   const [selectedLocation, setSelectedLocation] = useState('전체');
   const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   const [liveItems, setLiveItems] = useState<LiveLocationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -147,6 +147,29 @@ export default function EquipmentSearch() {
   }, [equipment, searchQuery, selectedType, selectedLocation]);
 
   useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('auth_user');
+      if (!raw) {
+        navigate('/', { replace: true });
+        return;
+      }
+      const user = JSON.parse(raw) as { role?: string };
+      if (user.role === 'admin') {
+        navigate('/verification', { replace: true });
+        return;
+      }
+      if (user.role !== 'staff') {
+        navigate('/', { replace: true });
+        return;
+      }
+      setIsAuthorized(true);
+    } catch {
+      navigate('/', { replace: true });
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!isAuthorized) return;
     let cancelled = false;
 
     const fetchLiveLocations = async () => {
@@ -189,7 +212,7 @@ export default function EquipmentSearch() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [isAuthorized]);
 
   useEffect(() => {
     if (!selectedEquipment) return;
@@ -199,6 +222,10 @@ export default function EquipmentSearch() {
   }, [equipment, selectedEquipment]);
 
   const selectedItem = filteredEquipment.find((item) => item.id === selectedEquipment) ?? null;
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -215,10 +242,6 @@ export default function EquipmentSearch() {
               </div>
             </div>
             <div className="flex items-center space-x-3">
-              <Button variant="outline" onClick={() => navigate('/verification')} className="flex items-center space-x-2">
-                <Shield className="w-4 h-4" />
-                <span>무결성 검증</span>
-              </Button>
               <Button variant="outline" onClick={() => navigate('/')} className="flex items-center space-x-2">
                 <LogOut className="w-4 h-4" />
                 <span>로그아웃</span>

@@ -8,6 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 const POSITION_OPTIONS = ['간호사', '의사', '간호조무사', '방사선사', '임상병리사', '물리치료사', '기타'];
+const ROLE_OPTIONS = [
+  { value: 'staff', label: 'Staff' },
+  { value: 'admin', label: '관리자(Admin)' },
+] as const;
+type SignUpRole = (typeof ROLE_OPTIONS)[number]['value'];
 
 export default function SignUp() {
   const navigate = useNavigate();
@@ -15,11 +20,13 @@ export default function SignUp() {
   const [displayName, setDisplayName] = useState('');
   const [department, setDepartment] = useState('');
   const [position, setPosition] = useState('간호사');
+  const [role, setRole] = useState<SignUpRole>('staff');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const isAdminRole = role === 'admin';
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,8 +47,9 @@ export default function SignUp() {
           username: username.trim(),
           display_name: displayName.trim(),
           password,
-          department: department.trim() || null,
-          position,
+          department: isAdminRole ? null : department.trim() || null,
+          position: isAdminRole ? null : position,
+          role,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -96,30 +104,50 @@ export default function SignUp() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="department">부서</Label>
-                <Input
-                  id="department"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  placeholder="내과"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>직책</Label>
-                <Select value={position} onValueChange={setPosition}>
+                <Label>가입 권한</Label>
+                <Select value={role} onValueChange={(value) => setRole(value as SignUpRole)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="직책 선택" />
+                    <SelectValue placeholder="권한 선택" />
                   </SelectTrigger>
                   <SelectContent>
-                    {POSITION_OPTIONS.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item}
+                    {ROLE_OPTIONS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {!isAdminRole && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="department">부서</Label>
+                    <Input
+                      id="department"
+                      value={department}
+                      onChange={(e) => setDepartment(e.target.value)}
+                      placeholder="내과"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>직책</Label>
+                    <Select value={position} onValueChange={setPosition}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="직책 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {POSITION_OPTIONS.map((item) => (
+                          <SelectItem key={item} value={item}>
+                            {item}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="password">비밀번호</Label>

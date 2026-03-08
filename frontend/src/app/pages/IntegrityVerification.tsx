@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -19,7 +19,6 @@ import {
   ChevronDown,
   ChevronUp,
   LogOut,
-  MapPin,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
@@ -62,7 +61,26 @@ export default function IntegrityVerification() {
   const [selectedStatus, setSelectedStatus] = useState('전체');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('auth_user');
+      if (!raw) {
+        navigate('/', { replace: true });
+        return;
+      }
+      const user = JSON.parse(raw) as { role?: string };
+      if (user.role !== 'admin') {
+        navigate('/equipment', { replace: true });
+        return;
+      }
+      setIsAuthorized(true);
+    } catch {
+      navigate('/', { replace: true });
+    }
+  }, [navigate]);
 
   const departments = useMemo(() => makeDepartments(mockUsageHistory), []);
 
@@ -98,11 +116,14 @@ export default function IntegrityVerification() {
   };
 
   const handleLogout = () => navigate('/');
-  const handleGoToEquipment = () => navigate('/equipment');
 
   const verifiedCount = mockUsageHistory.filter((h) => h.verified).length;
   const totalCount = mockUsageHistory.length;
   const verificationRate = ((verifiedCount / totalCount) * 100).toFixed(1);
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -120,10 +141,6 @@ export default function IntegrityVerification() {
               </div>
             </div>
             <div className="flex items-center space-x-3">
-              <Button variant="outline" onClick={handleGoToEquipment} className="flex items-center space-x-2">
-                <MapPin className="w-4 h-4" />
-                <span>장비 검색</span>
-              </Button>
               <Button variant="outline" onClick={handleLogout} className="flex items-center space-x-2">
                 <LogOut className="w-4 h-4" />
                 <span>로그아웃</span>

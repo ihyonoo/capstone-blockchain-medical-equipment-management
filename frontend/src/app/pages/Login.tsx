@@ -4,13 +4,20 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Lock, Mail } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const ROLE_OPTIONS = [
+  { value: 'staff', label: 'Staff' },
+  { value: 'admin', label: '관리자(Admin)' },
+] as const;
+type LoginRole = (typeof ROLE_OPTIONS)[number]['value'];
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<LoginRole>('staff');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -27,6 +34,7 @@ export default function Login() {
         body: JSON.stringify({
           username: email.trim(),
           password,
+          role,
         }),
       });
 
@@ -36,7 +44,8 @@ export default function Login() {
       }
 
       sessionStorage.setItem('auth_user', JSON.stringify(payload.user));
-      navigate('/equipment');
+      const loginRole = (payload.user?.role as string | undefined)?.toLowerCase();
+      navigate(loginRole === 'admin' ? '/verification' : '/equipment');
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -97,6 +106,22 @@ export default function Login() {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-base">로그인 권한</Label>
+                <Select value={role} onValueChange={(value) => setRole(value as LoginRole)}>
+                  <SelectTrigger className="h-12 text-base">
+                    <SelectValue placeholder="권한 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex items-center justify-between">
