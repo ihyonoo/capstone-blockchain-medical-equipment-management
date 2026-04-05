@@ -1,0 +1,9 @@
+.env
+deployments/*.json
+node_modules/
+config/genesis.json
+validators/*/address
+validators/*/data/*
+!validators/*/data/.gitkeep
+rpc-node/data/*
+!rpc-node/data/.gitkeep

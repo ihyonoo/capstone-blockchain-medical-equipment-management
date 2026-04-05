@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Lock, Mail } from 'lucide-react';
+import AppShell from '../components/layout/AppShell';
+import { ArrowRight, Fingerprint, Lock, Mail, ShieldCheck, Waves } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 const ROLE_OPTIONS = [
@@ -13,6 +14,24 @@ const ROLE_OPTIONS = [
   { value: 'admin', label: '관리자(Admin)' },
 ] as const;
 type LoginRole = (typeof ROLE_OPTIONS)[number]['value'];
+
+const TRUST_POINTS = [
+  {
+    title: 'RTLS 가시성',
+    copy: '병원 내부 리더 수신 상태를 기준으로 장비 위치를 연속적으로 확인합니다.',
+    icon: Waves,
+  },
+  {
+    title: 'NFC 기반 인증',
+    copy: '인가된 의료진 계정만 사용 이력 생성 흐름에 진입할 수 있도록 설계합니다.',
+    icon: Fingerprint,
+  },
+  {
+    title: '무결성 검증',
+    copy: 'DB 이력과 블록체인 해시 비교를 통해 변경 가능성을 탐지합니다.',
+    icon: ShieldCheck,
+  },
+] as const;
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -62,114 +81,144 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="w-full max-w-[768px] mx-auto">
-        <Card className="w-full shadow-2xl">
-          <CardHeader className="space-y-1 text-center pb-8">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-                <Lock className="w-8 h-8 text-white" />
+    <AppShell
+      title="로그인"
+      subtitle="권한에 따라 장비 검색 또는 무결성 검증 화면으로 이동합니다."
+      headerAside={
+        <div className="surface-panel p-6">
+          <div className="panel-header !mb-4">
+            <div>
+              <div className="panel-title">접속 준비 상태</div>
+              <p className="panel-copy mt-2">RTLS, 인증 API, 권한 분기 상태를 간단히 확인합니다.</p>
+            </div>
+            <Badge variant="outline">Secure Session</Badge>
+          </div>
+          <div className="space-y-3">
+            <div className="inline-meta__item w-full justify-between">
+              <span className="flex items-center gap-2">
+                <span className="status-dot status-dot--live" />
+                RTLS 리더 연동
+              </span>
+              <strong className="text-foreground">활성</strong>
+            </div>
+            <div className="inline-meta__item w-full justify-between">
+              <span className="flex items-center gap-2">
+                <span className="status-dot status-dot--live" />
+                인증 API
+              </span>
+              <strong className="text-foreground">연결됨</strong>
+            </div>
+            <div className="inline-meta__item w-full justify-between">
+              <span className="flex items-center gap-2">
+                <span className="status-dot status-dot--warn" />
+                운영 권한 분기
+              </span>
+              <strong className="text-foreground">Staff / Admin</strong>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.8fr)]">
+        <section className="surface-panel p-6 fade-rise">
+          <div className="panel-header">
+            <div>
+              <div className="panel-title">로그인</div>
+            </div>
+            <Badge variant="outline">Hospital Access</Badge>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">아이디(이메일)</Label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="text"
+                  placeholder="example@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-11"
+                  required
+                />
               </div>
             </div>
-            <CardTitle className="text-3xl">블록체인 기반 의료 장비 관리 시스템</CardTitle>
-          </CardHeader>
-          
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-base">아이디(이메일)</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <Input
-                    id="email"
-                    type="text"
-                    placeholder="example@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 h-12 text-base"
-                    required
-                  />
-                </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">비밀번호</Label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-11"
+                  required
+                />
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-base">비밀번호</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 h-12 text-base"
-                    required
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label>로그인 권한</Label>
+              <Select value={role} onValueChange={(value) => setRole(value as LoginRole)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="권한 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" className="h-4 w-4 rounded border-border accent-[#0071e3]" />
+                로그인 상태 유지
+              </label>
+              <span>권한에 맞는 화면으로 자동 분기</span>
+            </div>
+
+            {error ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
+                {error}
               </div>
+            ) : null}
 
-              <div className="space-y-2">
-                <Label className="text-base">로그인 권한</Label>
-                <Select value={role} onValueChange={(value) => setRole(value as LoginRole)}>
-                  <SelectTrigger className="h-12 text-base">
-                    <SelectValue placeholder="권한 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLE_OPTIONS.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-600">로그인 상태 유지</span>
-                </label>
-                <a href="#" className="text-sm text-blue-600 hover:text-blue-800 hover:underline">
-                  비밀번호 찾기
-                </a>
-              </div>
-
-              {error && (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {error}
-                </div>
-              )}
-
-              <Button type="submit" className="w-full h-12 text-base bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700">
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+              <Button type="submit" className="flex-1" size="lg" disabled={isLoading}>
                 {isLoading ? '로그인 중...' : '로그인'}
+                {!isLoading ? <ArrowRight className="h-4 w-4" /> : null}
               </Button>
-            </form>
-          </CardContent>
-
-          <CardFooter className="flex flex-col space-y-4 pt-6">
-            <div className="relative w-full">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-2 text-gray-500">또는</span>
-              </div>
+              <Button type="button" variant="outline" size="lg" className="flex-1" onClick={handleSignUp}>
+                회원가입
+              </Button>
             </div>
+          </form>
+        </section>
 
-            <Button 
-              type="button" 
-              variant="outline" 
-              className="w-full h-12 text-base border-2 hover:bg-gray-50"
-              onClick={handleSignUp}
-            >
-              회원가입
-            </Button>
-          </CardFooter>
-        </Card>
+        <aside className="space-y-3 fade-rise-delay">
+          {TRUST_POINTS.map(({ title, copy, icon: Icon }) => (
+            <section key={title} className="surface-panel p-6">
+              <div className="flex items-start gap-4">
+                <div className="brand-mark h-11 w-11 shrink-0">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-[1.05rem]">{title}</h3>
+                  <p className="panel-copy">{copy}</p>
+                </div>
+              </div>
+            </section>
+          ))}
+        </aside>
       </div>
-    </div>
+    </AppShell>
   );
 }

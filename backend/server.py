@@ -1,9 +1,12 @@
 import os
 import time
+import csv
+import io
+import datetime as dt
 from typing import Dict, List
 
 import psycopg
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from passlib.context import CryptContext
 from pydantic import BaseModel
@@ -36,8 +39,10 @@ app.add_middleware(
 # reader_id -> location string
 # 출력해주기 위하여 Reader_ID를 정확한 구역의 이름으로 mapping
 READER_LOCATION = {
-    "M501": "M501호",
-    "M502": "M502호",
+    "ER-TRIAGE": "응급실",
+    "ICU-WARD": "중환자실",
+    "M503": "수술실",
+    "M504": "영상의학과",
 }
 
 # 서버 메모리 상태 저장소
@@ -505,3 +510,181 @@ def rtls_live():
         "items": items,
         "readers": readers,
     }
+
+
+@app.get("/usage/history")
+def usage_history(user: str | None = None, equipment: str | None = None, date: str | None = None, limit: int = 200):
+    safe_limit, rows = query_usage_history_rows(user=user, equipment=equipment, date=date, limit=limit, max_limit=1000)
+
+    items = []
+    for row in rows:
+        items.append(
+            {
+                "usage_id": row[0],
+                "user": {
+                    "user_id": row[1],
+                    "name": row[2],
+                    "position": row[3],
+                    "department": row[4],
+                },
+                "equipment": {
+                    "tag_id": row[5],
+                    "name": row[6],
+                },
+                "checkout": {
+                    "reader_id": row[7],
+                    "location": row[8],
+                    "at": row[9],
+                },
+                "return": {
+                    "reader_id": row[10],
+                    "location": row[11],
+                    "at": row[12],
+                },
+                "created_at": row[13],
+            }
+        )
+
+    return {
+        "ok": True,
+        "count": len(items),
+        "filters": {
+            "user": user,
+            "equipment": equipment,
+            "date": date,
+            "limit": safe_limit,
+        },
+        "items": items,
+    }
+
+
+def query_usage_history_rows(
+    user: str | None,
+    equipment: str | None,
+    date: str | None,
+    limit: int,
+    max_limit: int,
+):
+    safe_limit = max(1, min(limit, max_limit))
+    where_clauses = []
+    params: list = []
+
+    if user and user.strip():
+        q = f"%{user.strip()}%"
+        where_clauses.append("(h.user_name ILIKE %s OR CAST(h.user_id AS TEXT) ILIKE %s)")
+        params.extend([q, q])
+
+    if equipment and equipment.strip():
+        q = f"%{equipment.strip()}%"
+        where_clauses.append("(h.equipment_name ILIKE %s OR h.tag_id ILIKE %s)")
+        params.extend([q, q])
+
+    if date and date.strip():
+        try:
+            target_date = dt.date.fromisoformat(date.strip())
+        except ValueError:
+            raise HTTPException(400, "date는 YYYY-MM-DD 형식이어야 합니다.")
+        where_clauses.append("h.checkout_at::date = %s")
+        params.append(target_date)
+
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+
+    sql = f"""
+    SELECT
+      h.usage_id,
+      h.user_id,
+      h.user_name,
+      h.user_position,
+      h.user_department,
+      h.tag_id,
+      h.equipment_name,
+      h.checkout_reader_id,
+      h.checkout_location,
+      EXTRACT(EPOCH FROM h.checkout_at)::BIGINT AS checkout_at_epoch,
+      h.return_reader_id,
+      h.return_location,
+      EXTRACT(EPOCH FROM h.returned_at)::BIGINT AS returned_at_epoch,
+      EXTRACT(EPOCH FROM h.created_at)::BIGINT AS created_at_epoch
+    FROM usage_history h
+    {where_sql}
+    ORDER BY h.checkout_at DESC
+    LIMIT %s
+    """
+    params.append(safe_limit)
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+    except Exception:
+        raise HTTPException(500, "사용 이력 조회 중 데이터베이스 오류가 발생했습니다.")
+
+    return safe_limit, rows
+
+
+def format_epoch_to_text(epoch: int | None) -> str:
+    if epoch is None:
+        return ""
+    return dt.datetime.fromtimestamp(epoch).strftime("%Y-%m-%d %H:%M:%S")
+
+
+@app.get("/usage/history/export")
+def usage_history_export(user: str | None = None, equipment: str | None = None, date: str | None = None, limit: int = 10000):
+    safe_limit, rows = query_usage_history_rows(user=user, equipment=equipment, date=date, limit=limit, max_limit=50000)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "usage_id",
+            "user_id",
+            "user_name",
+            "user_position",
+            "user_department",
+            "tag_id",
+            "equipment_name",
+            "checkout_reader_id",
+            "checkout_location",
+            "checkout_at",
+            "return_reader_id",
+            "return_location",
+            "returned_at",
+            "created_at",
+        ]
+    )
+
+    for row in rows:
+        writer.writerow(
+            [
+                row[0],
+                row[1],
+                row[2] or "",
+                row[3] or "",
+                row[4] or "",
+                row[5] or "",
+                row[6] or "",
+                row[7] or "",
+                row[8] or "",
+                format_epoch_to_text(row[9]),
+                row[10] or "",
+                row[11] or "",
+                format_epoch_to_text(row[12]),
+                format_epoch_to_text(row[13]),
+            ]
+        )
+
+    ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"usage_history_{ts}.csv"
+    content = output.getvalue().encode("utf-8-sig")
+
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Export-Count": str(len(rows)),
+            "X-Export-Limit": str(safe_limit),
+        },
+    )

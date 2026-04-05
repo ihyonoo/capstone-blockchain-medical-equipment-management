@@ -1,0 +1,142 @@
+name: besu-qbft
+
+services:
+  validator1:
+    image: ${BESU_IMAGE:-hyperledger/besu:latest}
+    container_name: besu-validator1
+    restart: unless-stopped
+    volumes:
+      - ./config:/opt/besu/config
+      - ./validators/validator1/data:/opt/besu/data
+    command:
+      - --data-path=/opt/besu/data
+      - --genesis-file=/opt/besu/config/genesis.json
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-api=ETH,NET,QBFT,WEB3
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=all
+      - --profile=ENTERPRISE
+    ports:
+      - "8545:8545"
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+    networks:
+      besu-qbft:
+        ipv4_address: 172.28.0.11
+
+  validator2:
+    image: ${BESU_IMAGE:-hyperledger/besu:latest}
+    container_name: besu-validator2
+    restart: unless-stopped
+    depends_on:
+      - validator1
+    volumes:
+      - ./config:/opt/besu/config
+      - ./validators/validator2/data:/opt/besu/data
+    command:
+      - --data-path=/opt/besu/data
+      - --genesis-file=/opt/besu/config/genesis.json
+      - --bootnodes=${BOOTNODE_ENODE}
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-api=ETH,NET,QBFT,WEB3
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=all
+      - --profile=ENTERPRISE
+    ports:
+      - "8546:8545"
+      - "30304:30303/tcp"
+      - "30304:30303/udp"
+    networks:
+      besu-qbft:
+        ipv4_address: 172.28.0.12
+
+  validator3:
+    image: ${BESU_IMAGE:-hyperledger/besu:latest}
+    container_name: besu-validator3
+    restart: unless-stopped
+    depends_on:
+      - validator1
+    volumes:
+      - ./config:/opt/besu/config
+      - ./validators/validator3/data:/opt/besu/data
+    command:
+      - --data-path=/opt/besu/data
+      - --genesis-file=/opt/besu/config/genesis.json
+      - --bootnodes=${BOOTNODE_ENODE}
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-api=ETH,NET,QBFT,WEB3
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=all
+      - --profile=ENTERPRISE
+    ports:
+      - "8547:8545"
+      - "30305:30303/tcp"
+      - "30305:30303/udp"
+    networks:
+      besu-qbft:
+        ipv4_address: 172.28.0.13
+
+  validator4:
+    image: ${BESU_IMAGE:-hyperledger/besu:latest}
+    container_name: besu-validator4
+    restart: unless-stopped
+    depends_on:
+      - validator1
+    volumes:
+      - ./config:/opt/besu/config
+      - ./validators/validator4/data:/opt/besu/data
+    command:
+      - --data-path=/opt/besu/data
+      - --genesis-file=/opt/besu/config/genesis.json
+      - --bootnodes=${BOOTNODE_ENODE}
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-api=ETH,NET,QBFT,WEB3
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=all
+      - --profile=ENTERPRISE
+    ports:
+      - "8548:8545"
+      - "30306:30303/tcp"
+      - "30306:30303/udp"
+    networks:
+      besu-qbft:
+        ipv4_address: 172.28.0.14
+
+  rpc-node:
+    image: ${BESU_IMAGE:-hyperledger/besu:latest}
+    container_name: besu-rpc-node
+    restart: unless-stopped
+    depends_on:
+      - validator1
+    volumes:
+      - ./config:/opt/besu/config
+      - ./rpc-node/data:/opt/besu/data
+    command:
+      - --data-path=/opt/besu/data
+      - --genesis-file=/opt/besu/config/genesis.json
+      - --bootnodes=${BOOTNODE_ENODE}
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-api=ETH,NET,QBFT,WEB3
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=all
+      - --profile=ENTERPRISE
+      - --sync-mode=FULL
+    ports:
+      - "8549:8545"
+      - "30307:30303/tcp"
+      - "30307:30303/udp"
+    networks:
+      besu-qbft:
+        ipv4_address: 172.28.0.21
+
+networks:
+  besu-qbft:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

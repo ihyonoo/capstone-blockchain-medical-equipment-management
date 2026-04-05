@@ -71,6 +71,29 @@ npm install
 npm run dev
 ```
 
+### Blockchain
+
+개발용 프라이빗 블록체인은 `blockchain/besu` 아래에 구성합니다.
+
+구성:
+- Hyperledger Besu
+- QBFT
+- 4 validator + 1 RPC 노드
+
+실행:
+
+```bash
+bash blockchain/besu/scripts/generate-network.sh
+cd blockchain/besu
+docker compose up -d
+```
+
+검증:
+
+```bash
+bash blockchain/besu/scripts/check-network.sh
+```
+
 
 ## 무결성 검증 흐름
 

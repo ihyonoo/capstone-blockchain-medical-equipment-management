@@ -6,7 +6,7 @@ from bleak import BleakScanner
 
 
 SERVER_URL = "http://192.168.0.196:8000/ingest"     # Server IP
-READER_ID = "M501"                                  # Reader의 논리적 ID
+READER_ID = "ER-TRIAGE"                             # Reader의 논리적 ID
 
 # 윈도우를 사용하는 이유: RSSI의 튐 현상, 노이즈 감소를 위해
 WINDOW_SEC = 2.0                                    # 수집 윈도우(최근 2초 동안의 RSSI를 수집)
