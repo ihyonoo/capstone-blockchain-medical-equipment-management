@@ -51,11 +51,17 @@ NFC(Near Field Communication) 기반 사용자 인증을 개발하여 인가된 
 
 요구사항:
 - Python 3.10 이상
+- PostgreSQL
 
 실행:
 
 ```bash
-uvicorn app.main:app --reload
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+cp .env.example .env
+bash scripts/init-db.sh
+uvicorn backend.server:app --reload
 ```
 
 ### Frontend
@@ -67,6 +73,7 @@ uvicorn app.main:app --reload
 
 ```bash
 cd frontend
+cp .env.example .env
 npm install
 npm run dev
 ```
@@ -93,6 +100,27 @@ docker compose up -d
 ```bash
 bash blockchain/besu/scripts/check-network.sh
 ```
+
+환경 파일:
+
+- 루트 `.env`: 백엔드 DB/CORS 설정
+- `frontend/.env`: 프론트 API 엔드포인트
+- `rtls/.env`: RTLS 리더가 호출할 서버 주소와 리더 ID
+- `blockchain/besu/.env`: Besu 이미지와 bootnode 정보
+
+각 예시는 `.env.example` 파일로 제공합니다.
+
+DB 초기 구성 방법은 [docs/POSTGRES_SETUP.md](docs/POSTGRES_SETUP.md)를 참고하세요.
+
+## 새 장비 이전 / Private Repo 정리
+
+새 맥북으로 개발 환경을 옮길 때는 파일 전체를 복사하거나 모든 로컬 파일을 Git에 넣기보다, 아래처럼 분리하는 방식이 안전합니다.
+
+- Git에 올릴 것: 소스코드, 문서, 의존성 파일, `.env.example`, Docker/compose 설정
+- Git에 올리지 말 것: `.env`, DB 실데이터, Besu validator 키, 체인 상태 데이터, `.venv`, `node_modules`
+- Besu 실행 산출물은 `generate-network.sh`로 다시 생성하거나 별도 백업으로 이전
+
+상세 체크리스트는 [docs/MACBOOK_PRIVATE_REPO_MIGRATION.md](docs/MACBOOK_PRIVATE_REPO_MIGRATION.md)를 참고하세요.
 
 
 ## 무결성 검증 흐름

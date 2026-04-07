@@ -2,14 +2,22 @@
 
 import os
 from contextlib import contextmanager
+from pathlib import Path
 
 import psycopg
 from fastapi import FastAPI, HTTPException
 from passlib.context import CryptContext
 from pydantic import BaseModel
+from dotenv import load_dotenv
 import traceback
 
-DATABASE_URL = "postgresql://postgres:9124@localhost:5432/rtls"             # Database URL
+# 회원 등록 API도 저장소 루트의 .env를 기준으로 읽도록 맞춘다.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:9124@localhost:5432/rtls",
+)             # Database URL
 
 app = FastAPI(title="Register API (readers/tags/users)")                    # FastAPI 애플리케이션 인스턴스 생성
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")                   # password Hash를 만들기 위한 설정

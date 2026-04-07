@@ -3,6 +3,7 @@ import time
 import csv
 import io
 import datetime as dt
+from pathlib import Path
 from typing import Dict, List
 
 import psycopg
@@ -10,6 +11,10 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from passlib.context import CryptContext
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# 백엔드는 저장소 루트의 .env를 기준으로 읽는다.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 app = FastAPI()     # FastAPI 애플리케이션 인스턴스 생성
 

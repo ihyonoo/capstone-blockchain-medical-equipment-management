@@ -32,6 +32,10 @@ build/
 # Logs
 *.log
 
+# Local backup artifacts
+backups/
+.local-backups/
+
 # OS / Editor
 .DS_Store
 Thumbs.db

@@ -1,12 +1,20 @@
 # send_to_server.py
 
-import asyncio, time, statistics
+import asyncio
+import os
+import statistics
+import time
+from pathlib import Path
+
 import requests
 from bleak import BleakScanner
+from dotenv import load_dotenv
 
+# RTLS 리더는 rtls/.env를 기준으로 장비별 설정을 읽는다.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-SERVER_URL = "http://192.168.0.196:8000/ingest"     # Server IP
-READER_ID = "ER-TRIAGE"                             # Reader의 논리적 ID
+SERVER_URL = os.getenv("RTLS_SERVER_URL", "http://127.0.0.1:8000/ingest")  # Server IP
+READER_ID = os.getenv("RTLS_READER_ID", "ER-TRIAGE")                        # Reader의 논리적 ID
 
 # 윈도우를 사용하는 이유: RSSI의 튐 현상, 노이즈 감소를 위해
 WINDOW_SEC = 2.0                                    # 수집 윈도우(최근 2초 동안의 RSSI를 수집)
