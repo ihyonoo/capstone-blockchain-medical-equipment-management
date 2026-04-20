@@ -12,27 +12,24 @@ __pycache__/
 venv/
 env/
 
-# Environment variables and secrets
-.env
-.env.*
-!.env.example
-AGENTS.md
-
 # Node / Frontend
 node_modules/
+dist/
+build/
+.vite/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-dist/
-build/
-.vite/
-/package-lock.json
 
-# Logs
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Local artifacts
+.codex
 *.log
-
-# Local backup artifacts
 backups/
 .local-backups/
 
