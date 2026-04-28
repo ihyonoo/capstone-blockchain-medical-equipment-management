@@ -73,19 +73,26 @@ async function main() {
   const contract = new ethers.Contract(deployment.address, abi, wallet);
   const usageHash = normalizeHash(usageHashInput);
 
-  console.log(`recording usageId: ${usageId}`);
-  console.log(`usageHash: ${usageHash}`);
-  console.log(`contract: ${deployment.address}`);
-  console.log(`sender: ${wallet.address}`);
-
   const tx = await contract.recordUsageHash(usageId, usageHash, {
     gasPrice: ethers.parseUnits("1", "gwei"),
     type: 0,
   });
   const receipt = await tx.wait();
 
-  console.log(`tx hash: ${tx.hash}`);
-  console.log(`block number: ${receipt?.blockNumber ?? "unknown"}`);
+  console.log(
+    JSON.stringify(
+      {
+        usageId,
+        usageHash,
+        contract: deployment.address,
+        sender: wallet.address,
+        txHash: tx.hash,
+        blockNumber: receipt?.blockNumber ?? null,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 main().catch((error) => {

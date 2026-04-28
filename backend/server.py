@@ -2,7 +2,10 @@ import os
 import time
 import csv
 import io
+import json
+import hashlib
 import datetime as dt
+import subprocess
 from pathlib import Path
 from typing import Dict, List
 
@@ -22,6 +25,8 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://postgres:9124@localhost:5432/rtls",
 )
+BESU_DIR = Path(__file__).resolve().parents[1] / "blockchain" / "besu"
+BESU_DEPLOYMENT_PATH = BESU_DIR / "deployments" / "usage-registry.json"
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -32,9 +37,24 @@ def get_allowed_origins() -> List[str]:
     return ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 
+def get_allowed_origin_regex() -> str:
+    # Allow common private-network dev origins so phones and Raspberry Pis on the
+    # same LAN can reach the backend during local development.
+    return (
+        r"^https?://("
+        r"localhost|"
+        r"127\.0\.0\.1|"
+        r"192\.168\.\d+\.\d+|"
+        r"10\.\d+\.\d+\.\d+|"
+        r"172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+"
+        r")(:\d+)?$"
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_allowed_origins(),
+    allow_origin_regex=get_allowed_origin_regex(),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,6 +107,22 @@ class RegisterRequest(BaseModel):
     role: str = "staff"
     department: str | None = None
     is_active: bool = True
+
+
+class NfcMappingUpsertRequest(BaseModel):
+    tag_id: str
+    nfc_token: str
+    actor_role: str | None = None
+
+
+class NfcUsageActionRequest(BaseModel):
+    nfc_token: str
+    user_id: int
+    username: str
+    display_name: str
+    role: str
+    department: str | None = None
+    position: str | None = None
 
 
 def upsert_tags_from_observations(tag_ids: set[str]) -> None:
@@ -154,6 +190,494 @@ def insert_location_history(updates: Dict[str, tuple[str, int | None, int]]) -> 
         pass
 
 
+def load_reader_location_map() -> dict[str, str]:
+    sql = """
+    SELECT reader_id, COALESCE(location_name, reader_id) AS location
+    FROM readers
+    ORDER BY reader_id
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+    except Exception:
+        return dict(READER_LOCATION)
+
+    mapping = {reader_id: location for (reader_id, location) in rows}
+    if not mapping:
+        return dict(READER_LOCATION)
+    return mapping
+
+
+def load_tag_metadata(tag_ids: set[str]) -> dict[str, dict]:
+    if not tag_ids:
+        return {}
+
+    sql = """
+    SELECT
+      t.tag_id,
+      t.equipment_name,
+      t.equipment_type,
+      t.serial_number,
+      t.asset_status,
+      t.current_holder_user_id,
+      COALESCE(u.display_name, u.username) AS current_holder_name
+    FROM tags t
+    LEFT JOIN users u ON u.user_id = t.current_holder_user_id
+    WHERE tag_id = ANY(%s)
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql, (list(tag_ids),))
+            rows = cur.fetchall()
+    except Exception:
+        return {}
+
+    return {
+        row[0]: {
+            "equipment_name": row[1],
+            "equipment_type": row[2],
+            "serial_number": row[3],
+            "asset_status": row[4],
+            "current_holder_user_id": row[5],
+            "current_holder_name": row[6],
+        }
+        for row in rows
+    }
+
+
+def normalize_nfc_token(raw: str) -> str:
+    token = raw.strip()
+    if not token:
+        raise HTTPException(400, "nfc_token은 비어 있을 수 없습니다.")
+    if any(ch.isspace() for ch in token) or "/" in token or "?" in token or "#" in token:
+        raise HTTPException(400, "nfc_token에는 공백, '/', '?', '#' 문자를 사용할 수 없습니다.")
+    return token
+
+
+def require_admin_actor(role: str | None) -> None:
+    if (role or "").strip().lower() != "admin":
+        raise HTTPException(403, "관리자 권한이 필요합니다.")
+
+
+def validate_usage_actor(body: NfcUsageActionRequest) -> dict:
+    username = body.username.strip()
+    display_name = body.display_name.strip()
+    role = body.role.strip().lower()
+
+    if not username or not display_name:
+        raise HTTPException(400, "username과 display_name은 필수입니다.")
+    if role not in ("admin", "staff"):
+        raise HTTPException(400, "role은 admin 또는 staff여야 합니다.")
+
+    return {
+        "user_id": body.user_id,
+        "username": username,
+        "display_name": display_name,
+        "role": role,
+        "department": body.department.strip() if body.department else None,
+        "position": body.position.strip() if body.position else None,
+    }
+
+
+def resolve_tag_location_snapshot(tag_id: str, now: int | None = None, reader_locations: dict[str, str] | None = None):
+    current_ts = now if now is not None else int(time.time())
+    locations = reader_locations if reader_locations is not None else load_reader_location_map()
+
+    state = tag_state.get(tag_id)
+    if state and state.get("current_reader"):
+        rid = state["current_reader"]
+        updated_at_epoch = state.get("updated_at")
+        last_rssi = state.get("current_rssi")
+        is_stale = False
+        if isinstance(updated_at_epoch, int):
+            is_stale = (current_ts - updated_at_epoch) > (STALE_SEC * 2)
+
+        return {
+            "reader_id": rid,
+            "location": locations.get(rid, READER_LOCATION.get(rid, rid)),
+            "rssi": last_rssi,
+            "updated_at": updated_at_epoch,
+            "is_stale": is_stale,
+        }
+
+    sql = """
+    SELECT
+      h.reader_id,
+      COALESCE(r.location_name, h.reader_id) AS location,
+      h.rssi,
+      EXTRACT(EPOCH FROM h.decided_at)::BIGINT AS updated_at_epoch
+    FROM tag_state_history h
+    LEFT JOIN readers r ON r.reader_id = h.reader_id
+    WHERE h.tag_id = %s
+    ORDER BY h.decided_at DESC
+    LIMIT 1
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql, (tag_id,))
+            row = cur.fetchone()
+    except Exception:
+        raise HTTPException(500, "현재 위치 조회 중 데이터베이스 오류가 발생했습니다.")
+
+    if not row:
+        return None
+
+    rid, location, last_rssi, updated_at_epoch = row
+    is_stale = False
+    if isinstance(updated_at_epoch, int):
+        is_stale = (current_ts - updated_at_epoch) > (STALE_SEC * 2)
+
+    return {
+        "reader_id": rid,
+        "location": location,
+        "rssi": last_rssi,
+        "updated_at": updated_at_epoch,
+        "is_stale": is_stale,
+    }
+
+
+def fetch_tag_by_nfc_token(cur, token: str):
+    sql = """
+    SELECT
+      t.tag_id,
+      t.equipment_name,
+      t.equipment_type,
+      t.serial_number,
+      t.nfc_tag_uid,
+      t.asset_status,
+      t.current_holder_user_id,
+      COALESCE(u.display_name, u.username) AS current_holder_name,
+      t.current_usage_id,
+      t.is_active
+    FROM tags t
+    LEFT JOIN users u ON u.user_id = t.current_holder_user_id
+    WHERE t.nfc_tag_uid = %s
+    FOR UPDATE OF t
+    """
+    cur.execute(sql, (token,))
+    return cur.fetchone()
+
+
+def insert_nfc_event(
+    cur,
+    *,
+    usage_id: int | None,
+    tag_id: str,
+    user_id: int | None,
+    equipment_nfc_uid: str,
+    action: str,
+    result: str,
+    reader_id: str | None,
+    location_name: str | None,
+    reason: str | None,
+):
+    sql = """
+    INSERT INTO usage_nfc_events (
+      usage_id, tag_id, user_id, equipment_nfc_uid, action, result, reader_id, location_name, reason, occurred_at
+    )
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+    """
+    cur.execute(
+        sql,
+        (usage_id, tag_id, user_id, equipment_nfc_uid, action, result, reader_id, location_name, reason),
+    )
+
+
+def fetch_usage_integrity_source(usage_id: int) -> dict | None:
+    sql = """
+    SELECT
+      h.usage_id,
+      h.usage_status,
+      h.user_id,
+      h.user_name,
+      h.user_position,
+      h.user_department,
+      h.returned_by_user_id,
+      h.returned_by_name,
+      h.returned_by_position,
+      h.returned_by_department,
+      h.tag_id,
+      h.equipment_name,
+      h.equipment_type,
+      h.equipment_serial_number,
+      h.equipment_nfc_uid,
+      h.checkout_method,
+      h.checkout_reader_id,
+      h.checkout_location,
+      EXTRACT(EPOCH FROM h.checkout_at)::BIGINT AS checkout_at_epoch,
+      h.return_method,
+      h.return_reader_id,
+      h.return_location,
+      EXTRACT(EPOCH FROM h.returned_at)::BIGINT AS returned_at_epoch,
+      EXTRACT(EPOCH FROM h.created_at)::BIGINT AS created_at_epoch
+    FROM usage_history h
+    WHERE h.usage_id = %s
+    LIMIT 1
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql, (usage_id,))
+            row = cur.fetchone()
+    except Exception:
+        raise HTTPException(500, "사용 이력 무결성 조회 중 데이터베이스 오류가 발생했습니다.")
+
+    if not row:
+        return None
+
+    return {
+        "usage_id": row[0],
+        "usage_status": row[1],
+        "user_id": row[2],
+        "user_name": row[3],
+        "user_position": row[4],
+        "user_department": row[5],
+        "returned_by_user_id": row[6],
+        "returned_by_name": row[7],
+        "returned_by_position": row[8],
+        "returned_by_department": row[9],
+        "tag_id": row[10],
+        "equipment_name": row[11],
+        "equipment_type": row[12],
+        "equipment_serial_number": row[13],
+        "equipment_nfc_uid": row[14],
+        "checkout_method": row[15],
+        "checkout_reader_id": row[16],
+        "checkout_location": row[17],
+        "checkout_at": row[18],
+        "return_method": row[19],
+        "return_reader_id": row[20],
+        "return_location": row[21],
+        "returned_at": row[22],
+        "created_at": row[23],
+    }
+
+
+def build_usage_integrity_payload(source: dict) -> dict:
+    return {
+        "usage_id": str(source["usage_id"]),
+        "usage_status": source["usage_status"],
+        "user": {
+            "user_id": source["user_id"],
+            "name": source["user_name"],
+            "position": source["user_position"],
+            "department": source["user_department"],
+        },
+        "returned_by": {
+            "user_id": source["returned_by_user_id"],
+            "name": source["returned_by_name"],
+            "position": source["returned_by_position"],
+            "department": source["returned_by_department"],
+        },
+        "equipment": {
+            "tag_id": source["tag_id"],
+            "name": source["equipment_name"],
+            "type": source["equipment_type"],
+            "serial_number": source["equipment_serial_number"],
+            "nfc_token": source["equipment_nfc_uid"],
+        },
+        "checkout": {
+            "method": source["checkout_method"],
+            "reader_id": source["checkout_reader_id"],
+            "location": source["checkout_location"],
+            "at": source["checkout_at"],
+        },
+        "return": {
+            "method": source["return_method"],
+            "reader_id": source["return_reader_id"],
+            "location": source["return_location"],
+            "at": source["returned_at"],
+        },
+        "created_at": source["created_at"],
+    }
+
+
+def compute_usage_hash(payload: dict) -> str:
+    canonical_json = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+    return f"0x{digest}"
+
+
+def is_besu_ready() -> tuple[bool, str | None]:
+    if not BESU_DEPLOYMENT_PATH.exists():
+        return False, "배포된 UsageHashRegistry 컨트랙트 정보가 없습니다."
+    if not (BESU_DIR / "node_modules").exists():
+        return False, "blockchain/besu 의 npm 의존성이 설치되지 않았습니다."
+    return True, None
+
+
+def run_besu_script(script_name: str, *args: str) -> tuple[bool, str, str]:
+    env = os.environ.copy()
+    process = subprocess.run(
+        ["node", f"scripts/{script_name}", *args],
+        cwd=BESU_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return process.returncode == 0, process.stdout.strip(), process.stderr.strip()
+
+
+def read_usage_hash_from_chain(usage_id: int) -> dict:
+    ready, reason = is_besu_ready()
+    if not ready:
+        return {
+            "status": "not_configured",
+            "detail": reason,
+            "exists": False,
+        }
+
+    ok, stdout, stderr = run_besu_script("read-usage-hash.mjs", str(usage_id))
+    if not ok:
+        return {
+            "status": "read_error",
+            "detail": stderr or stdout or "온체인 조회에 실패했습니다.",
+            "exists": False,
+        }
+
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError:
+        return {
+            "status": "read_error",
+            "detail": "온체인 조회 응답을 해석하지 못했습니다.",
+            "exists": False,
+        }
+
+    return {
+        "status": "ok",
+        "detail": None,
+        "exists": bool(payload.get("exists")),
+        "usage_hash": payload.get("usageHash"),
+        "recorded_at": payload.get("recordedAt"),
+        "recorder": payload.get("recorder"),
+    }
+
+
+def anchor_usage_hash_to_chain(usage_id: int, usage_hash: str) -> dict:
+    ready, reason = is_besu_ready()
+    if not ready:
+        return {
+            "ok": False,
+            "status": "not_configured",
+            "detail": reason,
+        }
+
+    existing = read_usage_hash_from_chain(usage_id)
+    if existing["status"] == "ok" and existing["exists"]:
+        onchain_hash = existing.get("usage_hash")
+        if onchain_hash and onchain_hash.lower() != usage_hash.lower():
+            return {
+                "ok": False,
+                "status": "mismatch",
+                "detail": "이미 다른 해시가 온체인에 기록되어 있습니다.",
+                "usage_hash": usage_hash,
+                "onchain_hash": onchain_hash,
+            }
+        return {
+            "ok": True,
+            "status": "already_anchored",
+            "detail": None,
+            "usage_hash": usage_hash,
+            "onchain_hash": onchain_hash,
+            "recorded_at": existing.get("recorded_at"),
+            "recorder": existing.get("recorder"),
+        }
+    if existing["status"] not in ("ok", "not_configured") and existing["status"] != "read_error":
+        return {
+            "ok": False,
+            "status": existing["status"],
+            "detail": existing.get("detail"),
+        }
+
+    ok, stdout, stderr = run_besu_script("record-usage-hash.mjs", str(usage_id), usage_hash)
+    if not ok:
+        return {
+            "ok": False,
+            "status": "record_error",
+            "detail": stderr or stdout or "온체인 기록에 실패했습니다.",
+        }
+
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError:
+        return {
+            "ok": False,
+            "status": "record_error",
+            "detail": "온체인 기록 응답을 해석하지 못했습니다.",
+        }
+
+    return {
+        "ok": True,
+        "status": "anchored",
+        "detail": None,
+        "usage_hash": usage_hash,
+        "onchain_hash": payload.get("usageHash"),
+        "transaction_hash": payload.get("txHash"),
+        "block_number": payload.get("blockNumber"),
+    }
+
+
+def verify_usage_against_chain(usage_id: int) -> dict:
+    source = fetch_usage_integrity_source(usage_id)
+    if not source:
+        raise HTTPException(404, "사용 이력을 찾을 수 없습니다.")
+
+    payload = build_usage_integrity_payload(source)
+    recalculated_hash = compute_usage_hash(payload)
+    chain_record = read_usage_hash_from_chain(usage_id)
+
+    if chain_record["status"] == "not_configured":
+        return {
+            "ok": True,
+            "usage_id": usage_id,
+            "verification_status": "not_configured",
+            "detail": chain_record["detail"],
+            "recalculated_hash": recalculated_hash,
+            "onchain_hash": None,
+            "onchain_exists": False,
+            "payload": payload,
+        }
+    if chain_record["status"] != "ok":
+        return {
+            "ok": True,
+            "usage_id": usage_id,
+            "verification_status": "chain_error",
+            "detail": chain_record["detail"],
+            "recalculated_hash": recalculated_hash,
+            "onchain_hash": None,
+            "onchain_exists": False,
+            "payload": payload,
+        }
+    if not chain_record["exists"]:
+        return {
+            "ok": True,
+            "usage_id": usage_id,
+            "verification_status": "not_anchored",
+            "detail": "온체인에 아직 기록되지 않았습니다.",
+            "recalculated_hash": recalculated_hash,
+            "onchain_hash": None,
+            "onchain_exists": False,
+            "payload": payload,
+        }
+
+    onchain_hash = (chain_record.get("usage_hash") or "").lower()
+    matches = onchain_hash == recalculated_hash.lower()
+    return {
+        "ok": True,
+        "usage_id": usage_id,
+        "verification_status": "match" if matches else "mismatch",
+        "detail": None if matches else "현재 DB 원문을 재계산한 해시와 온체인 해시가 다릅니다.",
+        "recalculated_hash": recalculated_hash,
+        "onchain_hash": chain_record.get("usage_hash"),
+        "onchain_exists": True,
+        "recorded_at": chain_record.get("recorded_at"),
+        "recorder": chain_record.get("recorder"),
+        "payload": payload,
+    }
+
+
 @app.post("/auth/register")
 def register(body: RegisterRequest):
     username = body.username.strip()
@@ -170,9 +694,6 @@ def register(body: RegisterRequest):
         raise HTTPException(400, "role은 admin 또는 staff여야 합니다.")
     if role == "staff" and not position:
         raise HTTPException(400, "staff 계정은 position이 필수입니다.")
-
-    if len(password) < 8:
-        raise HTTPException(400, "비밀번호는 8자 이상이어야 합니다.")
 
     password_hash = pwd.hash(password)
 
@@ -390,123 +911,476 @@ def ingest(payload: Payload):
 # 결과
 @app.get("/where/{tag_id}")
 def where(tag_id: str):
-    sql = """
-    SELECT
-      h.reader_id,
-      COALESCE(r.location_name, h.reader_id) AS location,
-      h.rssi,
-      EXTRACT(EPOCH FROM h.decided_at)::BIGINT AS updated_at_epoch
-    FROM tag_state_history h
-    LEFT JOIN readers r ON r.reader_id = h.reader_id
-    WHERE h.tag_id = %s
-    ORDER BY h.decided_at DESC
-    LIMIT 1
-    """
-    try:
-        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
-            cur.execute(sql, (tag_id,))
-            row = cur.fetchone()
-    except Exception:
-        raise HTTPException(500, "현재 위치 조회 중 데이터베이스 오류가 발생했습니다.")
-
-    if not row:
+    snapshot = resolve_tag_location_snapshot(tag_id)
+    if not snapshot:
         return {"ok": False, "reason": "unknown"}
-
-    rid, location, last_rssi, updated_at_epoch = row
-    is_stale = False
-    if isinstance(updated_at_epoch, int):
-        is_stale = (int(time.time()) - updated_at_epoch) > (STALE_SEC * 2)
 
     return {
         "ok": True,
         "tag_id": tag_id,
-        "reader_id": rid,
-        "location": location,
-        "rssi": last_rssi,
-        "updated_at": updated_at_epoch,
-        "is_stale": is_stale,
+        "reader_id": snapshot["reader_id"],
+        "location": snapshot["location"],
+        "rssi": snapshot["rssi"],
+        "updated_at": snapshot["updated_at"],
+        "is_stale": snapshot["is_stale"],
+    }
+
+
+@app.get("/admin/nfc-mappings")
+def list_nfc_mappings():
+    sql = """
+    SELECT
+      t.tag_id,
+      t.equipment_name,
+      t.equipment_type,
+      t.serial_number,
+      t.nfc_tag_uid,
+      t.asset_status,
+      t.is_active
+    FROM tags t
+    WHERE t.is_active = TRUE
+    ORDER BY t.equipment_name ASC, t.tag_id ASC
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+    except Exception:
+        raise HTTPException(500, "NFC 매핑 목록 조회 중 데이터베이스 오류가 발생했습니다.")
+
+    now = int(time.time())
+    reader_locations = load_reader_location_map()
+    items = []
+    for row in rows:
+        location_snapshot = resolve_tag_location_snapshot(row[0], now=now, reader_locations=reader_locations)
+        items.append(
+            {
+                "tag_id": row[0],
+                "equipment_name": row[1],
+                "equipment_type": row[2],
+                "serial_number": row[3],
+                "nfc_token": row[4],
+                "asset_status": row[5],
+                "is_active": row[6],
+                "reader_id": location_snapshot["reader_id"] if location_snapshot else None,
+                "location": location_snapshot["location"] if location_snapshot else None,
+                "updated_at": location_snapshot["updated_at"] if location_snapshot else None,
+                "is_stale": location_snapshot["is_stale"] if location_snapshot else True,
+            }
+        )
+
+    return {
+        "ok": True,
+        "count": len(items),
+        "items": items,
+    }
+
+
+@app.post("/admin/nfc-mappings")
+def upsert_nfc_mapping(body: NfcMappingUpsertRequest):
+    require_admin_actor(body.actor_role)
+    tag_id = body.tag_id.strip()
+    token = normalize_nfc_token(body.nfc_token)
+    if not tag_id:
+        raise HTTPException(400, "tag_id는 필수입니다.")
+
+    sql = """
+    UPDATE tags
+    SET nfc_tag_uid = %s, updated_at = now()
+    WHERE tag_id = %s
+    RETURNING tag_id, equipment_name, equipment_type, serial_number, nfc_tag_uid, asset_status
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql, (token, tag_id))
+            row = cur.fetchone()
+    except psycopg.errors.UniqueViolation:
+        raise HTTPException(409, "이미 다른 장비에 매핑된 NFC 토큰입니다.")
+    except Exception:
+        raise HTTPException(500, "NFC 매핑 저장 중 데이터베이스 오류가 발생했습니다.")
+
+    if not row:
+        raise HTTPException(404, "장비를 찾을 수 없습니다.")
+
+    return {
+        "ok": True,
+        "item": {
+            "tag_id": row[0],
+            "equipment_name": row[1],
+            "equipment_type": row[2],
+            "serial_number": row[3],
+            "nfc_token": row[4],
+            "asset_status": row[5],
+        },
+    }
+
+
+@app.delete("/admin/nfc-mappings/{tag_id}")
+def remove_nfc_mapping(tag_id: str, actor_role: str | None = None):
+    require_admin_actor(actor_role)
+    clean_tag_id = tag_id.strip()
+    if not clean_tag_id:
+        raise HTTPException(400, "tag_id는 필수입니다.")
+
+    sql = """
+    UPDATE tags
+    SET nfc_tag_uid = NULL, updated_at = now()
+    WHERE tag_id = %s
+    RETURNING tag_id
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql, (clean_tag_id,))
+            row = cur.fetchone()
+    except Exception:
+        raise HTTPException(500, "NFC 매핑 해제 중 데이터베이스 오류가 발생했습니다.")
+
+    if not row:
+        raise HTTPException(404, "장비를 찾을 수 없습니다.")
+
+    return {
+        "ok": True,
+        "tag_id": row[0],
+    }
+
+
+@app.get("/nfc/{token}")
+def get_nfc_equipment(token: str):
+    clean_token = normalize_nfc_token(token)
+
+    sql = """
+    SELECT
+      t.tag_id,
+      t.equipment_name,
+      t.equipment_type,
+      t.serial_number,
+      t.nfc_tag_uid,
+      t.asset_status,
+      t.current_holder_user_id,
+      COALESCE(u.display_name, u.username) AS current_holder_name,
+      t.current_usage_id
+    FROM tags t
+    LEFT JOIN users u ON u.user_id = t.current_holder_user_id
+    WHERE t.nfc_tag_uid = %s
+      AND t.is_active = TRUE
+    LIMIT 1
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql, (clean_token,))
+            row = cur.fetchone()
+    except Exception:
+        raise HTTPException(500, "NFC 장비 조회 중 데이터베이스 오류가 발생했습니다.")
+
+    if not row:
+        raise HTTPException(404, "매핑되지 않은 NFC 태그입니다.")
+
+    location_snapshot = resolve_tag_location_snapshot(row[0])
+    return {
+        "ok": True,
+        "item": {
+            "tag_id": row[0],
+            "equipment_name": row[1],
+            "equipment_type": row[2],
+            "serial_number": row[3],
+            "nfc_token": row[4],
+            "asset_status": row[5],
+            "current_holder_user_id": row[6],
+            "current_holder_name": row[7],
+            "current_usage_id": row[8],
+            "reader_id": location_snapshot["reader_id"] if location_snapshot else None,
+            "location": location_snapshot["location"] if location_snapshot else None,
+            "updated_at": location_snapshot["updated_at"] if location_snapshot else None,
+            "is_stale": location_snapshot["is_stale"] if location_snapshot else True,
+        },
+    }
+
+
+@app.post("/usage/checkout")
+def usage_checkout(body: NfcUsageActionRequest):
+    actor = validate_usage_actor(body)
+    token = normalize_nfc_token(body.nfc_token)
+    now = dt.datetime.now(dt.timezone.utc)
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            tag_row = fetch_tag_by_nfc_token(cur, token)
+            if not tag_row or not tag_row[9]:
+                raise HTTPException(404, "매핑된 장비를 찾을 수 없습니다.")
+
+            (
+                tag_id,
+                equipment_name,
+                equipment_type,
+                serial_number,
+                nfc_uid,
+                asset_status,
+                current_holder_user_id,
+                current_holder_name,
+                current_usage_id,
+                _is_active,
+            ) = tag_row
+
+            location_snapshot = resolve_tag_location_snapshot(tag_id)
+            reader_id = location_snapshot["reader_id"] if location_snapshot else None
+            location_name = location_snapshot["location"] if location_snapshot else None
+
+            if asset_status == "checked_out":
+                raise HTTPException(
+                    409,
+                    f"이미 사용 중인 장비입니다. 현재 사용자: {current_holder_name or current_holder_user_id or '알 수 없음'}",
+                )
+            if asset_status != "available":
+                raise HTTPException(409, f"현재 상태({asset_status})에서는 사용 시작할 수 없습니다.")
+
+            cur.execute(
+                """
+                INSERT INTO usage_history (
+                  usage_status,
+                  user_id,
+                  user_name,
+                  user_position,
+                  user_department,
+                  tag_id,
+                  equipment_name,
+                  equipment_type,
+                  equipment_serial_number,
+                  equipment_nfc_uid,
+                  checkout_method,
+                  checkout_reader_id,
+                  checkout_location,
+                  checkout_at,
+                  created_at,
+                  updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                RETURNING usage_id
+                """,
+                (
+                    "checked_out",
+                    actor["user_id"],
+                    actor["display_name"],
+                    actor["position"],
+                    actor["department"],
+                    tag_id,
+                    equipment_name,
+                    equipment_type,
+                    serial_number,
+                    nfc_uid,
+                    "nfc",
+                    reader_id,
+                    location_name,
+                    now,
+                ),
+            )
+            usage_id = cur.fetchone()[0]
+
+            cur.execute(
+                """
+                UPDATE tags
+                SET
+                  asset_status = 'checked_out',
+                  current_holder_user_id = %s,
+                  current_usage_id = %s,
+                  last_checkout_at = %s,
+                  updated_at = now()
+                WHERE tag_id = %s
+                """,
+                (actor["user_id"], usage_id, now, tag_id),
+            )
+
+            insert_nfc_event(
+                cur,
+                usage_id=usage_id,
+                tag_id=tag_id,
+                user_id=actor["user_id"],
+                equipment_nfc_uid=nfc_uid,
+                action="checkout",
+                result="accepted",
+                reader_id=reader_id,
+                location_name=location_name,
+                reason=None,
+            )
+            conn.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(500, "장비 사용 시작 처리 중 데이터베이스 오류가 발생했습니다.")
+
+    return {
+        "ok": True,
+        "usage_id": usage_id,
+        "tag_id": tag_id,
+        "asset_status": "checked_out",
+        "current_holder_user_id": actor["user_id"],
+        "current_holder_name": actor["display_name"],
+    }
+
+
+@app.post("/usage/return")
+def usage_return(body: NfcUsageActionRequest):
+    actor = validate_usage_actor(body)
+    token = normalize_nfc_token(body.nfc_token)
+    now = dt.datetime.now(dt.timezone.utc)
+
+    anchor_result = None
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            tag_row = fetch_tag_by_nfc_token(cur, token)
+            if not tag_row or not tag_row[9]:
+                raise HTTPException(404, "매핑된 장비를 찾을 수 없습니다.")
+
+            (
+                tag_id,
+                _equipment_name,
+                _equipment_type,
+                _serial_number,
+                nfc_uid,
+                asset_status,
+                current_holder_user_id,
+                current_holder_name,
+                current_usage_id,
+                _is_active,
+            ) = tag_row
+
+            location_snapshot = resolve_tag_location_snapshot(tag_id)
+            reader_id = location_snapshot["reader_id"] if location_snapshot else None
+            location_name = location_snapshot["location"] if location_snapshot else None
+
+            if asset_status != "checked_out" or not current_usage_id:
+                raise HTTPException(409, "현재 사용 중인 장비가 아닙니다.")
+            if actor["role"] != "admin" and current_holder_user_id != actor["user_id"]:
+                raise HTTPException(
+                    403,
+                    f"이 장비는 {current_holder_name or current_holder_user_id or '다른 사용자'}가 사용 중입니다.",
+                )
+
+            cur.execute(
+                """
+                UPDATE usage_history
+                SET
+                  usage_status = 'returned',
+                  returned_by_user_id = %s,
+                  returned_by_name = %s,
+                  returned_by_position = %s,
+                  returned_by_department = %s,
+                  return_method = 'nfc',
+                  return_reader_id = %s,
+                  return_location = %s,
+                  returned_at = %s,
+                  updated_at = now()
+                WHERE usage_id = %s
+                """,
+                (
+                    actor["user_id"],
+                    actor["display_name"],
+                    actor["position"],
+                    actor["department"],
+                    reader_id,
+                    location_name,
+                    now,
+                    current_usage_id,
+                ),
+            )
+
+            cur.execute(
+                """
+                UPDATE tags
+                SET
+                  asset_status = 'available',
+                  current_holder_user_id = NULL,
+                  current_usage_id = NULL,
+                  last_returned_at = %s,
+                  updated_at = now()
+                WHERE tag_id = %s
+                """,
+                (now, tag_id),
+            )
+
+            insert_nfc_event(
+                cur,
+                usage_id=current_usage_id,
+                tag_id=tag_id,
+                user_id=actor["user_id"],
+                equipment_nfc_uid=nfc_uid,
+                action="return",
+                result="accepted",
+                reader_id=reader_id,
+                location_name=location_name,
+                reason=None,
+            )
+            conn.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(500, "장비 사용 종료 처리 중 데이터베이스 오류가 발생했습니다.")
+
+    try:
+        source = fetch_usage_integrity_source(current_usage_id)
+        if source:
+            payload = build_usage_integrity_payload(source)
+            usage_hash = compute_usage_hash(payload)
+            anchor_result = anchor_usage_hash_to_chain(current_usage_id, usage_hash)
+    except Exception:
+        anchor_result = {
+            "ok": False,
+            "status": "record_error",
+            "detail": "반납 후 온체인 기록 중 오류가 발생했습니다.",
+        }
+
+    return {
+        "ok": True,
+        "usage_id": current_usage_id,
+        "tag_id": tag_id,
+        "asset_status": "available",
+        "current_holder_user_id": None,
+        "current_holder_name": None,
+        "blockchain": anchor_result,
     }
 
 
 @app.get("/rtls/live")
 def rtls_live():
     now = int(time.time())
-    sql = """
-    WITH latest AS (
-      SELECT DISTINCT ON (h.tag_id)
-        h.tag_id,
-        h.reader_id,
-        h.rssi,
-        h.decided_at
-      FROM tag_state_history h
-      ORDER BY h.tag_id, h.decided_at DESC
-    )
-    SELECT
-      l.tag_id,
-      t.equipment_name,
-      t.equipment_type,
-      t.serial_number,
-      l.reader_id,
-      COALESCE(r.location_name, l.reader_id) AS location,
-      l.rssi,
-      EXTRACT(EPOCH FROM l.decided_at)::BIGINT AS updated_at_epoch
-    FROM latest l
-    LEFT JOIN tags t ON t.tag_id = l.tag_id
-    LEFT JOIN readers r ON r.reader_id = l.reader_id
-    ORDER BY l.decided_at DESC
-    """
-    readers_sql = """
-    SELECT reader_id, COALESCE(location_name, reader_id) AS location
-    FROM readers
-    WHERE is_active = TRUE
-    ORDER BY reader_id
-    """
-    try:
-        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
-            cur.execute(sql)
-            rows = cur.fetchall()
-            cur.execute(readers_sql)
-            reader_rows = cur.fetchall()
-    except Exception:
-        raise HTTPException(500, "실시간 위치 조회 중 데이터베이스 오류가 발생했습니다.")
+    reader_locations = load_reader_location_map()
+    tag_metadata = load_tag_metadata(set(tag_state.keys()))
 
     items = []
-    for (
-        tag_id,
-        equipment_name,
-        equipment_type,
-        serial_number,
-        reader_id,
-        location,
-        last_rssi,
-        updated_at_epoch,
-    ) in rows:
+    for tag_id, state in tag_state.items():
+        reader_id = state.get("current_reader")
+        if not reader_id:
+            continue
+
+        metadata = tag_metadata.get(tag_id, {})
+        updated_at_epoch = state.get("updated_at")
+        last_rssi = state.get("current_rssi")
         is_stale = False
         if isinstance(updated_at_epoch, int):
             is_stale = (now - updated_at_epoch) > (STALE_SEC * 2)
         items.append(
             {
                 "tag_id": tag_id,
-                "equipment_name": equipment_name,
-                "equipment_type": equipment_type,
-                "serial_number": serial_number,
+                "equipment_name": metadata.get("equipment_name"),
+                "equipment_type": metadata.get("equipment_type"),
+                "serial_number": metadata.get("serial_number"),
+                "asset_status": metadata.get("asset_status") or "available",
+                "current_holder_user_id": metadata.get("current_holder_user_id"),
+                "current_holder_name": metadata.get("current_holder_name"),
                 "reader_id": reader_id,
-                "location": location,
+                "location": reader_locations.get(reader_id, READER_LOCATION.get(reader_id, reader_id)),
                 "rssi": last_rssi,
                 "updated_at": updated_at_epoch,
                 "is_stale": is_stale,
             }
         )
 
+    items.sort(key=lambda item: item.get("updated_at") or 0, reverse=True)
+
     readers = [
         {"reader_id": reader_id, "location": location}
-        for (reader_id, location) in reader_rows
+        for reader_id, location in sorted(reader_locations.items())
     ]
-    if not readers:
-        readers = [
-            {"reader_id": reader_id, "location": location}
-            for reader_id, location in READER_LOCATION.items()
-        ]
 
     return {
         "ok": True,
@@ -523,6 +1397,7 @@ def usage_history(user: str | None = None, equipment: str | None = None, date: s
 
     items = []
     for row in rows:
+        verification = verify_usage_against_chain(row[0])
         items.append(
             {
                 "usage_id": row[0],
@@ -547,6 +1422,15 @@ def usage_history(user: str | None = None, equipment: str | None = None, date: s
                     "at": row[12],
                 },
                 "created_at": row[13],
+                "verification": {
+                    "verification_status": verification.get("verification_status"),
+                    "detail": verification.get("detail"),
+                    "recalculated_hash": verification.get("recalculated_hash"),
+                    "onchain_hash": verification.get("onchain_hash"),
+                    "onchain_exists": verification.get("onchain_exists"),
+                    "recorded_at": verification.get("recorded_at"),
+                    "recorder": verification.get("recorder"),
+                },
             }
         )
 

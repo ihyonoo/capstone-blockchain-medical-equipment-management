@@ -60,7 +60,10 @@ fi
 
 cp "${BUILD_DIR}/genesis.json" "${GENESIS_FILE}"
 
-mapfile -t KEY_DIRS < <(find "${KEYS_DIR}" -mindepth 1 -maxdepth 1 -type d | sort)
+KEY_DIRS=()
+while IFS= read -r key_dir; do
+  KEY_DIRS+=("${key_dir}")
+done < <(find "${KEYS_DIR}" -mindepth 1 -maxdepth 1 -type d | sort)
 
 if [[ "${#KEY_DIRS[@]}" -ne 4 ]]; then
   echo "expected 4 validator key directories, got ${#KEY_DIRS[@]}" >&2

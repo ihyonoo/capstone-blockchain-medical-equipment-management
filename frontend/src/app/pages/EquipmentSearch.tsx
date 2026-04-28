@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
+import { API_BASE_URL } from '../lib/runtime';
 import {
   Search,
   MapPin,
@@ -16,16 +17,16 @@ import {
   ScanLine,
   LogOut,
   Navigation,
-  RefreshCw,
 } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 type LiveLocationItem = {
   tag_id: string;
   equipment_name: string | null;
   equipment_type: string | null;
   serial_number: string | null;
+  asset_status: string;
+  current_holder_user_id: number | null;
+  current_holder_name: string | null;
   reader_id: string;
   location: string;
   rssi: number | null;
@@ -45,121 +46,11 @@ type EquipmentViewItem = {
   location: string;
   readerId: string;
   updatedAt: number | null;
-  isInUse: boolean;
+  isStale: boolean;
+  assetStatus: string;
+  currentHolderUserId: number | null;
+  currentHolderName: string | null;
 };
-
-const MOCK_READERS: LiveReaderItem[] = [
-  { reader_id: 'ER-TRIAGE', location: '응급실' },
-  { reader_id: 'ICU-WARD', location: '중환자실' },
-  { reader_id: 'M503', location: '수술실' },
-  { reader_id: 'M504', location: '영상의학과' },
-  { reader_id: 'WARD-7', location: '7병동' },
-  { reader_id: 'LAB-2', location: '검사실' },
-];
-
-function buildMockLiveItems(now: number): LiveLocationItem[] {
-  return [
-    {
-      tag_id: 'TAG-001',
-      equipment_name: '심전도 모니터',
-      equipment_type: '응급',
-      serial_number: 'DEF-2026-001',
-      reader_id: 'ER-TRIAGE',
-      location: '응급실',
-      rssi: -49,
-      updated_at: now - 3,
-      is_stale: false,
-    },
-    {
-      tag_id: 'TAG-002',
-      equipment_name: '수액펌프',
-      equipment_type: '모니터링',
-      serial_number: 'MON-2026-011',
-      reader_id: 'ICU-WARD',
-      location: '중환자실',
-      rssi: -55,
-      updated_at: now - 7,
-      is_stale: false,
-    },
-    {
-      tag_id: 'TAG-003',
-      equipment_name: '제세동기',
-      equipment_type: '영상',
-      serial_number: 'IMG-2026-004',
-      reader_id: 'M504',
-      location: '영상의학과',
-      rssi: -63,
-      updated_at: now - 18,
-      is_stale: true,
-    },
-    {
-      tag_id: 'TAG-004',
-      equipment_name: '인공호흡기',
-      equipment_type: '병실',
-      serial_number: 'BED-2026-020',
-      reader_id: 'WARD-7',
-      location: '7병동',
-      rssi: -58,
-      updated_at: now - 4,
-      is_stale: false,
-    },
-    {
-      tag_id: 'TAG-005',
-      equipment_name: '이동식 X-ray',
-      equipment_type: '측정',
-      serial_number: 'TMP-2026-008',
-      reader_id: 'LAB-2',
-      location: '검사실',
-      rssi: -61,
-      updated_at: now - 9,
-      is_stale: false,
-    },
-    {
-      tag_id: 'TAG-006',
-      equipment_name: '초음파기',
-      equipment_type: '치료',
-      serial_number: 'TRT-2026-005',
-      reader_id: 'ICU-WARD',
-      location: '중환자실',
-      rssi: -67,
-      updated_at: now - 24,
-      is_stale: true,
-    },
-    {
-      tag_id: 'TAG-007',
-      equipment_name: '환자 모니터',
-      equipment_type: '모니터링',
-      serial_number: 'MON-2026-013',
-      reader_id: 'M503',
-      location: '수술실',
-      rssi: -53,
-      updated_at: now - 5,
-      is_stale: false,
-    },
-    {
-      tag_id: 'TAG-008',
-      equipment_name: '휠체어',
-      equipment_type: '응급',
-      serial_number: 'DEF-2026-009',
-      reader_id: 'ER-TRIAGE',
-      location: '응급실',
-      rssi: -57,
-      updated_at: now - 11,
-      is_stale: false,
-    },
-    {
-      tag_id: 'TAG-009',
-      equipment_name: '폴대',
-      equipment_type: '병실',
-      serial_number: 'BED-2026-024',
-      reader_id: 'WARD-7',
-      location: '7병동',
-      rssi: -52,
-      updated_at: now - 6,
-      is_stale: false,
-    },
-  ];
-}
 
 function getEquipmentIcon(type: string) {
   switch (type) {
@@ -180,24 +71,43 @@ function getEquipmentIcon(type: string) {
   }
 }
 
-function getStatusColor(isInUse: boolean) {
-  return isInUse ? 'h-2.5 w-2.5 rounded-full bg-red-500' : 'h-2.5 w-2.5 rounded-full bg-green-500';
+function getStatusColor(isStale: boolean) {
+  return isStale ? 'h-2.5 w-2.5 rounded-full bg-amber-500' : 'h-2.5 w-2.5 rounded-full bg-green-500';
 }
 
-function getStatusLabel(isInUse: boolean) {
-  return isInUse ? '사용 중' : '사용 가능';
+function getStatusLabel(isStale: boolean) {
+  return isStale ? '수신 지연' : '수신 정상';
 }
 
-function formatAgo(updatedAt: number | null) {
-  if (!updatedAt) return '미수신';
-  const now = Math.floor(Date.now() / 1000);
-  const diff = Math.max(0, now - updatedAt);
-  if (diff < 5) return '방금';
-  if (diff < 60) return `${diff}초 전`;
-  const min = Math.floor(diff / 60);
-  if (min < 60) return `${min}분 전`;
-  const hour = Math.floor(min / 60);
-  return `${hour}시간 전`;
+function getAssetStatusColor(status: string) {
+  switch (status) {
+    case 'checked_out':
+      return 'h-2.5 w-2.5 rounded-full bg-red-500';
+    case 'maintenance':
+      return 'h-2.5 w-2.5 rounded-full bg-amber-500';
+    case 'inactive':
+      return 'h-2.5 w-2.5 rounded-full bg-slate-400';
+    default:
+      return 'h-2.5 w-2.5 rounded-full bg-green-500';
+  }
+}
+
+function getAssetStatusLabel(status: string) {
+  switch (status) {
+    case 'checked_out':
+      return '대여 중';
+    case 'maintenance':
+      return '점검 중';
+    case 'inactive':
+      return '비활성';
+    default:
+      return '사용 가능';
+  }
+}
+
+function getShortTagId(tagId: string) {
+  const head = tagId.split(':')[0] ?? tagId;
+  return head.split('-')[0] ?? head;
 }
 
 export default function EquipmentSearch() {
@@ -214,7 +124,6 @@ export default function EquipmentSearch() {
   const [fetchError, setFetchError] = useState('');
   const [lastSyncTs, setLastSyncTs] = useState<number | null>(null);
   const [readerLocations, setReaderLocations] = useState<string[]>([]);
-  const [isUsingMockData, setIsUsingMockData] = useState(false);
 
   const equipment = useMemo<EquipmentViewItem[]>(() => {
     return liveItems.map((item) => ({
@@ -224,7 +133,10 @@ export default function EquipmentSearch() {
       location: item.location || item.reader_id,
       readerId: item.reader_id,
       updatedAt: item.updated_at,
-      isInUse: item.reader_id === 'ER-TRIAGE' || item.reader_id === 'ICU-WARD' || item.is_stale,
+      isStale: item.is_stale,
+      assetStatus: item.asset_status,
+      currentHolderUserId: item.current_holder_user_id,
+      currentHolderName: item.current_holder_name,
     }));
   }, [liveItems]);
 
@@ -257,8 +169,6 @@ export default function EquipmentSearch() {
       return matchesSearch && matchesType && matchesLocation;
     });
   }, [equipment, searchQuery, selectedType, selectedLocation]);
-
-  const inUseCount = useMemo(() => equipment.filter((item) => item.isInUse).length, [equipment]);
 
   useEffect(() => {
     try {
@@ -306,30 +216,17 @@ export default function EquipmentSearch() {
               .filter((location): location is string => typeof location === 'string' && location.length > 0)
           : [];
         const responseTs = payload.ts ?? Math.floor(Date.now() / 1000);
-
-        if (serverItems.length > 0) {
-          setLiveItems(serverItems);
-          setReaderLocations(Array.from(new Set(serverReaders)));
-          setLastSyncTs(responseTs * 1000);
-          setFetchError('');
-          setIsUsingMockData(false);
-          return;
-        }
-
-        setLiveItems(buildMockLiveItems(responseTs));
-        setReaderLocations(Array.from(new Set(MOCK_READERS.map((reader) => reader.location))));
+        setLiveItems(serverItems);
+        setReaderLocations(Array.from(new Set(serverReaders)));
         setLastSyncTs(responseTs * 1000);
         setFetchError('');
-        setIsUsingMockData(true);
       } catch (err) {
         if (cancelled) return;
-        const fallbackTs = Math.floor(Date.now() / 1000);
-        setLiveItems(buildMockLiveItems(fallbackTs));
-        setReaderLocations(Array.from(new Set(MOCK_READERS.map((reader) => reader.location))));
-        setLastSyncTs(fallbackTs * 1000);
-        setIsUsingMockData(true);
-        if (err instanceof Error) setFetchError(`${err.message} 현재는 예시 데이터를 표시합니다.`);
-        else setFetchError('실시간 위치 조회 중 오류가 발생했습니다. 현재는 예시 데이터를 표시합니다.');
+        setLiveItems([]);
+        setReaderLocations([]);
+        setLastSyncTs(null);
+        if (err instanceof Error) setFetchError(err.message);
+        else setFetchError('실시간 위치 조회 중 오류가 발생했습니다.');
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -361,13 +258,8 @@ export default function EquipmentSearch() {
 
   return (
     <AppShell
-      title="장비 검색"
       actions={
         <>
-          <div className="hidden md:flex inline-meta__item">
-            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {lastSyncTs ? new Date(lastSyncTs).toLocaleTimeString() : '대기 중'}
-          </div>
           <Button variant="outline" onClick={() => navigate('/')}>
             <LogOut className="h-4 w-4" />
             로그아웃
@@ -375,7 +267,7 @@ export default function EquipmentSearch() {
         </>
       }
       headerAside={
-        <div className="metric-grid">
+        <div className="metric-grid w-full max-w-[32rem]" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
           <div className="metric-card">
             <div className="metric-label">추적 중인 장비</div>
             <div className="metric-value">{equipment.length}</div>
@@ -383,10 +275,6 @@ export default function EquipmentSearch() {
           <div className="metric-card">
             <div className="metric-label">활성 위치 구역</div>
             <div className="metric-value">{locationPanels.length}</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">사용 중 장비</div>
-            <div className="metric-value">{inUseCount}</div>
           </div>
         </div>
       }
@@ -483,7 +371,9 @@ export default function EquipmentSearch() {
                         <div className="space-y-2">
                           <div>
                             <h3 className="text-[1rem] leading-5">{item.name}</h3>
-                            <p className="text-sm text-muted-foreground">{item.id}</p>
+                            <p className="text-sm text-muted-foreground" title={item.id}>
+                              {getShortTagId(item.id)}
+                            </p>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                             <span className="inline-flex items-center gap-2">
@@ -493,15 +383,19 @@ export default function EquipmentSearch() {
                           </div>
                         </div>
                       </div>
-                      <span className={getStatusColor(item.isInUse)} />
+                      <span className={getAssetStatusColor(item.assetStatus)} />
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                      <Badge variant="outline">{item.type}</Badge>
-                      <div className="text-xs text-muted-foreground">
-                        상태: {getStatusLabel(item.isInUse)} · 업데이트 {formatAgo(item.updatedAt)}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{item.type}</Badge>
+                        <Badge variant="outline">{getAssetStatusLabel(item.assetStatus)}</Badge>
                       </div>
+                      <div className="text-xs text-muted-foreground">추적: {getStatusLabel(item.isStale)}</div>
                     </div>
+                    {item.currentHolderName ? (
+                      <div className="mt-2 text-xs text-muted-foreground">사용자: {item.currentHolderName}</div>
+                    ) : null}
                   </button>
                 ))
               )}
@@ -518,7 +412,6 @@ export default function EquipmentSearch() {
                   리더 위치 패널
                 </div>
               </div>
-              {selectedItem ? <Badge>{selectedItem.name}</Badge> : <Badge variant="outline">선택 없음</Badge>}
             </div>
 
             {locationPanels.length === 0 ? (
@@ -555,13 +448,13 @@ export default function EquipmentSearch() {
                             >
                               <div className="min-w-0">
                                 <div className="truncate font-medium text-foreground">{eq.name}</div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  {eq.id} · {formatAgo(eq.updatedAt)}
+                                <div className="mt-1 text-xs text-muted-foreground" title={eq.id}>
+                                  {getShortTagId(eq.id)}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span className={getStatusColor(eq.isInUse)} />
-                                <span>{getStatusLabel(eq.isInUse)}</span>
+                                <span className={getAssetStatusColor(eq.assetStatus)} />
+                                <span className="whitespace-nowrap">{getAssetStatusLabel(eq.assetStatus)}</span>
                               </div>
                             </button>
                           ))
@@ -579,6 +472,7 @@ export default function EquipmentSearch() {
               <div>
                 <div className="panel-title">선택 장비 상세</div>
               </div>
+              {selectedItem ? <Badge>{selectedItem.name}</Badge> : <Badge variant="outline">선택 없음</Badge>}
             </div>
 
             {!selectedItem ? (
@@ -602,17 +496,29 @@ export default function EquipmentSearch() {
                 <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">
                   <div className="metric-label">업데이트 상태</div>
                   <div className="mt-3 flex items-center gap-3 text-lg font-semibold tracking-[-0.04em]">
-                    <span className={getStatusColor(selectedItem.isInUse)} />
-                    {getStatusLabel(selectedItem.isInUse)}
+                    <span className={getStatusColor(selectedItem.isStale)} />
+                    {getStatusLabel(selectedItem.isStale)}
                   </div>
+                </div>
+                <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">
+                  <div className="metric-label">사용 상태</div>
+                  <div className="mt-3 flex items-center gap-3 text-xl font-semibold tracking-[-0.04em]">
+                    <span className={getAssetStatusColor(selectedItem.assetStatus)} />
+                    {getAssetStatusLabel(selectedItem.assetStatus)}
+                  </div>
+                </div>
+                <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">
+                  <div className="metric-label">현재 사용자</div>
+                  <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">{selectedItem.currentHolderName ?? '-'}</div>
                 </div>
               </div>
             )}
 
             {selectedItem ? (
               <div className="mt-4 inline-meta">
-                <span className="inline-meta__item">Tag {selectedItem.id}</span>
-                <span className="inline-meta__item">마지막 수신 {formatAgo(selectedItem.updatedAt)}</span>
+                <span className="inline-meta__item" title={selectedItem.id}>
+                  Tag {getShortTagId(selectedItem.id)}
+                </span>
                 <span className="inline-meta__item">{selectedItem.type}</span>
               </div>
             ) : null}

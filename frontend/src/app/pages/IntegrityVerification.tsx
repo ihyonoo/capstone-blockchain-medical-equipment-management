@@ -5,9 +5,8 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
-import { Search, LogOut, User, ListFilter, AlertTriangle, Download, ShieldCheck, ChevronDown } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+import { API_BASE_URL } from '../lib/runtime';
+import { Search, LogOut, User, ListFilter, Download, ShieldCheck, ChevronDown } from 'lucide-react';
 
 type UsageHistoryItem = {
   usage_id: number;
@@ -32,6 +31,31 @@ type UsageHistoryItem = {
     at: number | null;
   };
   created_at: number | null;
+  verification: UsageVerifyResult;
+};
+
+const FALLBACK_VERIFICATION: UsageVerifyResult = {
+  ok: true,
+  usage_id: 0,
+  verification_status: 'not_configured',
+  detail: '검증 결과를 아직 불러오지 못했습니다.',
+  recalculated_hash: null,
+  onchain_hash: null,
+  onchain_exists: false,
+  recorded_at: null,
+  recorder: null,
+};
+
+type UsageVerifyResult = {
+  ok: boolean;
+  usage_id: number;
+  verification_status: 'match' | 'mismatch' | 'not_anchored' | 'not_configured' | 'chain_error';
+  detail: string | null;
+  recalculated_hash: string | null;
+  onchain_hash: string | null;
+  onchain_exists: boolean;
+  recorded_at?: number | null;
+  recorder?: string | null;
 };
 
 type SearchMode = 'user' | 'equipment' | 'date';
@@ -47,49 +71,45 @@ function formatDateTime(epoch: number | null) {
 }
 
 function getDisplayDepartment(item: UsageHistoryItem) {
-  if (item.equipment.name === '제세동기-06' && item.user.name === '홍길동') {
-    return '외과';
-  }
   return item.user.department ?? '-';
 }
 
 function getDisplayPosition(item: UsageHistoryItem) {
-  if (item.equipment.name === '제세동기-06' && item.user.name === '홍길동') {
-    return '간호사';
-  }
   return item.user.position ?? '-';
 }
 
 function getDisplayUsagePath(item: UsageHistoryItem) {
-  if (item.equipment.name === '제세동기-06' && item.user.name === '홍길동') {
-    return '외과 → 중환자실';
-  }
   return `${item.checkout.location ?? item.checkout.reader_id ?? '-'} → ${item.return.location ?? item.return.reader_id ?? '진료과'}`;
 }
 
-function buildUsagePayloadText(item: UsageHistoryItem) {
-  return [
-    `장비 ID: ${item.equipment.tag_id}`,
-    `장비명: ${item.equipment.name}`,
-    `사용자: ${item.user.name}`,
-    `소속부서: ${getDisplayDepartment(item)}`,
-    `직책: ${getDisplayPosition(item)}`,
-    `사용 위치: ${getDisplayUsagePath(item)}`,
-    `대여 시각: ${formatDateTime(item.checkout.at)}`,
-    `반납 시각: ${formatDateTime(item.return.at)}`,
-    `트랜잭션 인덱스 번호: TX-${String(item.usage_id).padStart(5, '0')}`,
-  ].join('\n');
+function getVerificationLabel(status: UsageVerifyResult['verification_status']) {
+  switch (status) {
+    case 'match':
+      return '검증 통과';
+    case 'mismatch':
+      return '불일치';
+    case 'not_anchored':
+      return '미앵커';
+    case 'not_configured':
+      return '체인 미설정';
+    default:
+      return '조회 오류';
+  }
 }
 
-function pseudoHash(input: string) {
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
+function getVerificationBadgeVariant(status: UsageVerifyResult['verification_status']): 'default' | 'destructive' | 'outline' | 'secondary' {
+  switch (status) {
+    case 'match':
+      return 'default';
+    case 'mismatch':
+    case 'chain_error':
+      return 'destructive';
+    case 'not_anchored':
+    case 'not_configured':
+      return 'secondary';
+    default:
+      return 'outline';
   }
-
-  const hex = (hash >>> 0).toString(16).padStart(8, '0');
-  return `0x${hex}${hex}${hex}${hex}${hex}${hex}${hex}${hex}`;
 }
 
 export default function IntegrityVerification() {
@@ -161,40 +181,6 @@ export default function IntegrityVerification() {
     if (!isAuthorized) return;
     fetchHistory(searchMode, '');
   }, [isAuthorized, fetchHistory]);
-
-  const verificationSummary = useMemo(() => {
-    // 현재 프론트에서는 검증 시뮬레이션 값을 사용한다.
-    // usage_id 기반의 고정 점수를 만들어 화면 새로고침마다 결과가 흔들리지 않게 유지한다.
-    const targetItems = items.slice(0, 100);
-    const checkedCount = targetItems.length;
-    if (checkedCount === 0) {
-      return {
-        checkedCount: 0,
-        successCount: 0,
-        failedCount: 0,
-        failedUsageIds: new Set<number>(),
-      };
-    }
-
-    const failedCount = Math.min(checkedCount, Math.max(1, Math.round(checkedCount * 0.03)));
-    const failedUsageIds = new Set(
-      [...targetItems]
-        .map((item) => ({
-          usageId: item.usage_id,
-          score: (item.usage_id * 2654435761) >>> 0,
-        }))
-        .sort((a, b) => a.score - b.score)
-        .slice(0, failedCount)
-        .map((entry) => entry.usageId),
-    );
-
-    return {
-      checkedCount,
-      successCount: checkedCount - failedCount,
-      failedCount,
-      failedUsageIds,
-    };
-  }, [items]);
 
   const totalCount = items.length;
 
@@ -271,27 +257,25 @@ export default function IntegrityVerification() {
 
   return (
     <AppShell
-      title="무결성 검증"
-      subtitle="검색, 다운로드, 사용 이력 검토"
       actions={
-        <Button variant="outline" onClick={() => navigate('/')}>
-          <LogOut className="h-4 w-4" />
-          로그아웃
-        </Button>
+        <>
+          <Button variant="secondary" onClick={() => navigate('/verification')}>
+            장비 사용 이력 조회
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/admin/nfc-mapping')}>
+            NFC 매핑
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/')}>
+            <LogOut className="h-4 w-4" />
+            로그아웃
+          </Button>
+        </>
       }
       headerAside={
-        <div className="metric-grid">
-          <div className="metric-card">
+        <div className="w-[10rem] max-w-full">
+          <div className="metric-card text-center">
             <div className="metric-label">조회 결과</div>
             <div className="metric-value">{totalCount}</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">검증 성공</div>
-            <div className="metric-value text-emerald-700">{verificationSummary.successCount}</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">검증 실패</div>
-            <div className="metric-value text-red-700">{verificationSummary.failedCount}</div>
           </div>
         </div>
       }
@@ -371,23 +355,6 @@ export default function IntegrityVerification() {
           ) : null}
         </section>
 
-        {verificationSummary.failedCount > 0 ? (
-          <section className="surface-panel p-5 fade-rise-delay">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <div className="panel-title flex items-center gap-2 text-foreground">
-                  <AlertTriangle className="h-5 w-5 text-primary" />
-                  무결성 경고
-                </div>
-                <p className="mt-2 text-[1.02rem] leading-7 text-muted-foreground">
-                  검증 대상 {verificationSummary.checkedCount}건 중 {verificationSummary.failedCount}건이 블록체인 대조 결과와 일치하지 않았습니다.
-                </p>
-              </div>
-              <Badge variant="outline">{verificationSummary.failedCount}건 재검토 필요</Badge>
-            </div>
-          </section>
-        ) : null}
-
         <section className="surface-panel p-5 fade-rise-delay">
           <div className="panel-header">
             <div>
@@ -406,29 +373,22 @@ export default function IntegrityVerification() {
                 <div className="empty-state">조회된 사용 이력이 없습니다.</div>
               ) : (
                 items.map((item) => {
-                  const isFailed = verificationSummary.failedUsageIds.has(item.usage_id);
                   const isExpanded = expandedUsageId === item.usage_id;
-                  const originalPayload = buildUsagePayloadText(item);
-                  const originalHash = pseudoHash(originalPayload);
-                  const blockchainHash = isFailed
-                    ? pseudoHash(`${originalPayload}-blockchain-mismatch`)
-                    : originalHash;
-                  const verificationLabel = originalHash === blockchainHash ? '무결성 검증 성공' : '무결성 검증 실패';
                   const displayDepartment = getDisplayDepartment(item);
                   const displayPosition = getDisplayPosition(item);
                   const usagePath = getDisplayUsagePath(item);
+                  const verification = item.verification ?? { ...FALLBACK_VERIFICATION, usage_id: item.usage_id };
                   return (
                   <div
                     key={item.usage_id}
-                    className={`rounded-[1.7rem] border p-5 transition-all ${
-                      isFailed
-                        ? 'border-white/70 bg-white/62'
-                        : 'border-white/70 bg-white/58'
-                    }`}
+                    className="rounded-[1.7rem] border border-white/70 bg-white/58 p-5 transition-all"
                   >
                     <button
                       type="button"
-                      onClick={() => setExpandedUsageId(isExpanded ? null : item.usage_id)}
+                      onClick={() => {
+                        const nextExpanded = isExpanded ? null : item.usage_id;
+                        setExpandedUsageId(nextExpanded);
+                      }}
                       className="mb-4 flex w-full flex-wrap items-center justify-between gap-3 text-left"
                     >
                       <div>
@@ -436,11 +396,7 @@ export default function IntegrityVerification() {
                         <div className="mt-1 text-[1.02rem] text-muted-foreground">usage_id {item.usage_id} · tag {item.equipment.tag_id}</div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {isFailed ? (
-                          <Badge className="border border-red-300 bg-red-100 text-red-700">무결성 실패</Badge>
-                        ) : (
-                          <Badge className="border border-emerald-300 bg-emerald-100 text-emerald-700">무결성 성공</Badge>
-                        )}
+                        <Badge variant="outline">사용 이력</Badge>
                         <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                       </div>
                     </button>
@@ -489,6 +445,24 @@ export default function IntegrityVerification() {
                     {isExpanded ? (
                       <div className="mt-4 space-y-3 rounded-[1.5rem] border border-slate-300/70 bg-slate-200/70 p-4">
                         <div>
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-[1.2rem] font-semibold text-black">블록체인 무결성 검증</div>
+                          </div>
+                          <div className="space-y-3 rounded-[1.1rem] border border-slate-300/70 bg-slate-100/90 p-4 text-[1rem] text-foreground">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant={getVerificationBadgeVariant(verification.verification_status)}>
+                                {getVerificationLabel(verification.verification_status)}
+                              </Badge>
+                              {verification.detail ? (
+                                <span className="text-sm text-muted-foreground">{verification.detail}</span>
+                              ) : null}
+                            </div>
+                            <div>재계산 해시: {verification.recalculated_hash ?? '-'}</div>
+                            <div>온체인 해시: {verification.onchain_hash ?? '-'}</div>
+                            <div>기록 시각: {formatDateTime(verification.recorded_at ?? null)}</div>
+                          </div>
+                        </div>
+                        <div>
                           <div className="text-[1.2rem] font-semibold text-black">장비 사용 이력 원본 데이터</div>
                           <div className="mt-2 rounded-[1.1rem] border border-slate-300/70 bg-slate-100/90 p-4 text-[1.28rem] leading-[2rem] text-foreground">
                             <div>장비 ID: {item.equipment.tag_id}</div>
@@ -500,35 +474,6 @@ export default function IntegrityVerification() {
                             <div>대여 시각: {formatDateTime(item.checkout.at)}</div>
                             <div>반납 시각: {formatDateTime(item.return.at)}</div>
                             <div>트랜잭션 인덱스 번호: TX-{String(item.usage_id).padStart(5, '0')}</div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[1.2rem] font-semibold text-black">원본 데이터 해시값</div>
-                          <div className="mt-2 break-all rounded-[1.1rem] border border-slate-300/70 bg-slate-100/90 p-4 font-mono text-[1.2rem] leading-[1.9rem] text-foreground">
-                            {originalHash}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[1.2rem] font-semibold text-black">블록체인 저장 해시값</div>
-                          <div className="mt-2 break-all rounded-[1.1rem] border border-slate-300/70 bg-slate-100/90 p-4 font-mono text-[1.2rem] leading-[1.9rem] text-foreground">
-                            {blockchainHash}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[1.2rem] font-semibold text-black">검증 결과</div>
-                          <div className="mt-2 rounded-[1.1rem] border border-slate-300/70 bg-slate-100/90 p-4">
-                            {originalHash === blockchainHash ? (
-                              <Badge className="border border-emerald-300 bg-emerald-100 px-4 py-2.5 text-[1.16rem] text-emerald-700">
-                                {verificationLabel}
-                              </Badge>
-                            ) : (
-                              <Badge className="border border-red-300 bg-red-100 px-4 py-2.5 text-[1.16rem] text-red-700">
-                                {verificationLabel}
-                              </Badge>
-                            )}
                           </div>
                         </div>
                       </div>

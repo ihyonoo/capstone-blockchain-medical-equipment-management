@@ -32,6 +32,7 @@ pnpm-debug.log*
 *.log
 backups/
 .local-backups/
+.postgres-data/
 
 # OS / Editor
 .DS_Store

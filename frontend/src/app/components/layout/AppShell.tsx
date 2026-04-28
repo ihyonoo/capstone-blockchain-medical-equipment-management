@@ -3,7 +3,7 @@ import { Activity } from 'lucide-react';
 import { cn } from '../ui/utils';
 
 type AppShellProps = {
-  title: string;
+  title?: string;
   subtitle?: string;
   actions?: ReactNode;
   headerAside?: ReactNode;
@@ -19,6 +19,9 @@ export default function AppShell({
   children,
   contentClassName,
 }: AppShellProps) {
+  const hasHero = Boolean(title || subtitle || headerAside);
+  const headerOnly = Boolean(headerAside && !title && !subtitle);
+
   return (
     <div className="app-shell">
       <div className="app-shell__ambient" />
@@ -29,24 +32,34 @@ export default function AppShell({
               <Activity className="h-4 w-4" />
             </div>
             <div className="brand-copy">
-              <strong>Clinical Asset Ledger</strong>
-              <span>병원 장비 위치 추적 · 사용 이력 무결성</span>
+              <strong>의료 장비 사용 이력 관리 시스템</strong>
+              <span>의료 장비 사용 이력 관리 · 무결성 검증 · 의료 장비 실시간 위치 추적</span>
             </div>
           </div>
-          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+          {actions ? <div className="app-shell__actions flex items-center gap-2">{actions}</div> : null}
         </header>
 
-        <section className={cn('app-shell__hero', headerAside && 'app-shell__hero--split')}>
-          <div className="fade-rise">
-            <div className="page-header">
-              <div>
-                <div className="page-header__title">{title}</div>
-                {subtitle ? <p className="page-header__meta mt-2">{subtitle}</p> : null}
+        {hasHero ? (
+          <section
+            className={cn(
+              'app-shell__hero',
+              headerAside && !headerOnly && 'app-shell__hero--split',
+              headerOnly && 'justify-items-end',
+            )}
+          >
+            {title || subtitle ? (
+              <div className="fade-rise">
+                <div className="page-header">
+                  <div>
+                    {title ? <div className="page-header__title">{title}</div> : null}
+                    {subtitle ? <p className="page-header__meta mt-2">{subtitle}</p> : null}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          {headerAside ? <div className="fade-rise-delay">{headerAside}</div> : null}
-        </section>
+            ) : null}
+            {headerAside ? <div className="fade-rise-delay">{headerAside}</div> : null}
+          </section>
+        ) : null}
 
         <main className={cn('app-shell__content', contentClassName)}>{children}</main>
       </div>

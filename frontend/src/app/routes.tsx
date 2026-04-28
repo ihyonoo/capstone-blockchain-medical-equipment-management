@@ -3,6 +3,8 @@ import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import EquipmentSearch from './pages/EquipmentSearch';
 import IntegrityVerification from './pages/IntegrityVerification';
+import NfcMapping from './pages/NfcMapping';
+import NfcEquipment from './pages/NfcEquipment';
 
 export const router = createBrowserRouter([
   {
@@ -20,5 +22,13 @@ export const router = createBrowserRouter([
   {
     path: '/verification',
     Component: IntegrityVerification,
+  },
+  {
+    path: '/admin/nfc-mapping',
+    Component: NfcMapping,
+  },
+  {
+    path: '/nfc/:token',
+    Component: NfcEquipment,
   },
 ]);
