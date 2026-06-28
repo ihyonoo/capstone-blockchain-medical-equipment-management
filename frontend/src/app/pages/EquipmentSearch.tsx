@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
 import { API_BASE_URL } from '../lib/runtime';
+import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
 import {
   Search,
   MapPin,
@@ -79,6 +80,11 @@ function getStatusLabel(isStale: boolean) {
   return isStale ? '수신 지연' : '수신 정상';
 }
 
+function formatLastReceivedAt(epoch: number | null) {
+  if (!epoch) return '-';
+  return new Date(epoch * 1000).toLocaleString('ko-KR', { hour12: false });
+}
+
 function getAssetStatusColor(status: string) {
   switch (status) {
     case 'checked_out':
@@ -124,6 +130,11 @@ export default function EquipmentSearch() {
   const [fetchError, setFetchError] = useState('');
   const [lastSyncTs, setLastSyncTs] = useState<number | null>(null);
   const [readerLocations, setReaderLocations] = useState<string[]>([]);
+
+  const logout = () => {
+    clearStoredAuthSession();
+    navigate('/', { replace: true });
+  };
 
   const equipment = useMemo<EquipmentViewItem[]>(() => {
     return liveItems.map((item) => ({
@@ -172,12 +183,12 @@ export default function EquipmentSearch() {
 
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem('auth_user');
-      if (!raw) {
+      const session = getStoredAuthSession();
+      if (!session?.token || !session.user) {
         navigate('/', { replace: true });
         return;
       }
-      const user = JSON.parse(raw) as { role?: string };
+      const user = session.user;
       if (user.role === 'admin') {
         navigate('/verification', { replace: true });
         return;
@@ -199,11 +210,21 @@ export default function EquipmentSearch() {
     const fetchLiveLocations = async () => {
       setIsRefreshing(true);
       try {
+        const session = getStoredAuthSession();
+        if (!session?.token) {
+          logout();
+          return;
+        }
         const response = await fetch(`${API_BASE_URL}/rtls/live`, {
           method: 'GET',
           cache: 'no-store',
+          headers: buildAuthHeaders(session.token),
         });
         const payload = await response.json().catch(() => null);
+        if (response.status === 401 || response.status === 403) {
+          logout();
+          return;
+        }
         if (!response.ok || !payload?.ok) {
           throw new Error(payload?.detail ?? '실시간 위치 데이터를 가져오지 못했습니다.');
         }
@@ -236,6 +257,7 @@ export default function EquipmentSearch() {
     };
 
     fetchLiveLocations();
+    // 의료진 화면은 실시간 위치가 핵심이므로 짧은 주기로 새 값을 다시 받아온다.
     const intervalId = window.setInterval(fetchLiveLocations, 1000);
     return () => {
       cancelled = true;
@@ -260,7 +282,7 @@ export default function EquipmentSearch() {
     <AppShell
       actions={
         <>
-          <Button variant="outline" onClick={() => navigate('/')}>
+          <Button variant="outline" onClick={logout}>
             <LogOut className="h-4 w-4" />
             로그아웃
           </Button>
@@ -391,7 +413,10 @@ export default function EquipmentSearch() {
                         <Badge variant="outline">{item.type}</Badge>
                         <Badge variant="outline">{getAssetStatusLabel(item.assetStatus)}</Badge>
                       </div>
-                      <div className="text-xs text-muted-foreground">추적: {getStatusLabel(item.isStale)}</div>
+                      <div className="text-right text-xs text-muted-foreground">
+                        <div>추적: {getStatusLabel(item.isStale)}</div>
+                        {item.isStale ? <div>마지막 수신: {formatLastReceivedAt(item.updatedAt)}</div> : null}
+                      </div>
                     </div>
                     {item.currentHolderName ? (
                       <div className="mt-2 text-xs text-muted-foreground">사용자: {item.currentHolderName}</div>
@@ -495,9 +520,14 @@ export default function EquipmentSearch() {
                 </div>
                 <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">
                   <div className="metric-label">업데이트 상태</div>
-                  <div className="mt-3 flex items-center gap-3 text-lg font-semibold tracking-[-0.04em]">
-                    <span className={getStatusColor(selectedItem.isStale)} />
-                    {getStatusLabel(selectedItem.isStale)}
+                  <div className="mt-3">
+                    <div className="flex items-center gap-3 text-lg font-semibold tracking-[-0.04em]">
+                      <span className={getStatusColor(selectedItem.isStale)} />
+                      {getStatusLabel(selectedItem.isStale)}
+                    </div>
+                    <div className="mt-2 text-sm text-muted-foreground">
+                      마지막 수신 시각: {formatLastReceivedAt(selectedItem.updatedAt)}
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">

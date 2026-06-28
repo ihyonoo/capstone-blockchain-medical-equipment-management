@@ -1,11 +1,11 @@
 {
-  "name": "besu-usage-hash-tools",
+  "name": "besu-usage-record-tools",
   "private": true,
   "type": "module",
   "scripts": {
     "deploy:usage-registry": "node scripts/deploy-usage-registry.mjs",
-    "record:usage-hash": "node scripts/record-usage-hash.mjs",
-    "read:usage-hash": "node scripts/read-usage-hash.mjs"
+    "record:usage-record": "node scripts/record-usage-record.mjs",
+    "read:usage-record": "node scripts/read-usage-record.mjs"
   },
   "dependencies": {
     "ethers": "^6.13.5",

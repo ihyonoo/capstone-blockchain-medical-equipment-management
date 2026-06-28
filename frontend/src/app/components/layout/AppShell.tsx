@@ -33,7 +33,7 @@ export default function AppShell({
             </div>
             <div className="brand-copy">
               <strong>의료 장비 사용 이력 관리 시스템</strong>
-              <span>의료 장비 사용 이력 관리 · 무결성 검증 · 의료 장비 실시간 위치 추적</span>
+              <span>의료 장비 사용 이력 관리 · 완료 이력 온체인 기록 · 의료 장비 실시간 위치 추적</span>
             </div>
           </div>
           {actions ? <div className="app-shell__actions flex items-center gap-2">{actions}</div> : null}

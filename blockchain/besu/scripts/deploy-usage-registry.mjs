@@ -5,7 +5,7 @@ import solc from "solc";
 import { ethers } from "ethers";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const CONTRACT_PATH = path.join(ROOT_DIR, "contracts", "UsageHashRegistry.sol");
+const CONTRACT_PATH = path.join(ROOT_DIR, "contracts", "UsageRecordRegistry.sol");
 const DEPLOYMENT_PATH = path.join(ROOT_DIR, "deployments", "usage-registry.json");
 const RPC_URL = process.env.BESU_RPC_URL ?? "http://127.0.0.1:8549";
 const CHAIN_ID = Number(process.env.BESU_CHAIN_ID ?? "1337");
@@ -18,12 +18,17 @@ function compileContract() {
   const input = {
     language: "Solidity",
     sources: {
-      "UsageHashRegistry.sol": {
+      "UsageRecordRegistry.sol": {
         content: source,
       },
     },
     settings: {
       evmVersion: "berlin",
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      viaIR: true,
       outputSelection: {
         "*": {
           "*": ["abi", "evm.bytecode.object"],
@@ -40,7 +45,7 @@ function compileContract() {
     throw new Error(fatalErrors.map((item) => item.formattedMessage).join("\n"));
   }
 
-  return output.contracts["UsageHashRegistry.sol"].UsageHashRegistry;
+  return output.contracts["UsageRecordRegistry.sol"].UsageRecordRegistry;
 }
 
 async function main() {
@@ -52,7 +57,7 @@ async function main() {
   const wallet = new ethers.Wallet(DEPLOYER_PRIVATE_KEY, provider);
   const factory = new ethers.ContractFactory(compiled.abi, compiled.evm.bytecode.object, wallet);
 
-  console.log(`Deploying UsageHashRegistry to ${RPC_URL} ...`);
+  console.log(`Deploying UsageRecordRegistry to ${RPC_URL} ...`);
   console.log(`deployer: ${wallet.address}`);
 
   const contract = await factory.deploy({
@@ -72,7 +77,7 @@ async function main() {
     DEPLOYMENT_PATH,
     JSON.stringify(
       {
-        contractName: "UsageHashRegistry",
+        contractName: "UsageRecordRegistry",
         address: await contract.getAddress(),
         chainId: CHAIN_ID,
         rpcUrl: RPC_URL,

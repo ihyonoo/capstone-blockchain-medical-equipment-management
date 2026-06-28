@@ -1,0 +1,730 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import solc from "solc";
+import { ethers } from "ethers";
+
+const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const CONTRACT_PATH = path.join(ROOT_DIR, "contracts", "UsageRecordRegistry.sol");
+const DEPLOYMENT_PATH = path.join(ROOT_DIR, "deployments", "usage-registry.json");
+const RPC_URL = process.env.BESU_RPC_URL ?? "http://127.0.0.1:8549";
+const CHAIN_ID = Number(process.env.BESU_CHAIN_ID ?? "1337");
+const EMPTY_TRIE_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
+
+function compileContract() {
+  // 검증 스크립트도 계약 ABI가 필요하므로 소스에서 직접 ABI를 만든다.
+  const source = fs.readFileSync(CONTRACT_PATH, "utf8");
+  const input = {
+    language: "Solidity",
+    sources: {
+      "UsageRecordRegistry.sol": {
+        content: source,
+      },
+    },
+    settings: {
+      evmVersion: "berlin",
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      viaIR: true,
+      outputSelection: {
+        "*": {
+          "*": ["abi"],
+        },
+      },
+    },
+  };
+
+  const output = JSON.parse(solc.compile(JSON.stringify(input)));
+  const errors = output.errors ?? [];
+  const fatalErrors = errors.filter((item) => item.severity === "error");
+
+  if (fatalErrors.length > 0) {
+    throw new Error(fatalErrors.map((item) => item.formattedMessage).join("\n"));
+  }
+
+  return output.contracts["UsageRecordRegistry.sol"].UsageRecordRegistry.abi;
+}
+
+function normalizeString(value) {
+  return typeof value === "string" ? value : "";
+}
+
+function normalizeNullableString(value) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function normalizeInteger(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function sameHex(left, right) {
+  return normalizeString(left).toLowerCase() === normalizeString(right).toLowerCase();
+}
+
+function decodeOnchainRecord(usageId, record) {
+  return {
+    usageId: String(usageId),
+    checkoutUserId: Number(record[0]),
+    returnUserId: Number(record[1]),
+    tagId: record[2],
+    checkoutLocation: record[3],
+    checkoutAt: Number(record[4]),
+    returnLocation: record[5],
+    returnedAt: Number(record[6]),
+    recordedAt: Number(record[7]),
+    recorder: record[8],
+    exists: Boolean(record[9]),
+  };
+}
+
+function normalizeExpectedRecord(value, usageId) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return {
+    usageId: String(value.usageId ?? usageId),
+    checkoutUserId: normalizeInteger(value.checkoutUserId),
+    returnUserId: normalizeInteger(value.returnUserId),
+    tagId: normalizeString(value.tagId),
+    checkoutLocation: normalizeString(value.checkoutLocation),
+    checkoutAt: normalizeInteger(value.checkoutAt),
+    returnLocation: normalizeString(value.returnLocation),
+    returnedAt: normalizeInteger(value.returnedAt),
+  };
+}
+
+function normalizeAnchor(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return {
+    txHash: normalizeNullableString(value.txHash),
+    blockNumber: normalizeInteger(value.blockNumber),
+    blockHash: normalizeNullableString(value.blockHash),
+    transactionIndex: normalizeInteger(value.transactionIndex),
+    recordedAt: normalizeInteger(value.recordedAt),
+  };
+}
+
+function compareUsageRecord(left, right) {
+  const comparableKeys = [
+    "usageId",
+    "checkoutUserId",
+    "returnUserId",
+    "tagId",
+    "checkoutLocation",
+    "checkoutAt",
+    "returnLocation",
+    "returnedAt",
+  ];
+  const mismatchFields = comparableKeys.filter((key) => left?.[key] !== right?.[key]);
+  return {
+    matches: mismatchFields.length === 0,
+    mismatchFields,
+  };
+}
+
+function formatStatus(status, detail = null) {
+  switch (status) {
+    case "verified":
+      return {
+        verification_status: status,
+        verification_label: "무결성 검증 성공",
+        verification_method:
+          "DB 원문과 온체인 원문이 일치하고, 해당 트랜잭션이 포함된 블록의 transactionsRoot 재계산값도 일치합니다.",
+        detail,
+      };
+    case "not_eligible":
+      return {
+        verification_status: status,
+        verification_label: "검증 대상 아님",
+        verification_method: detail ?? "반납이 완료되지 않은 이력은 아직 온체인 검증 대상이 아닙니다.",
+        detail,
+      };
+    case "not_configured":
+      return {
+        verification_status: status,
+        verification_label: "체인 미설정",
+        verification_method: detail ?? "온체인 검증 환경이 아직 준비되지 않았습니다.",
+        detail,
+      };
+    case "onchain_missing":
+      return {
+        verification_status: status,
+        verification_label: "온체인 미기록",
+        verification_method: detail ?? "DB에 있는 반납 이력을 온체인에서 찾지 못했습니다.",
+        detail,
+      };
+    case "db_mismatch":
+      return {
+        verification_status: status,
+        verification_label: "DB/온체인 원문 불일치",
+        verification_method: detail ?? "DB 원문과 온체인 원문이 다릅니다.",
+        detail,
+      };
+    case "tx_input_mismatch":
+      return {
+        verification_status: status,
+        verification_label: "트랜잭션 입력값 불일치",
+        verification_method: detail ?? "앵커 트랜잭션의 입력값이 DB 원문과 일치하지 않습니다.",
+        detail,
+      };
+    case "anchor_unresolved":
+      return {
+        verification_status: status,
+        verification_label: "앵커 트랜잭션 미확인",
+        verification_method: detail ?? "해당 이력에 대응되는 트랜잭션 해시를 찾지 못했습니다.",
+        detail,
+      };
+    case "transaction_missing":
+      return {
+        verification_status: status,
+        verification_label: "트랜잭션 조회 실패",
+        verification_method: detail ?? "앵커 트랜잭션 또는 영수증을 체인에서 조회하지 못했습니다.",
+        detail,
+      };
+    case "tx_not_in_block":
+      return {
+        verification_status: status,
+        verification_label: "블록 내 트랜잭션 불일치",
+        verification_method: detail ?? "저장된 트랜잭션 해시가 지정된 블록/인덱스와 일치하지 않습니다.",
+        detail,
+      };
+    case "transactions_root_mismatch":
+      return {
+        verification_status: status,
+        verification_label: "블록 머클 검증 실패",
+        verification_method: detail ?? "블록의 transactionsRoot와 재계산한 값이 일치하지 않습니다.",
+        detail,
+      };
+    default:
+      return {
+        verification_status: "chain_error",
+        verification_label: "검증 중 오류",
+        verification_method: detail ?? "온체인 검증 중 예기치 못한 오류가 발생했습니다.",
+        detail,
+      };
+  }
+}
+
+function bigintToMinimalHex(value) {
+  const normalized = BigInt(value);
+  if (normalized === 0n) {
+    return "0x";
+  }
+  let hex = normalized.toString(16);
+  if (hex.length % 2 !== 0) {
+    hex = `0${hex}`;
+  }
+  return `0x${hex}`;
+}
+
+function keyNibblesFromIndex(index) {
+  // transactionsRoot는 "트랜잭션 인덱스 -> RLP 키" 규칙을 그대로 따라야 재계산 결과가 맞는다.
+  const encodedIndex = ethers.encodeRlp(bigintToMinimalHex(index));
+  const nibbles = [];
+  for (const byte of ethers.getBytes(encodedIndex)) {
+    nibbles.push(byte >> 4, byte & 0x0f);
+  }
+  return nibbles;
+}
+
+function compactEncode(nibbles, isLeaf) {
+  const flags = isLeaf ? 2 : 0;
+  const prefixed = nibbles.length % 2 === 1 ? [flags + 1, ...nibbles] : [flags, 0, ...nibbles];
+  const bytes = [];
+  for (let index = 0; index < prefixed.length; index += 2) {
+    bytes.push((prefixed[index] << 4) | prefixed[index + 1]);
+  }
+  return ethers.hexlify(Uint8Array.from(bytes));
+}
+
+function sharedPrefixLength(keys) {
+  if (keys.length === 0) {
+    return 0;
+  }
+  let index = 0;
+  while (true) {
+    if (index >= keys[0].length) {
+      return index;
+    }
+    const nibble = keys[0][index];
+    for (let cursor = 1; cursor < keys.length; cursor += 1) {
+      if (index >= keys[cursor].length || keys[cursor][index] !== nibble) {
+        return index;
+      }
+    }
+    index += 1;
+  }
+}
+
+function normalizeRawTransaction(tx) {
+  const type = tx.type ? Number(BigInt(tx.type)) : 0;
+  const normalized = {
+    type,
+    chainId: Number(BigInt(tx.chainId)),
+    nonce: Number(BigInt(tx.nonce)),
+    gasLimit: tx.gas,
+    to: tx.to,
+    value: tx.value,
+    data: tx.input,
+    signature: {
+      r: tx.r,
+      s: tx.s,
+      v: Number(BigInt(tx.v)),
+    },
+  };
+
+  if (type === 0) {
+    return {
+      ...normalized,
+      gasPrice: tx.gasPrice,
+    };
+  }
+  if (type === 1) {
+    return {
+      ...normalized,
+      gasPrice: tx.gasPrice,
+      accessList: tx.accessList ?? [],
+    };
+  }
+  if (type === 2) {
+    return {
+      ...normalized,
+      maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
+      maxFeePerGas: tx.maxFeePerGas,
+      accessList: tx.accessList ?? [],
+    };
+  }
+
+  return {
+    ...normalized,
+    gasPrice: tx.gasPrice ?? undefined,
+    accessList: tx.accessList ?? undefined,
+    maxPriorityFeePerGas: tx.maxPriorityFeePerGas ?? undefined,
+    maxFeePerGas: tx.maxFeePerGas ?? undefined,
+    maxFeePerBlobGas: tx.maxFeePerBlobGas ?? undefined,
+    blobVersionedHashes: tx.blobVersionedHashes ?? undefined,
+  };
+}
+
+function buildTrieNode(entries) {
+  if (entries.length === 1) {
+    return {
+      type: "leaf",
+      key: entries[0].key,
+      value: entries[0].value,
+    };
+  }
+
+  const prefixLength = sharedPrefixLength(entries.map((entry) => entry.key));
+  if (prefixLength > 0) {
+    return {
+      type: "extension",
+      key: entries[0].key.slice(0, prefixLength),
+      child: buildTrieNode(
+        entries.map((entry) => ({
+          ...entry,
+          key: entry.key.slice(prefixLength),
+        })),
+      ),
+    };
+  }
+
+  const groups = Array.from({ length: 16 }, () => []);
+  let value = "0x";
+  for (const entry of entries) {
+    if (entry.key.length === 0) {
+      value = entry.value;
+      continue;
+    }
+    groups[entry.key[0]].push({
+      ...entry,
+      key: entry.key.slice(1),
+    });
+  }
+
+  return {
+    type: "branch",
+    children: groups.map((group) => (group.length > 0 ? buildTrieNode(group) : null)),
+    value,
+  };
+}
+
+function encodeTrieNode(node) {
+  const childReference = (childNode) => {
+    if (!childNode) {
+      return "0x";
+    }
+    const encoded = encodeTrieNode(childNode);
+    return ethers.getBytes(encoded).length < 32 ? encoded : ethers.keccak256(encoded);
+  };
+
+  if (node.type === "leaf") {
+    return ethers.encodeRlp([compactEncode(node.key, true), node.value]);
+  }
+  if (node.type === "extension") {
+    return ethers.encodeRlp([compactEncode(node.key, false), childReference(node.child)]);
+  }
+  return ethers.encodeRlp([...node.children.map(childReference), node.value]);
+}
+
+function calculateTransactionsRoot(transactions) {
+  // Besu 블록의 transactionsRoot를 동일한 방식으로 다시 계산한다.
+  if (!Array.isArray(transactions) || transactions.length === 0) {
+    return EMPTY_TRIE_ROOT;
+  }
+  const entries = transactions.map((tx, index) => ({
+    key: keyNibblesFromIndex(index),
+    value: ethers.Transaction.from(normalizeRawTransaction(tx)).serialized,
+  }));
+  return ethers.keccak256(encodeTrieNode(buildTrieNode(entries)));
+}
+
+function decodeUsageRecordInput(iface, tx) {
+  try {
+    const parsed = iface.parseTransaction({ data: tx.input, value: tx.value });
+    if (!parsed || parsed.name !== "recordUsageRecord") {
+      return null;
+    }
+    return {
+      usageId: String(parsed.args[0]),
+      checkoutUserId: Number(parsed.args[1]),
+      returnUserId: Number(parsed.args[2]),
+      tagId: String(parsed.args[3]),
+      checkoutLocation: String(parsed.args[4]),
+      checkoutAt: Number(parsed.args[5]),
+      returnLocation: String(parsed.args[6]),
+      returnedAt: Number(parsed.args[7]),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildAnchorResult(anchor) {
+  return {
+    source: anchor?.source ?? null,
+    tx_hash: anchor?.txHash ?? null,
+    block_number: anchor?.blockNumber ?? null,
+    block_hash: anchor?.blockHash ?? null,
+    transaction_index: anchor?.transactionIndex ?? null,
+    recorded_at: anchor?.recordedAt ?? null,
+    transactions_root: anchor?.transactionsRoot ?? null,
+    recalculated_transactions_root: anchor?.recalculatedTransactionsRoot ?? null,
+  };
+}
+
+async function main() {
+  const rawInput = process.argv[2];
+  if (!rawInput) {
+    throw new Error("usage: node scripts/verify-usage-records.mjs '<json-payload>'");
+  }
+  if (!fs.existsSync(DEPLOYMENT_PATH)) {
+    throw new Error("deployment file not found. run deploy-usage-registry.mjs first");
+  }
+
+  const parsedInput = JSON.parse(rawInput);
+  const inputItems = Array.isArray(parsedInput?.items) ? parsedInput.items : [];
+  const deployment = JSON.parse(fs.readFileSync(DEPLOYMENT_PATH, "utf8"));
+  const abi = compileContract();
+  const iface = new ethers.Interface(abi);
+  const provider = new ethers.JsonRpcProvider(RPC_URL, {
+    name: "besu-qbft",
+    chainId: CHAIN_ID,
+  });
+  const contract = new ethers.Contract(deployment.address, abi, provider);
+
+  const eventsByUsageId = new Map();
+  // DB에 txHash가 없는 오래된 이력만 이벤트 로그를 보조 수단으로 스캔한다.
+  const needsEventLookup = inputItems.some((item) => {
+    const expectedRecord = normalizeExpectedRecord(item?.expected, item?.usageId ?? "");
+    const anchor = normalizeAnchor(item?.anchor);
+    return Boolean(expectedRecord && !anchor?.txHash);
+  });
+  if (needsEventLookup) {
+    const latestBlockNumber = await provider.getBlockNumber();
+    const fromBlock = Number(deployment.deploymentBlockNumber ?? 0);
+    const chunkSize = 1000;
+    for (let start = fromBlock; start <= latestBlockNumber; start += chunkSize) {
+      const end = Math.min(start + chunkSize - 1, latestBlockNumber);
+      const logs = await contract.queryFilter(contract.filters.UsageRecordStored(), start, end);
+      for (const log of logs) {
+        const usageId = String(log.args?.usageId ?? "");
+        if (!usageId) {
+          continue;
+        }
+        const current = eventsByUsageId.get(usageId);
+        if (
+          !current ||
+          log.blockNumber > current.blockNumber ||
+          (log.blockNumber === current.blockNumber && (log.index ?? 0) > (current.logIndex ?? 0))
+        ) {
+          eventsByUsageId.set(usageId, {
+            usageId,
+            transactionHash: log.transactionHash,
+            blockNumber: log.blockNumber,
+            logIndex: log.index ?? 0,
+            record: {
+              usageId,
+              checkoutUserId: Number(log.args?.checkoutUserId ?? 0),
+              returnUserId: Number(log.args?.returnUserId ?? 0),
+              tagId: String(log.args?.tagId ?? ""),
+              checkoutLocation: String(log.args?.checkoutLocation ?? ""),
+              checkoutAt: Number(log.args?.checkoutAt ?? 0),
+              returnLocation: String(log.args?.returnLocation ?? ""),
+              returnedAt: Number(log.args?.returnedAt ?? 0),
+            },
+          });
+        }
+      }
+    }
+  }
+
+  const receiptCache = new Map();
+  const blockCache = new Map();
+  const onchainRecordCache = new Map();
+
+  const getReceipt = async (txHash) => {
+    if (!txHash) {
+      return null;
+    }
+    if (!receiptCache.has(txHash)) {
+      receiptCache.set(txHash, await provider.getTransactionReceipt(txHash));
+    }
+    return receiptCache.get(txHash);
+  };
+
+  const getBlock = async (blockHash, blockNumber) => {
+    const cacheKey = blockHash || `number:${blockNumber}`;
+    if (blockCache.has(cacheKey)) {
+      return blockCache.get(cacheKey);
+    }
+    let block = null;
+    if (blockHash) {
+      block = await provider.send("eth_getBlockByHash", [blockHash, true]);
+    } else if (blockNumber !== null && blockNumber !== undefined) {
+      block = await provider.send("eth_getBlockByNumber", [ethers.toQuantity(BigInt(blockNumber)), true]);
+    }
+    blockCache.set(cacheKey, block);
+    return block;
+  };
+
+  const getOnchainRecord = async (usageId) => {
+    if (!onchainRecordCache.has(usageId)) {
+      onchainRecordCache.set(usageId, decodeOnchainRecord(usageId, await contract.getUsageRecord(usageId)));
+    }
+    return onchainRecordCache.get(usageId);
+  };
+
+  const results = [];
+
+  for (const item of inputItems) {
+    // 검증은 DB 원문 -> 온체인 원문 -> 트랜잭션 포함 여부 -> 머클루트 재계산 순으로 진행한다.
+    const usageId = String(item?.usageId ?? "");
+    const expectedRecord = normalizeExpectedRecord(item?.expected, usageId);
+    const storedAnchor = normalizeAnchor(item?.anchor);
+    const result = {
+      usage_id: usageId,
+      eligible: Boolean(expectedRecord),
+      db_record: expectedRecord,
+      onchain_record: null,
+      event_record: null,
+      onchain_exists: false,
+      db_matches_onchain: null,
+      db_matches_event: null,
+      tx_input_matches_db: null,
+      tx_included_in_block: null,
+      transactions_root_matches: null,
+      mismatch_fields: [],
+      anchor: buildAnchorResult(storedAnchor),
+    };
+
+    if (!expectedRecord) {
+      Object.assign(result, formatStatus("not_eligible"));
+      results.push(result);
+      continue;
+    }
+
+    const eventRecord = eventsByUsageId.get(usageId) ?? null;
+    if (eventRecord) {
+      result.event_record = eventRecord.record;
+      const eventCompare = compareUsageRecord(expectedRecord, eventRecord.record);
+      result.db_matches_event = eventCompare.matches;
+    }
+
+    const onchainRecord = await getOnchainRecord(usageId);
+    result.onchain_record = onchainRecord;
+    result.onchain_exists = Boolean(onchainRecord.exists);
+    result.anchor.recorded_at = onchainRecord.exists ? onchainRecord.recordedAt : result.anchor.recorded_at;
+
+    if (!onchainRecord.exists) {
+      Object.assign(result, formatStatus("onchain_missing"));
+      results.push(result);
+      continue;
+    }
+
+    const dbCompare = compareUsageRecord(expectedRecord, onchainRecord);
+    result.db_matches_onchain = dbCompare.matches;
+    result.mismatch_fields = dbCompare.mismatchFields;
+    if (!dbCompare.matches) {
+      Object.assign(
+        result,
+        formatStatus("db_mismatch", `불일치 필드: ${dbCompare.mismatchFields.join(", ")}`),
+      );
+      results.push(result);
+      continue;
+    }
+
+    let resolvedAnchor = {
+      source: storedAnchor?.txHash ? "db" : null,
+      txHash: storedAnchor?.txHash ?? null,
+      blockNumber: storedAnchor?.blockNumber ?? null,
+      blockHash: storedAnchor?.blockHash ?? null,
+      transactionIndex: storedAnchor?.transactionIndex ?? null,
+      recordedAt: storedAnchor?.recordedAt ?? onchainRecord.recordedAt,
+      transactionsRoot: null,
+      recalculatedTransactionsRoot: null,
+    };
+
+    if (!resolvedAnchor.txHash && eventRecord) {
+      resolvedAnchor = {
+        ...resolvedAnchor,
+        source: "event",
+        txHash: eventRecord.transactionHash,
+        blockNumber: eventRecord.blockNumber,
+      };
+    }
+
+    if (!resolvedAnchor.txHash) {
+      result.anchor = buildAnchorResult(resolvedAnchor);
+      Object.assign(result, formatStatus("anchor_unresolved"));
+      results.push(result);
+      continue;
+    }
+
+    const receipt = await getReceipt(resolvedAnchor.txHash);
+    if (!receipt) {
+      result.anchor = buildAnchorResult(resolvedAnchor);
+      Object.assign(result, formatStatus("transaction_missing"));
+      results.push(result);
+      continue;
+    }
+
+    resolvedAnchor = {
+      ...resolvedAnchor,
+      blockNumber: receipt.blockNumber ?? resolvedAnchor.blockNumber,
+      blockHash: receipt.blockHash ?? resolvedAnchor.blockHash,
+      transactionIndex: receipt.index ?? receipt.transactionIndex ?? resolvedAnchor.transactionIndex,
+    };
+
+    const block = await getBlock(resolvedAnchor.blockHash, resolvedAnchor.blockNumber);
+    if (!block || !Array.isArray(block.transactions)) {
+      result.anchor = buildAnchorResult(resolvedAnchor);
+      Object.assign(result, formatStatus("transaction_missing", "앵커 블록을 조회하지 못했습니다."));
+      results.push(result);
+      continue;
+    }
+
+    resolvedAnchor.transactionsRoot = block.transactionsRoot ?? null;
+    resolvedAnchor.recalculatedTransactionsRoot = calculateTransactionsRoot(block.transactions);
+    result.transactions_root_matches = sameHex(
+      resolvedAnchor.transactionsRoot,
+      resolvedAnchor.recalculatedTransactionsRoot,
+    );
+
+    const txIndex = normalizeInteger(resolvedAnchor.transactionIndex);
+    const indexedTx = txIndex !== null ? block.transactions[txIndex] ?? null : null;
+    result.tx_included_in_block = Boolean(indexedTx && sameHex(indexedTx.hash, resolvedAnchor.txHash));
+    if (!result.tx_included_in_block) {
+      result.anchor = buildAnchorResult(resolvedAnchor);
+      Object.assign(result, formatStatus("tx_not_in_block"));
+      results.push(result);
+      continue;
+    }
+
+    const decodedInput = decodeUsageRecordInput(iface, indexedTx);
+    if (!decodedInput) {
+      result.anchor = buildAnchorResult(resolvedAnchor);
+      Object.assign(result, formatStatus("tx_input_mismatch", "앵커 트랜잭션 입력을 UsageRecord로 해석하지 못했습니다."));
+      results.push(result);
+      continue;
+    }
+
+    const txInputCompare = compareUsageRecord(expectedRecord, decodedInput);
+    result.tx_input_matches_db = txInputCompare.matches;
+    if (!txInputCompare.matches) {
+      result.anchor = buildAnchorResult(resolvedAnchor);
+      Object.assign(
+        result,
+        formatStatus("tx_input_mismatch", `불일치 필드: ${txInputCompare.mismatchFields.join(", ")}`),
+      );
+      results.push(result);
+      continue;
+    }
+
+    if (!result.transactions_root_matches) {
+      result.anchor = buildAnchorResult(resolvedAnchor);
+      Object.assign(result, formatStatus("transactions_root_mismatch"));
+      results.push(result);
+      continue;
+    }
+
+    result.anchor = buildAnchorResult(resolvedAnchor);
+    Object.assign(result, formatStatus("verified"));
+    results.push(result);
+  }
+
+  const summary = results.reduce(
+    (acc, item) => {
+      acc.total_count += 1;
+      if (item.eligible) {
+        acc.eligible_count += 1;
+      } else {
+        acc.not_eligible_count += 1;
+      }
+      if (item.verification_status === "verified") {
+        acc.verified_count += 1;
+      } else if (item.verification_status === "not_eligible") {
+        acc.not_eligible_count += 0;
+      } else {
+        acc.failed_count += 1;
+      }
+      acc.status_counts[item.verification_status] = (acc.status_counts[item.verification_status] ?? 0) + 1;
+      return acc;
+    },
+    {
+      total_count: 0,
+      eligible_count: 0,
+      verified_count: 0,
+      failed_count: 0,
+      not_eligible_count: 0,
+      status_counts: {},
+    },
+  );
+
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        contract: deployment.address,
+        chainId: deployment.chainId ?? CHAIN_ID,
+        items: results,
+        summary,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+});

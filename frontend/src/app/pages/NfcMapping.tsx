@@ -4,7 +4,7 @@ import AppShell from '../components/layout/AppShell';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
-import { getStoredAuthUser } from '../lib/auth';
+import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
 import { API_BASE_URL, PUBLIC_APP_URL } from '../lib/runtime';
 import { Link2, LogOut, RefreshCw, Save, Search, ShieldCheck, Trash2 } from 'lucide-react';
 
@@ -59,12 +59,18 @@ export default function NfcMapping() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
+  const logout = () => {
+    clearStoredAuthSession();
+    navigate('/', { replace: true });
+  };
+
   useEffect(() => {
-    const user = getStoredAuthUser();
-    if (!user) {
+    const session = getStoredAuthSession();
+    if (!session?.token || !session.user) {
       navigate('/', { replace: true });
       return;
     }
+    const user = session.user;
     if (user.role !== 'admin') {
       navigate('/equipment', { replace: true });
       return;
@@ -76,11 +82,21 @@ export default function NfcMapping() {
     setIsRefreshing(true);
     setError('');
     try {
+      const session = getStoredAuthSession();
+      if (!session?.token) {
+        logout();
+        return;
+      }
       const response = await fetch(`${API_BASE_URL}/admin/nfc-mappings`, {
         method: 'GET',
         cache: 'no-store',
+        headers: buildAuthHeaders(session.token),
       });
       const payload = await response.json().catch(() => null);
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        return;
+      }
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.detail ?? 'NFC 매핑 목록을 불러오지 못했습니다.');
       }
@@ -133,16 +149,24 @@ export default function NfcMapping() {
     setError('');
     setNotice('');
     try {
+      const session = getStoredAuthSession();
+      if (!session?.token) {
+        logout();
+        return;
+      }
       const response = await fetch(`${API_BASE_URL}/admin/nfc-mappings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildAuthHeaders(session.token, { 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           tag_id: tagId,
           nfc_token: token,
-          actor_role: 'admin',
         }),
       });
       const payload = await response.json().catch(() => null);
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        return;
+      }
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.detail ?? 'NFC 매핑 저장에 실패했습니다.');
       }
@@ -162,13 +186,23 @@ export default function NfcMapping() {
     setError('');
     setNotice('');
     try {
+      const session = getStoredAuthSession();
+      if (!session?.token) {
+        logout();
+        return;
+      }
       const response = await fetch(
-        `${API_BASE_URL}/admin/nfc-mappings/${encodeURIComponent(tagId)}?actor_role=admin`,
+        `${API_BASE_URL}/admin/nfc-mappings/${encodeURIComponent(tagId)}`,
         {
           method: 'DELETE',
+          headers: buildAuthHeaders(session.token),
         },
       );
       const payload = await response.json().catch(() => null);
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        return;
+      }
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.detail ?? 'NFC 매핑 해제에 실패했습니다.');
       }
@@ -197,7 +231,7 @@ export default function NfcMapping() {
           <Button variant="secondary" onClick={() => navigate('/admin/nfc-mapping')}>
             NFC 매핑
           </Button>
-          <Button variant="outline" onClick={() => navigate('/')}>
+          <Button variant="outline" onClick={logout}>
             <LogOut className="h-4 w-4" />
             로그아웃
           </Button>

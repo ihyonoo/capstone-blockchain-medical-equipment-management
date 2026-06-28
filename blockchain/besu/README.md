@@ -67,9 +67,9 @@ docker compose down
 - 방화벽, permissioning, Web3Signer, TLS, 운영용 키 관리 체계는 포함하지 않습니다.
 - 백엔드가 해시를 온체인에 기록/조회하는 로직은 아직 연결하지 않았습니다.
 
-## 수동 해시 기록
+## 수동 사용 완료 레코드 기록
 
-백엔드나 DB를 연결하지 않고, 사용자가 직접 `usageId`와 `usageHash`를 입력해 체인에 기록할 수 있습니다.
+백엔드나 DB를 연결하지 않고, 사용자가 직접 완료된 사용 이력 원문 레코드를 입력해 체인에 기록할 수 있습니다.
 
 준비:
 
@@ -87,18 +87,18 @@ node scripts/deploy-usage-registry.mjs
 
 배포 결과는 `deployments/usage-registry.json`에 저장됩니다.
 
-해시 기록:
+사용 완료 레코드 기록:
 
 ```bash
 cd blockchain/besu
-node scripts/record-usage-hash.mjs usage-0001 0x1111111111111111111111111111111111111111111111111111111111111111
+node scripts/record-usage-record.mjs '{"usageId":"UH-20260602-0001","checkoutUserId":1,"returnUserId":2,"tagId":"EQ-INF-0001","checkoutLocation":"응급실","checkoutAt":1779294600,"returnLocation":"중환자실","returnedAt":1779298200}'
 ```
 
 저장값 조회:
 
 ```bash
 cd blockchain/besu
-node scripts/read-usage-hash.mjs usage-0001
+node scripts/read-usage-record.mjs usage-0001
 ```
 
 기본 설정:
@@ -106,9 +106,10 @@ node scripts/read-usage-hash.mjs usage-0001
 - RPC: `http://127.0.0.1:8549`
 - Chain ID: `1337`
 - 기본 서명 계정: genesis에 포함된 개발용 prefunded 계정
+- QBFT block period: `30초`
 
 주의:
 
-- `usageHash`는 반드시 `0x`로 시작하는 32바이트 hex 문자열이어야 합니다.
 - 현재 스크립트는 동일한 `usageId`를 다시 기록하지 못하게 막습니다.
+- 저장 대상은 완료된 사용 이력의 최소 원문 레코드이며, 이름/부서/직책 같은 표시용 정보는 제외합니다.
 - 개발용 계정 키를 사용하므로 운영 환경에는 그대로 쓰면 안 됩니다.

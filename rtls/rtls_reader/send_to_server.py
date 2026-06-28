@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 SERVER_URL = os.getenv("RTLS_SERVER_URL", "http://127.0.0.1:8000/ingest")  # Server IP
-READER_ID = os.getenv("RTLS_READER_ID", "ER-TRIAGE")                        # Reader의 논리적 ID
+READER_ID = os.getenv("RTLS_READER_ID", "M501")                             # Reader의 논리적 ID
 
 # 윈도우를 사용하는 이유: RSSI의 튐 현상, 노이즈 감소를 위해
 WINDOW_SEC = 2.0                                    # 수집 윈도우(최근 2초 동안의 RSSI를 수집)
@@ -22,8 +22,8 @@ SEND_EVERY_SEC = 1.0                                # 전송 주기(1초마다 �
 
 
 # 태그별 RSSI 임시 저장 버퍼
-# tag_id -> list of (time stamp, rssi)
-buf = {}
+# tag_id -> list of (timestamp, rssi)
+tag_samples = {}
 
 
 # iBeacon UUID(byte) -> tag_id(문자열) 파싱
@@ -32,33 +32,26 @@ def bytes_to_uuid(b: bytes) -> str:
     return f"{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
 
 
-# iBeacon인지 검증, tag_id 생성
+# iBeacon인지 검증하고 시스템에서 쓰는 tag_id 형식으로 변환
 def parse_ibeacon_tag_id(adv) -> str | None:
-    
-    # ibeacon 인지 검증
     md = adv.manufacturer_data  # 제조사의 ID를 가져옴
     if 0x004C not in md:    # 0x004c는 Apple Company ID
         return None
 
     data = md[0x004C]
 
-    # ibeacon 인지 검증 2
     if len(data) < 22 or data[0] != 0x02 or data[1] != 0x15:    # iBeacon prefix: 02 15
         return None
 
-    # 실제 tag_id 구성요소 생성
     uuid = bytes_to_uuid(data[2:18]).lower()
     major = int.from_bytes(data[18:20], "big")
     minor = int.from_bytes(data[20:22], "big")
 
-    # 생성된 tag_id 반환
     return f"{uuid}:{major}:{minor}"
 
 
-# BLE scan callback
+# 스캔 콜백은 태그 판별과 버퍼 적재만 담당하고, 서버 전송은 별도 루프에서 수행한다.
 def on_scan(device, adv):
-    
-    # iBeacon 검증
     tag_id = parse_ibeacon_tag_id(adv)
     if tag_id is None:
         return
@@ -67,7 +60,7 @@ def on_scan(device, adv):
     rssi = int(adv.rssi)    # RSSI 값
 
     # 해당 태그의 버퍼에 (수신 시각, RSSI 값) 추가
-    buf.setdefault(tag_id, []).append((ts, rssi))   
+    tag_samples.setdefault(tag_id, []).append((ts, rssi))
 
 
 # 가공 후 서버로 전송 루프
@@ -77,10 +70,10 @@ async def sender_loop():
         cutoff = now - int(WINDOW_SEC)  # Window만큼 자르기
 
         observations = []   # 서버로 보낼 태그별 요약값 리스트
-        for tag_id, samples in list(buf.items()):   # 현재 버퍼의 모든 태그에 대해 처리
+        for tag_id, samples in list(tag_samples.items()):   # 현재 버퍼의 모든 태그에 대해 처리
            
             samples = [(t, r) for (t, r) in samples if t >= cutoff]    # 윈도우 밖 데이터 제거
-            buf[tag_id] = samples                                      # 버퍼를 생신
+            tag_samples[tag_id] = samples                               # 버퍼 갱신
 
             # 샘플이 없는 태그는 전송 대상에서 제외
             if not samples:
@@ -111,7 +104,7 @@ async def sender_loop():
             # 서버 전송 예외 처리
             try:
                 # HTTP POST 요청 전송, JSON 바디로 자동 직렬화, 2초 안에 응답 없으면 예외 발생
-                requests.post(SERVER_URL, json=payload, timeout=2)      
+                requests.post(SERVER_URL, json=payload, timeout=2)
             except Exception as e:
                 # 네트워크 불안정 시에도 스캐닝은 계속되어야 하므로 예외만 삼킴
                 print("send fail:", e)  # 로그 출력

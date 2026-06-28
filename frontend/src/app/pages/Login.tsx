@@ -6,11 +6,9 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
-import { getRedirectTarget, withRedirectQuery } from '../lib/auth';
+import { getRedirectTarget, storeAuthSession, withRedirectQuery } from '../lib/auth';
+import { API_BASE_URL } from '../lib/runtime';
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ??
-  `${window.location.protocol}//${window.location.hostname}:8000`;
 const ROLE_OPTIONS = [
   { value: 'staff', label: '의료진' },
   { value: 'admin', label: '관리자' },
@@ -47,8 +45,15 @@ export default function Login() {
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.detail ?? '로그인에 실패했습니다.');
       }
+      if (!payload.user || typeof payload.token !== 'string' || payload.token.length === 0) {
+        throw new Error('로그인 응답이 올바르지 않습니다.');
+      }
 
-      sessionStorage.setItem('auth_user', JSON.stringify(payload.user));
+      storeAuthSession({
+        token: payload.token,
+        expires_at: Number(payload.expires_at ?? 0),
+        user: payload.user,
+      });
       const loginRole = (payload.user?.role as string | undefined)?.toLowerCase();
       navigate(redirectTarget ?? (loginRole === 'admin' ? '/verification' : '/equipment'), { replace: true });
     } catch (err) {

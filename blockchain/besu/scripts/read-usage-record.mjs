@@ -5,7 +5,7 @@ import solc from "solc";
 import { ethers } from "ethers";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const CONTRACT_PATH = path.join(ROOT_DIR, "contracts", "UsageHashRegistry.sol");
+const CONTRACT_PATH = path.join(ROOT_DIR, "contracts", "UsageRecordRegistry.sol");
 const DEPLOYMENT_PATH = path.join(ROOT_DIR, "deployments", "usage-registry.json");
 const RPC_URL = process.env.BESU_RPC_URL ?? "http://127.0.0.1:8549";
 const CHAIN_ID = Number(process.env.BESU_CHAIN_ID ?? "1337");
@@ -15,12 +15,17 @@ function compileContract() {
   const input = {
     language: "Solidity",
     sources: {
-      "UsageHashRegistry.sol": {
+      "UsageRecordRegistry.sol": {
         content: source,
       },
     },
     settings: {
       evmVersion: "berlin",
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      viaIR: true,
       outputSelection: {
         "*": {
           "*": ["abi"],
@@ -37,14 +42,14 @@ function compileContract() {
     throw new Error(fatalErrors.map((item) => item.formattedMessage).join("\n"));
   }
 
-  return output.contracts["UsageHashRegistry.sol"].UsageHashRegistry.abi;
+  return output.contracts["UsageRecordRegistry.sol"].UsageRecordRegistry.abi;
 }
 
 async function main() {
   const usageId = process.argv[2];
 
   if (!usageId) {
-    throw new Error("usage: node scripts/read-usage-hash.mjs <usageId>");
+    throw new Error("usage: node scripts/read-usage-record.mjs <usageId>");
   }
 
   if (!fs.existsSync(DEPLOYMENT_PATH)) {
@@ -64,10 +69,16 @@ async function main() {
     JSON.stringify(
       {
         usageId,
-        usageHash: record[0],
-        recordedAt: Number(record[1]),
-        recorder: record[2],
-        exists: record[3],
+        checkoutUserId: Number(record[0]),
+        returnUserId: Number(record[1]),
+        tagId: record[2],
+        checkoutLocation: record[3],
+        checkoutAt: Number(record[4]),
+        returnLocation: record[5],
+        returnedAt: Number(record[6]),
+        recordedAt: Number(record[7]),
+        recorder: record[8],
+        exists: record[9],
       },
       null,
       2,

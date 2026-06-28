@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 import AppShell from '../components/layout/AppShell';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
-import { getStoredAuthUser, withRedirectQuery } from '../lib/auth';
+import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession, getStoredAuthUser, withRedirectQuery } from '../lib/auth';
 import { API_BASE_URL } from '../lib/runtime';
 import { Fingerprint, LogOut } from 'lucide-react';
 
@@ -49,16 +49,32 @@ export default function NfcEquipment() {
   const [notice, setNotice] = useState('');
 
   const currentUser = useMemo(() => getStoredAuthUser(), []);
+  const currentAuthToken = useMemo(() => getStoredAuthSession()?.token ?? null, []);
 
-  const fetchItem = async (currentToken: string) => {
+  const logout = () => {
+    clearStoredAuthSession();
+    navigate('/', { replace: true });
+  };
+
+  const fetchItem = async (nfcToken: string) => {
     setIsLoading(true);
     setError('');
     try {
-      const response = await fetch(`${API_BASE_URL}/nfc/${encodeURIComponent(currentToken)}`, {
+      const authToken = getStoredAuthSession()?.token;
+      if (!authToken) {
+        logout();
+        return;
+      }
+      const response = await fetch(`${API_BASE_URL}/nfc/${encodeURIComponent(nfcToken)}`, {
         method: 'GET',
         cache: 'no-store',
+        headers: buildAuthHeaders(authToken),
       });
       const payload = await response.json().catch(() => null);
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        return;
+      }
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.detail ?? 'NFC 장비 정보를 불러오지 못했습니다.');
       }
@@ -73,7 +89,8 @@ export default function NfcEquipment() {
   };
 
   useEffect(() => {
-    if (!currentUser) {
+    // NFC URL 직진입 시 로그인 페이지로 보내더라도, 현재 진입 경로는 redirect로 보존한다.
+    if (!currentUser || !currentAuthToken) {
       navigate(withRedirectQuery('/', `${location.pathname}${location.search}`), { replace: true });
       return;
     }
@@ -82,7 +99,7 @@ export default function NfcEquipment() {
       return;
     }
     setIsAuthorized(true);
-  }, [currentUser, location.pathname, location.search, navigate]);
+  }, [currentAuthToken, currentUser, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (!isAuthorized || !token) return;
@@ -95,20 +112,23 @@ export default function NfcEquipment() {
     setError('');
     setNotice('');
     try {
+      const authToken = getStoredAuthSession()?.token;
+      if (!authToken) {
+        logout();
+        return;
+      }
       const response = await fetch(`${API_BASE_URL}/usage/${action}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildAuthHeaders(authToken, { 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           nfc_token: token,
-          user_id: currentUser.user_id,
-          username: currentUser.username,
-          display_name: currentUser.display_name,
-          role: currentUser.role,
-          department: currentUser.department ?? null,
-          position: currentUser.position ?? null,
         }),
       });
       const payload = await response.json().catch(() => null);
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        return;
+      }
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.detail ?? `장비 ${action === 'checkout' ? '사용 시작' : '사용 종료'}에 실패했습니다.`);
       }
@@ -134,7 +154,7 @@ export default function NfcEquipment() {
     <AppShell
       actions={
         <>
-          <Button variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => navigate('/')}>
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={logout}>
             <LogOut className="h-2.5 w-2.5" />
             로그아웃
           </Button>

@@ -92,9 +92,12 @@ CREATE TABLE IF NOT EXISTS usage_history (
     return_reader_id TEXT REFERENCES readers(reader_id) ON UPDATE CASCADE,
     return_location TEXT,
     returned_at TIMESTAMPTZ,
-    integrity_payload JSONB,
-    payload_hash_sha256 TEXT,
     note TEXT,
+    blockchain_tx_hash TEXT,
+    blockchain_block_number BIGINT,
+    blockchain_block_hash TEXT,
+    blockchain_transaction_index INTEGER,
+    blockchain_recorded_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT usage_history_status_valid
@@ -114,30 +117,6 @@ CREATE TABLE IF NOT EXISTS usage_history (
             (usage_status = 'returned'
                 AND returned_at IS NOT NULL
                 AND return_method IS NOT NULL)
-        )
-);
-
-CREATE TABLE IF NOT EXISTS usage_blockchain_anchors (
-    anchor_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    usage_id BIGINT NOT NULL UNIQUE REFERENCES usage_history(usage_id) ON DELETE CASCADE,
-    payload_hash_sha256 TEXT NOT NULL,
-    blockchain_network TEXT NOT NULL DEFAULT 'besu-qbft',
-    chain_id BIGINT,
-    contract_address TEXT,
-    transaction_hash TEXT UNIQUE,
-    block_number BIGINT,
-    anchor_status TEXT NOT NULL DEFAULT 'pending',
-    anchored_at TIMESTAMPTZ,
-    verified_at TIMESTAMPTZ,
-    verification_match BOOLEAN,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT usage_blockchain_anchors_status_valid
-        CHECK (anchor_status IN ('pending', 'anchored', 'failed')),
-    CONSTRAINT usage_blockchain_anchors_anchor_consistent
-        CHECK (
-            anchor_status <> 'anchored'
-            OR (transaction_hash IS NOT NULL AND anchored_at IS NOT NULL)
         )
 );
 
@@ -192,9 +171,12 @@ ALTER TABLE usage_history
     ADD COLUMN IF NOT EXISTS equipment_nfc_uid TEXT,
     ADD COLUMN IF NOT EXISTS checkout_method TEXT NOT NULL DEFAULT 'nfc',
     ADD COLUMN IF NOT EXISTS return_method TEXT,
-    ADD COLUMN IF NOT EXISTS integrity_payload JSONB,
-    ADD COLUMN IF NOT EXISTS payload_hash_sha256 TEXT,
     ADD COLUMN IF NOT EXISTS note TEXT,
+    ADD COLUMN IF NOT EXISTS blockchain_tx_hash TEXT,
+    ADD COLUMN IF NOT EXISTS blockchain_block_number BIGINT,
+    ADD COLUMN IF NOT EXISTS blockchain_block_hash TEXT,
+    ADD COLUMN IF NOT EXISTS blockchain_transaction_index INTEGER,
+    ADD COLUMN IF NOT EXISTS blockchain_recorded_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 UPDATE usage_history
@@ -369,15 +351,12 @@ BEGIN
     END IF;
 END $$;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_nfc_tag_uid
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_nfc_tag_uid동
     ON tags (nfc_tag_uid)
     WHERE nfc_tag_uid IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_tags_asset_status
     ON tags (asset_status);
-
-CREATE INDEX IF NOT EXISTS idx_tags_current_holder_user_id
-    ON tags (current_holder_user_id);
 
 CREATE INDEX IF NOT EXISTS idx_tag_state_history_tag_decided_at
     ON tag_state_history (tag_id, decided_at DESC);
@@ -394,20 +373,9 @@ CREATE INDEX IF NOT EXISTS idx_usage_history_user_id
 CREATE INDEX IF NOT EXISTS idx_usage_history_tag_id
     ON usage_history (tag_id);
 
-CREATE INDEX IF NOT EXISTS idx_usage_history_status_checkout_at
-    ON usage_history (usage_status, checkout_at DESC);
-
 CREATE UNIQUE INDEX IF NOT EXISTS idx_usage_history_open_usage_per_tag
     ON usage_history (tag_id)
     WHERE usage_status = 'checked_out';
 
-CREATE INDEX IF NOT EXISTS idx_usage_blockchain_anchors_status_created_at
-    ON usage_blockchain_anchors (anchor_status, created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_usage_nfc_events_tag_occurred_at
-    ON usage_nfc_events (tag_id, occurred_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_usage_nfc_events_user_occurred_at
-    ON usage_nfc_events (user_id, occurred_at DESC);
 
 COMMIT;

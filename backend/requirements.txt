@@ -5,3 +5,4 @@ passlib==1.7.4
 bcrypt==3.2.2
 uvicorn==0.41.0
 python-dotenv==1.0.1
+redis>=5,<7

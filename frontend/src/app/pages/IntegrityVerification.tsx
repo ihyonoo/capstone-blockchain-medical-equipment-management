@@ -6,13 +6,29 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
 import { API_BASE_URL } from '../lib/runtime';
-import { Search, LogOut, User, ListFilter, Download, ShieldCheck, ChevronDown } from 'lucide-react';
+import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
+import { ChevronDown, ListFilter, LogOut, ShieldCheck, User } from 'lucide-react';
+
+type UsageChainRecord = {
+  usageId: string;
+  checkoutUserId: number | null;
+  returnUserId: number | null;
+  tagId: string;
+  checkoutLocation: string;
+  checkoutAt: number | null;
+  returnLocation: string;
+  returnedAt: number | null;
+};
 
 type UsageHistoryItem = {
   usage_id: number;
   user: {
-    user_id: number;
     name: string;
+    position: string | null;
+    department: string | null;
+  };
+  returned_by: {
+    name: string | null;
     position: string | null;
     department: string | null;
   };
@@ -30,44 +46,130 @@ type UsageHistoryItem = {
     location: string | null;
     at: number | null;
   };
-  created_at: number | null;
-  verification: UsageVerifyResult;
+  blockchain: {
+    verification_status: string;
+    verification_label: string;
+    db_record: UsageChainRecord | null;
+    tx_input_matches_db: boolean | null;
+    transactions_root_matches: boolean | null;
+    anchor: {
+      block_number: number | null;
+      transaction_index: number | null;
+      transactions_root: string | null;
+      recalculated_transactions_root: string | null;
+    } | null;
+  } | null;
 };
 
-const FALLBACK_VERIFICATION: UsageVerifyResult = {
-  ok: true,
-  usage_id: 0,
-  verification_status: 'not_configured',
-  detail: '검증 결과를 아직 불러오지 못했습니다.',
-  recalculated_hash: null,
-  onchain_hash: null,
-  onchain_exists: false,
-  recorded_at: null,
-  recorder: null,
+type IntegritySummary = {
+  eligible_count: number;
+  verified_count: number;
+  failed_count: number;
 };
 
-type UsageVerifyResult = {
-  ok: boolean;
-  usage_id: number;
-  verification_status: 'match' | 'mismatch' | 'not_anchored' | 'not_configured' | 'chain_error';
-  detail: string | null;
-  recalculated_hash: string | null;
-  onchain_hash: string | null;
-  onchain_exists: boolean;
-  recorded_at?: number | null;
-  recorder?: string | null;
+type SortField = 'time' | 'user' | 'equipment';
+type SortOrder = 'asc' | 'desc';
+
+type HistoryFilters = {
+  user: string;
+  equipment: string;
+  checkoutLocation: string;
+  returnLocation: string;
+  startDate: string;
+  endDate: string;
+  verificationStatus: string;
+  blockNumber: string;
+  sortField: SortField;
+  sortOrder: SortOrder;
 };
 
-type SearchMode = 'user' | 'equipment' | 'date';
-const SEARCH_OPTIONS: Array<{ value: SearchMode; label: string }> = [
-  { value: 'user', label: '사용자' },
-  { value: 'equipment', label: '장비' },
-  { value: 'date', label: '날짜' },
+const SORT_FIELD_OPTIONS: Array<{ value: SortField; label: string }> = [
+  { value: 'time', label: '시간 순' },
+  { value: 'user', label: '이름 순' },
+  { value: 'equipment', label: '장비 이름 순' },
 ];
 
-function formatDateTime(epoch: number | null) {
+const SORT_ORDER_OPTIONS: Array<{ value: SortOrder; label: string }> = [
+  { value: 'desc', label: '내림차순' },
+  { value: 'asc', label: '오름차순' },
+];
+
+const VERIFICATION_STATUS_OPTIONS = [
+  { value: 'all', label: '전체 상태' },
+  { value: 'verified', label: '검증 성공' },
+  { value: 'not_eligible', label: '검증 대상 아님' },
+  { value: 'onchain_missing', label: '온체인 미기록' },
+  { value: 'db_mismatch', label: 'DB/온체인 불일치' },
+  { value: 'tx_input_mismatch', label: '트랜잭션 입력 불일치' },
+  { value: 'anchor_unresolved', label: '앵커 트랜잭션 미확인' },
+  { value: 'transaction_missing', label: '트랜잭션 조회 실패' },
+  { value: 'tx_not_in_block', label: '블록 내 트랜잭션 불일치' },
+  { value: 'transactions_root_mismatch', label: '블록 머클 검증 실패' },
+  { value: 'not_configured', label: '체인 미설정' },
+  { value: 'chain_error', label: '검증 중 오류' },
+] as const;
+
+const DEFAULT_FILTERS: HistoryFilters = {
+  user: '',
+  equipment: '',
+  checkoutLocation: '',
+  returnLocation: '',
+  startDate: '',
+  endDate: '',
+  verificationStatus: 'all',
+  blockNumber: 'all',
+  sortField: 'time',
+  sortOrder: 'desc',
+};
+
+function formatDateTime(epoch: number | null | undefined) {
   if (!epoch) return '-';
-  return new Date(epoch * 1000).toLocaleString('ko-KR', { hour12: false });
+  const date = new Date(epoch * 1000);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}년 ${month}월 ${day}일 ${hours}시 ${minutes}분 ${seconds}초`;
+}
+
+function formatDownloadTimestamp(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+}
+
+function escapeCsvCell(value: string | number | null | undefined) {
+  const text = value == null ? '' : String(value);
+  if (!/[",\n\r]/.test(text)) return text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function getLocationLabel(location: string | null, readerId: string | null) {
+  return location ?? readerId ?? '-';
+}
+
+function getOnchainRecordNotice(value: boolean | null | undefined) {
+  if (value === true) return '블록체인에 저장된 값과 동일합니다.';
+  if (value === false) return '블록체인에 저장된 값과 일치하지 않습니다.';
+  return '블록체인 저장 값과의 비교 결과를 확인할 수 없습니다.';
+}
+
+function getMerkleVerificationNotice(value: boolean | null | undefined) {
+  if (value === true) return '머클루트 재계산 결과가 블록의 원본 값과 동일합니다.';
+  if (value === false) return '머클루트 재계산 결과가 블록의 원본 값과 일치하지 않습니다.';
+  return '머클루트 재계산 결과를 확인할 수 없습니다.';
+}
+
+function getNoticeToneClasses(value: boolean | null | undefined) {
+  if (value === true) return 'border-emerald-200 bg-emerald-50/90 text-emerald-700';
+  if (value === false) return 'border-rose-200 bg-rose-50/90 text-rose-700';
+  return 'border-slate-300/70 bg-white/80 text-foreground';
 }
 
 function getDisplayDepartment(item: UsageHistoryItem) {
@@ -78,62 +180,133 @@ function getDisplayPosition(item: UsageHistoryItem) {
   return item.user.position ?? '-';
 }
 
-function getDisplayUsagePath(item: UsageHistoryItem) {
-  return `${item.checkout.location ?? item.checkout.reader_id ?? '-'} → ${item.return.location ?? item.return.reader_id ?? '진료과'}`;
+function getDisplayReturnedByDepartment(item: UsageHistoryItem) {
+  return item.returned_by.department ?? '-';
 }
 
-function getVerificationLabel(status: UsageVerifyResult['verification_status']) {
-  switch (status) {
-    case 'match':
-      return '검증 통과';
-    case 'mismatch':
-      return '불일치';
-    case 'not_anchored':
-      return '미앵커';
-    case 'not_configured':
-      return '체인 미설정';
-    default:
-      return '조회 오류';
-  }
+function getDisplayReturnedByPosition(item: UsageHistoryItem) {
+  return item.returned_by.position ?? '-';
 }
 
-function getVerificationBadgeVariant(status: UsageVerifyResult['verification_status']): 'default' | 'destructive' | 'outline' | 'secondary' {
-  switch (status) {
-    case 'match':
-      return 'default';
-    case 'mismatch':
-    case 'chain_error':
-      return 'destructive';
-    case 'not_anchored':
-    case 'not_configured':
-      return 'secondary';
-    default:
-      return 'outline';
+function getStatusTone(status: string) {
+  if (status === 'verified') {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   }
+  if (status === 'not_eligible') {
+    return 'border-slate-200 bg-slate-50 text-slate-700';
+  }
+  return 'border-rose-200 bg-rose-50 text-rose-700';
+}
+
+function VerificationStatusPill({ status, label }: { status: string; label: string }) {
+  const tone = getStatusTone(status);
+  const dotClass =
+    status === 'verified'
+      ? 'bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.16)]'
+      : status === 'not_eligible'
+        ? 'bg-slate-400 shadow-[0_0_0_3px_rgba(100,116,139,0.14)]'
+        : 'bg-rose-500 shadow-[0_0_0_3px_rgba(244,63,94,0.16)]';
+
+  return (
+    <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-medium ${tone}`}>
+      <span className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
+      {label}
+    </span>
+  );
+}
+
+function RecordSnapshot({
+  title,
+  record,
+  notice,
+  noticeState,
+}: {
+  title: string;
+  record: UsageChainRecord | null;
+  notice?: string;
+  noticeState?: boolean | null;
+}) {
+  return (
+    <div>
+      <div className="text-[1.08rem] font-semibold text-black">{title}</div>
+      <div className="mt-2 rounded-[1.1rem] border border-slate-300/70 bg-slate-100/90 p-4 text-[1rem] leading-7 text-foreground">
+        {!record ? (
+          <div>기록 없음</div>
+        ) : (
+          <>
+            <div>usage_id: {record.usageId}</div>
+            <div>tag_id: {record.tagId || '-'}</div>
+            <div>사용 시작자 ID: {record.checkoutUserId ?? '-'}</div>
+            <div>사용 종료자 ID: {record.returnUserId ?? '-'}</div>
+            <div>대여 위치: {record.checkoutLocation || '-'}</div>
+            <div>반납 위치: {record.returnLocation || '-'}</div>
+            <div>대여 시각: {formatDateTime(record.checkoutAt)}</div>
+            <div>반납 시각: {formatDateTime(record.returnedAt)}</div>
+            {notice ? (
+              <div className={`mt-3 rounded-xl border px-3 py-2 text-[0.95rem] ${getNoticeToneClasses(noticeState)}`}>{notice}</div>
+            ) : null}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function IntegrityVerification() {
   const navigate = useNavigate();
-  const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
-
-  const [searchMode, setSearchMode] = useState<SearchMode>('user');
-  const [searchValue, setSearchValue] = useState('');
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [filters, setFilters] = useState<HistoryFilters>(DEFAULT_FILTERS);
+  const [allItems, setAllItems] = useState<UsageHistoryItem[]>([]);
   const [items, setItems] = useState<UsageHistoryItem[]>([]);
+  const [summary, setSummary] = useState<IntegritySummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isExportingFiltered, setIsExportingFiltered] = useState(false);
-  const [isExportingAll, setIsExportingAll] = useState(false);
   const [error, setError] = useState('');
   const [expandedUsageId, setExpandedUsageId] = useState<number | null>(null);
 
+  const logout = () => {
+    clearStoredAuthSession();
+    navigate('/', { replace: true });
+  };
+
+  const applyClientFilters = useCallback((sourceItems: UsageHistoryItem[], targetFilters: HistoryFilters) => {
+    // 텍스트/기간 조건은 서버 조회 시 반영하고, 블록/검증 상태만 화면에서 즉시 재필터링한다.
+    return sourceItems.filter((item) => {
+      const status = item.blockchain?.verification_status ?? 'chain_error';
+      const blockNumber = item.blockchain?.anchor?.block_number;
+      if (targetFilters.verificationStatus !== 'all' && status !== targetFilters.verificationStatus) return false;
+      if (targetFilters.blockNumber !== 'all' && String(blockNumber ?? '') !== targetFilters.blockNumber) return false;
+      return true;
+    });
+  }, []);
+
+  const updateFilter = <K extends keyof HistoryFilters>(key: K, value: HistoryFilters[K]) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const updateStartDate = (value: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      startDate: value,
+      endDate: prev.endDate && value && prev.endDate < value ? value : prev.endDate,
+    }));
+  };
+
+  const updateEndDate = (value: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      startDate: prev.startDate && value && prev.startDate > value ? value : prev.startDate,
+      endDate: value,
+    }));
+  };
+
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem('auth_user');
-      if (!raw) {
+      const session = getStoredAuthSession();
+      if (!session?.token || !session.user) {
         navigate('/', { replace: true });
         return;
       }
-      const user = JSON.parse(raw) as { role?: string };
-      if (user.role !== 'admin') {
+      if (session.user.role !== 'admin') {
         navigate('/equipment', { replace: true });
         return;
       }
@@ -144,112 +317,185 @@ export default function IntegrityVerification() {
   }, [navigate]);
 
   const fetchHistory = useCallback(
-    async (mode: SearchMode, value: string) => {
+    async (targetFilters: HistoryFilters) => {
       setIsLoading(true);
       setError('');
       try {
-        const params = new URLSearchParams();
-        const q = value.trim();
-        if (q) {
-          if (mode === 'user') params.set('user', q);
-          if (mode === 'equipment') params.set('equipment', q);
-          if (mode === 'date') params.set('date', q);
+        const session = getStoredAuthSession();
+        if (!session?.token) {
+          logout();
+          return;
         }
-        params.set('limit', '100');
+
+        const params = new URLSearchParams({
+          sort_by: targetFilters.sortField,
+          sort_order: targetFilters.sortOrder,
+          limit: '200',
+          include_blockchain: 'true',
+        });
+        if (targetFilters.user.trim()) params.set('user', targetFilters.user.trim());
+        if (targetFilters.equipment.trim()) params.set('equipment', targetFilters.equipment.trim());
+        if (targetFilters.checkoutLocation.trim()) params.set('checkout_location', targetFilters.checkoutLocation.trim());
+        if (targetFilters.returnLocation.trim()) params.set('return_location', targetFilters.returnLocation.trim());
+        if (targetFilters.startDate) params.set('start_date', targetFilters.startDate);
+        if (targetFilters.endDate) params.set('end_date', targetFilters.endDate);
 
         const response = await fetch(`${API_BASE_URL}/usage/history?${params.toString()}`, {
           method: 'GET',
           cache: 'no-store',
+          headers: buildAuthHeaders(session.token),
         });
         const payload = await response.json().catch(() => null);
+        if (response.status === 401 || response.status === 403) {
+          logout();
+          return;
+        }
         if (!response.ok || !payload?.ok) {
-          throw new Error(payload?.detail ?? '사용 이력 조회에 실패했습니다.');
+          throw new Error(payload?.detail ?? '사용 이력 무결성 검증 조회에 실패했습니다.');
         }
 
-        setItems(Array.isArray(payload.items) ? payload.items : []);
+        const fetchedItems = Array.isArray(payload.items) ? (payload.items as UsageHistoryItem[]) : [];
+        const fetchedSummary = (payload.integrity_summary as IntegritySummary | null | undefined) ?? null;
+        setAllItems(fetchedItems);
+        setSummary(fetchedSummary);
+        setItems(applyClientFilters(fetchedItems, targetFilters));
+        setExpandedUsageId(null);
       } catch (err) {
         if (err instanceof Error) setError(err.message);
-        else setError('사용 이력 조회 중 오류가 발생했습니다.');
+        else setError('사용 이력 무결성 검증 조회 중 오류가 발생했습니다.');
       } finally {
         setIsLoading(false);
       }
     },
-    [],
+    [applyClientFilters, navigate],
   );
 
   useEffect(() => {
     if (!isAuthorized) return;
-    fetchHistory(searchMode, '');
+    void fetchHistory(DEFAULT_FILTERS);
   }, [isAuthorized, fetchHistory]);
-
-  const totalCount = items.length;
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchHistory(searchMode, searchValue);
+    void fetchHistory(filters);
   };
 
   const onReset = () => {
-    setSearchMode('user');
-    setSearchValue('');
-    fetchHistory('user', '');
+    setFilters(DEFAULT_FILTERS);
+    void fetchHistory(DEFAULT_FILTERS);
   };
 
-  const downloadUsageHistory = useCallback(
-    async (exportAll: boolean) => {
-      if (exportAll) setIsExportingAll(true);
-      else setIsExportingFiltered(true);
-      setError('');
+  const downloadCsv = () => {
+    if (!items.length) return;
 
-      try {
-        const params = new URLSearchParams();
-        if (!exportAll) {
-          const q = searchValue.trim();
-          if (q) {
-            if (searchMode === 'user') params.set('user', q);
-            if (searchMode === 'equipment') params.set('equipment', q);
-            if (searchMode === 'date') params.set('date', q);
-          }
-        }
-        params.set('limit', '10000');
+    // 화면에 보이는 결과를 그대로 내보내야 하므로 서버 재호출 없이 현재 items를 사용한다.
+    const header = [
+      '사용 이력 ID',
+      '장비 ID',
+      '장비명',
+      '대여자 이름',
+      '대여자 부서',
+      '대여자 직책',
+      '반납자 이름',
+      '반납자 부서',
+      '반납자 직책',
+      '대여 위치',
+      '반납 위치',
+      '대여 시각',
+      '반납 시각',
+      '무결성 검증 결과',
+    ];
 
-        const response = await fetch(`${API_BASE_URL}/usage/history/export?${params.toString()}`, {
-          method: 'GET',
-          cache: 'no-store',
-        });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          throw new Error(payload?.detail ?? '엑셀 다운로드에 실패했습니다.');
-        }
+    const rows = items.map((item) => [
+      item.usage_id,
+      item.equipment.tag_id,
+      item.equipment.name,
+      item.user.name,
+      getDisplayDepartment(item),
+      getDisplayPosition(item),
+      item.returned_by.name ?? '-',
+      getDisplayReturnedByDepartment(item),
+      getDisplayReturnedByPosition(item),
+      getLocationLabel(item.checkout.location, item.checkout.reader_id),
+      getLocationLabel(item.return.location, item.return.reader_id),
+      formatDateTime(item.checkout.at),
+      formatDateTime(item.return.at),
+      item.blockchain?.verification_label ?? '검증 중 오류',
+    ]);
 
-        const blob = await response.blob();
-        const contentDisposition = response.headers.get('content-disposition');
-        const filenameMatch = contentDisposition?.match(/filename=\"?([^"]+)\"?/i);
-        const filename = filenameMatch?.[1] ?? `usage_history_${Date.now()}.csv`;
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = filename;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(url);
-      } catch (err) {
-        if (err instanceof Error) setError(err.message);
-        else setError('엑셀 다운로드 중 오류가 발생했습니다.');
-      } finally {
-        if (exportAll) setIsExportingAll(false);
-        else setIsExportingFiltered(false);
-      }
-    },
-    [searchMode, searchValue],
-  );
+    const csv = ['\ufeff' + header.map(escapeCsvCell).join(','), ...rows.map((row) => row.map(escapeCsvCell).join(','))].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `usage_history_${formatDownloadTimestamp(new Date())}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
-  const inputPlaceholder = useMemo(() => {
-    if (searchMode === 'user') return '이름 또는 사용자 ID';
-    if (searchMode === 'equipment') return '장비명 또는 태그 ID';
-    return 'YYYY-MM-DD';
-  }, [searchMode]);
+  const onSelectBlock = (blockNumber: string) => {
+    const nextFilters = { ...filters, blockNumber };
+    setFilters(nextFilters);
+    setItems(applyClientFilters(allItems, nextFilters));
+    setExpandedUsageId(null);
+  };
+
+  const onSelectVerificationStatus = (verificationStatus: string) => {
+    const nextFilters = { ...filters, verificationStatus };
+    setFilters(nextFilters);
+    setItems(applyClientFilters(allItems, nextFilters));
+    setExpandedUsageId(null);
+  };
+
+  const blockOptions = useMemo(() => {
+    const seen = new Set<number>();
+    const values: Array<{ value: string; label: string }> = [];
+    allItems.forEach((item) => {
+      const blockNumber = item.blockchain?.anchor?.block_number;
+      if (typeof blockNumber !== 'number' || seen.has(blockNumber)) return;
+      seen.add(blockNumber);
+      values.push({ value: String(blockNumber), label: `Block ${blockNumber}` });
+    });
+    values.sort((left, right) => Number(left.value) - Number(right.value));
+    return values;
+  }, [allItems]);
+
+  const checkoutLocationOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const values: Array<{ value: string; label: string }> = [];
+    allItems.forEach((item) => {
+      const value = (item.checkout.location ?? item.checkout.reader_id ?? '').trim();
+      if (!value || seen.has(value)) return;
+      seen.add(value);
+      values.push({ value, label: value });
+    });
+    values.sort((left, right) => left.label.localeCompare(right.label, 'ko'));
+    return values;
+  }, [allItems]);
+
+  const returnLocationOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const values: Array<{ value: string; label: string }> = [];
+    allItems.forEach((item) => {
+      const value = (item.return.location ?? item.return.reader_id ?? '').trim();
+      if (!value || seen.has(value)) return;
+      seen.add(value);
+      values.push({ value, label: value });
+    });
+    values.sort((left, right) => left.label.localeCompare(right.label, 'ko'));
+    return values;
+  }, [allItems]);
+
+  const verifiedCount = summary?.verified_count ?? allItems.filter((item) => item.blockchain?.verification_status === 'verified').length;
+  const failedCount =
+    summary?.failed_count ??
+    allItems.filter((item) => {
+      const status = item.blockchain?.verification_status;
+      return status !== 'verified' && status !== 'not_eligible';
+    }).length;
+  const eligibleCount = summary?.eligible_count ?? allItems.filter((item) => item.blockchain?.eligible).length;
 
   if (!isAuthorized) {
     return null;
@@ -265,17 +511,29 @@ export default function IntegrityVerification() {
           <Button variant="outline" onClick={() => navigate('/admin/nfc-mapping')}>
             NFC 매핑
           </Button>
-          <Button variant="outline" onClick={() => navigate('/')}>
+          <Button variant="outline" onClick={logout}>
             <LogOut className="h-4 w-4" />
             로그아웃
           </Button>
         </>
       }
       headerAside={
-        <div className="w-[10rem] max-w-full">
+        <div className="grid w-full gap-3 md:grid-cols-4">
           <div className="metric-card text-center">
             <div className="metric-label">조회 결과</div>
-            <div className="metric-value">{totalCount}</div>
+            <div className="metric-value">{items.length}</div>
+          </div>
+          <div className="metric-card text-center">
+            <div className="metric-label">검증 대상</div>
+            <div className="metric-value">{eligibleCount}</div>
+          </div>
+          <div className="metric-card text-center">
+            <div className="metric-label">검증 성공</div>
+            <div className="metric-value">{verifiedCount}</div>
+          </div>
+          <div className="metric-card text-center">
+            <div className="metric-label">검증 실패</div>
+            <div className="metric-value">{failedCount}</div>
           </div>
         </div>
       }
@@ -285,22 +543,59 @@ export default function IntegrityVerification() {
           <div className="panel-header">
             <div>
               <div className="panel-title flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                실사용 이력 무결성 검증
+              </div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                DB에 저장된 반납 완료 이력과 온체인 원문을 비교하고, 해당 트랜잭션이 포함된 블록의 transactionsRoot를 재계산해 검증합니다.
+              </div>
+            </div>
+            <Badge variant="outline">Real On-chain Verification</Badge>
+          </div>
+        </section>
+
+        <section className="surface-panel p-5 fade-rise">
+          <div className="panel-header">
+            <div>
+              <div className="panel-title flex items-center gap-2">
                 <ListFilter className="h-5 w-5 text-primary" />
                 검색 조건
               </div>
             </div>
-            <Badge variant="outline">Max 100 rows on screen</Badge>
+            <Badge variant="outline">최대 200건</Badge>
           </div>
 
-          <form onSubmit={onSubmit} className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_auto]">
+          <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <div className="space-y-2">
-              <label className="text-sm font-medium block">검색 방식</label>
-              <Select value={searchMode} onValueChange={(value) => setSearchMode(value as SearchMode)}>
+              <label className="block text-sm font-medium">사용자</label>
+              <Input
+                type="text"
+                value={filters.user}
+                onChange={(e) => updateFilter('user', e.target.value)}
+                placeholder="이름, 사용자 ID"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">장비</label>
+              <Input
+                type="text"
+                value={filters.equipment}
+                onChange={(e) => updateFilter('equipment', e.target.value)}
+                placeholder="장비명 또는 태그 ID"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">대여 위치</label>
+              <Select
+                value={filters.checkoutLocation || 'all'}
+                onValueChange={(value) => updateFilter('checkoutLocation', value === 'all' ? '' : value)}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="검색 방식 선택" />
+                  <SelectValue placeholder="대여 위치 선택" />
                 </SelectTrigger>
                 <SelectContent>
-                  {SEARCH_OPTIONS.map((option) => (
+                  <SelectItem value="all">전체 위치</SelectItem>
+                  {checkoutLocationOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -309,44 +604,126 @@ export default function IntegrityVerification() {
               </Select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium block">검색값</label>
+              <label className="block text-sm font-medium">반납 위치</label>
+              <Select
+                value={filters.returnLocation || 'all'}
+                onValueChange={(value) => updateFilter('returnLocation', value === 'all' ? '' : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="반납 위치 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 위치</SelectItem>
+                  {returnLocationOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">조회 시작일</label>
               <Input
-                type={searchMode === 'date' ? 'date' : 'text'}
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                placeholder={inputPlaceholder}
+                type="date"
+                value={filters.startDate}
+                max={filters.endDate || undefined}
+                onChange={(e) => updateStartDate(e.target.value)}
               />
             </div>
-            <div className="flex items-end gap-2">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">조회 종료일</label>
+              <Input
+                type="date"
+                value={filters.endDate}
+                min={filters.startDate || undefined}
+                onChange={(e) => updateEndDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">검증 상태</label>
+              <Select value={filters.verificationStatus} onValueChange={onSelectVerificationStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="검증 상태 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {VERIFICATION_STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">블록</label>
+              <Select value={filters.blockNumber} onValueChange={onSelectBlock}>
+                <SelectTrigger>
+                  <SelectValue placeholder="블록 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 블록</SelectItem>
+                  {blockOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">정렬 기준</label>
+              <Select value={filters.sortField} onValueChange={(value) => updateFilter('sortField', value as SortField)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="정렬 기준 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_FIELD_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">정렬 방향</label>
+              <Select value={filters.sortOrder} onValueChange={(value) => updateFilter('sortOrder', value as SortOrder)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="정렬 방향 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_ORDER_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end gap-2 xl:col-span-5">
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? '조회 중...' : '조회'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setFilters((prev) => ({ ...prev, startDate: '', endDate: '' }))}
+                disabled={!filters.startDate && !filters.endDate}
+              >
+                기간 초기화
               </Button>
               <Button type="button" variant="outline" onClick={onReset}>
                 초기화
               </Button>
+              <Button type="button" variant="outline" onClick={() => void fetchHistory(filters)} disabled={isLoading}>
+                새로고침
+              </Button>
+              <Button type="button" variant="outline" onClick={downloadCsv} disabled={isLoading || items.length === 0}>
+                CSV 다운로드
+              </Button>
             </div>
           </form>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => downloadUsageHistory(false)}
-              disabled={isExportingFiltered || isExportingAll}
-            >
-              <Download className="h-4 w-4" />
-              {isExportingFiltered ? '다운로드 중...' : '검색 결과 엑셀 다운로드'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => downloadUsageHistory(true)}
-              disabled={isExportingFiltered || isExportingAll}
-            >
-              <Download className="h-4 w-4" />
-              {isExportingAll ? '다운로드 중...' : '전체 이력 엑셀 다운로드'}
-            </Button>
-          </div>
 
           {error ? (
             <div className="mt-4 rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
@@ -363,125 +740,132 @@ export default function IntegrityVerification() {
                 장비 사용 이력
               </div>
             </div>
-            <Badge variant="outline">Immutable Audit View</Badge>
+            <Badge variant="outline">DB + On-chain + Transactions Root</Badge>
           </div>
 
           <div className="space-y-2.5">
-              {isLoading ? (
-                <div className="empty-state">조회 중입니다.</div>
-              ) : items.length === 0 ? (
-                <div className="empty-state">조회된 사용 이력이 없습니다.</div>
-              ) : (
-                items.map((item) => {
-                  const isExpanded = expandedUsageId === item.usage_id;
-                  const displayDepartment = getDisplayDepartment(item);
-                  const displayPosition = getDisplayPosition(item);
-                  const usagePath = getDisplayUsagePath(item);
-                  const verification = item.verification ?? { ...FALLBACK_VERIFICATION, usage_id: item.usage_id };
-                  return (
+            {isLoading ? (
+              <div className="empty-state">조회 중입니다.</div>
+            ) : items.length === 0 ? (
+              <div className="empty-state">조회된 사용 이력이 없습니다.</div>
+            ) : (
+              items.map((item) => {
+                const blockchain = item.blockchain;
+                const isExpanded = expandedUsageId === item.usage_id;
+                const displayDepartment = getDisplayDepartment(item);
+                const displayPosition = getDisplayPosition(item);
+                const returnedByDepartment = getDisplayReturnedByDepartment(item);
+                const returnedByPosition = getDisplayReturnedByPosition(item);
+                const returnedByName = item.returned_by.name ?? '-';
+                const checkoutLocation = getLocationLabel(item.checkout.location, item.checkout.reader_id);
+                const returnLocation = getLocationLabel(item.return.location, item.return.reader_id);
+                const blockNumber = blockchain?.anchor?.block_number ?? null;
+                const transactionIndex = blockchain?.anchor?.transaction_index ?? null;
+
+                return (
                   <div
                     key={item.usage_id}
                     className="rounded-[1.7rem] border border-white/70 bg-white/58 p-5 transition-all"
                   >
                     <button
                       type="button"
-                      onClick={() => {
-                        const nextExpanded = isExpanded ? null : item.usage_id;
-                        setExpandedUsageId(nextExpanded);
-                      }}
+                      onClick={() => setExpandedUsageId(isExpanded ? null : item.usage_id)}
                       className="mb-4 flex w-full flex-wrap items-center justify-between gap-3 text-left"
                     >
                       <div>
-                        <div className="text-[1.42rem] font-semibold tracking-[-0.04em] text-foreground">{item.equipment.name}</div>
-                        <div className="mt-1 text-[1.02rem] text-muted-foreground">usage_id {item.usage_id} · tag {item.equipment.tag_id}</div>
+                        <div className="text-[1.42rem] font-semibold tracking-[-0.04em] text-foreground">
+                          {item.equipment.name}
+                        </div>
+                        <div className="mt-1 text-[1.02rem] text-muted-foreground">
+                          usage_id {item.usage_id} · tag {item.equipment.tag_id}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline">사용 이력</Badge>
-                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        <VerificationStatusPill
+                          status={blockchain?.verification_status ?? 'chain_error'}
+                          label={blockchain?.verification_label ?? '검증 중 오류'}
+                        />
+                        {typeof blockNumber === 'number' ? <Badge variant="outline">Block {blockNumber}</Badge> : null}
+                        {typeof transactionIndex === 'number' ? <Badge variant="outline">Tx #{transactionIndex}</Badge> : null}
+                        <ChevronDown
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        />
                       </div>
                     </button>
 
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <div className="rounded-[1.2rem] border border-white/70 bg-white/62 p-4">
-                        <div className="metric-label text-[1rem]">사용자</div>
+                        <div className="metric-label text-[1rem]">대여자</div>
                         <div className="mt-2 flex items-center gap-2 text-[1.08rem] leading-7 text-foreground">
                           <User className="h-[1.05rem] w-[1.05rem] text-muted-foreground" />
-                          <span>
-                            {item.user.name} / {displayDepartment} / {displayPosition}
-                          </span>
+                          <div>
+                            <div>이름: {item.user.name}</div>
+                            <div>부서: {displayDepartment}</div>
+                            <div>직책: {displayPosition}</div>
+                          </div>
                         </div>
                       </div>
                       <div className="rounded-[1.2rem] border border-white/70 bg-white/62 p-4">
-                        <div className="metric-label text-[1rem]">대여 정보</div>
-                        <div className="mt-2 text-[1.08rem] leading-7 text-foreground">
-                          {formatDateTime(item.checkout.at)}
-                          <br />
-                          {item.checkout.location ?? item.checkout.reader_id ?? '-'}
+                        <div className="metric-label text-[1rem]">반납자</div>
+                        <div className="mt-2 flex items-center gap-2 text-[1.08rem] leading-7 text-foreground">
+                          <User className="h-[1.05rem] w-[1.05rem] text-muted-foreground" />
+                          <div>
+                            <div>이름: {returnedByName}</div>
+                            <div>부서: {returnedByDepartment}</div>
+                            <div>직책: {returnedByPosition}</div>
+                          </div>
                         </div>
                       </div>
                       <div className="rounded-[1.2rem] border border-white/70 bg-white/62 p-4">
-                        <div className="metric-label text-[1rem]">반납 정보</div>
+                        <div className="metric-label text-[1rem]">장소</div>
                         <div className="mt-2 text-[1.08rem] leading-7 text-foreground">
-                          {formatDateTime(item.return.at)}
+                          대여: {checkoutLocation}
                           <br />
-                          {item.return.location ?? item.return.reader_id ?? '-'}
+                          반납: {returnLocation}
                         </div>
                       </div>
-                    </div>
-
-                    <div className="mt-4 inline-meta text-[0.98rem]">
-                      <span className="inline-meta__item">
-                        <Search className="h-4 w-4" />
-                        생성 시각 {formatDateTime(item.created_at)}
-                      </span>
-                      <span className="inline-meta__item">
-                        <User className="h-4 w-4" />
-                        <span>
-                          user_id {item.user.user_id}
-                        </span>
-                      </span>
+                      <div className="rounded-[1.2rem] border border-white/70 bg-white/62 p-4">
+                        <div className="metric-label text-[1rem]">시각</div>
+                        <div className="mt-2 text-[0.9rem] leading-6 tracking-[-0.02em] text-foreground">
+                          대여: {formatDateTime(item.checkout.at)}
+                          <br />
+                          반납: {formatDateTime(item.return.at)}
+                        </div>
+                      </div>
                     </div>
 
                     {isExpanded ? (
                       <div className="mt-4 space-y-3 rounded-[1.5rem] border border-slate-300/70 bg-slate-200/70 p-4">
+                        <RecordSnapshot
+                          title="의료 장비 사용 이력"
+                          record={blockchain?.db_record ?? null}
+                          notice={getOnchainRecordNotice(blockchain?.tx_input_matches_db)}
+                          noticeState={blockchain?.tx_input_matches_db}
+                        />
+
                         <div>
-                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-[1.2rem] font-semibold text-black">블록체인 무결성 검증</div>
-                          </div>
-                          <div className="space-y-3 rounded-[1.1rem] border border-slate-300/70 bg-slate-100/90 p-4 text-[1rem] text-foreground">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant={getVerificationBadgeVariant(verification.verification_status)}>
-                                {getVerificationLabel(verification.verification_status)}
-                              </Badge>
-                              {verification.detail ? (
-                                <span className="text-sm text-muted-foreground">{verification.detail}</span>
-                              ) : null}
+                          <div className="text-[1.08rem] font-semibold text-black">머클 검증 결과</div>
+                          <div className="mt-2 rounded-[1.1rem] border border-slate-300/70 bg-slate-100/90 p-4 text-[1rem] leading-7 text-foreground">
+                            <div>블록 번호: {blockchain?.anchor?.block_number ?? '-'}</div>
+                            <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
+                            <div className="break-all">원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}</div>
+                            <div className="break-all">재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}</div>
+                            <div
+                              className={`mt-3 rounded-xl border px-3 py-2 text-[0.95rem] ${getNoticeToneClasses(
+                                blockchain?.transactions_root_matches,
+                              )}`}
+                            >
+                              {getMerkleVerificationNotice(blockchain?.transactions_root_matches)}
                             </div>
-                            <div>재계산 해시: {verification.recalculated_hash ?? '-'}</div>
-                            <div>온체인 해시: {verification.onchain_hash ?? '-'}</div>
-                            <div>기록 시각: {formatDateTime(verification.recorded_at ?? null)}</div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[1.2rem] font-semibold text-black">장비 사용 이력 원본 데이터</div>
-                          <div className="mt-2 rounded-[1.1rem] border border-slate-300/70 bg-slate-100/90 p-4 text-[1.28rem] leading-[2rem] text-foreground">
-                            <div>장비 ID: {item.equipment.tag_id}</div>
-                            <div>장비명: {item.equipment.name}</div>
-                            <div>
-                              사용자: {item.user.name} / {displayDepartment} / {displayPosition}
-                            </div>
-                            <div>사용 위치: {usagePath}</div>
-                            <div>대여 시각: {formatDateTime(item.checkout.at)}</div>
-                            <div>반납 시각: {formatDateTime(item.return.at)}</div>
-                            <div>트랜잭션 인덱스 번호: TX-{String(item.usage_id).padStart(5, '0')}</div>
                           </div>
                         </div>
                       </div>
                     ) : null}
                   </div>
-                )})
-              )}
-            </div>
+                );
+              })
+            )}
+          </div>
         </section>
       </div>
     </AppShell>

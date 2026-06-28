@@ -8,16 +8,15 @@ import AppShell from '../components/layout/AppShell';
 import { ChevronLeft } from 'lucide-react';
 import { cn } from '../components/ui/utils';
 import { getRedirectTarget, withRedirectQuery } from '../lib/auth';
+import { API_BASE_URL } from '../lib/runtime';
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ??
-  `${window.location.protocol}//${window.location.hostname}:8000`;
 const POSITION_OPTIONS = ['간호사', '의사', '간호조무사', '방사선사', '임상병리사', '물리치료사', '기타'];
 const ROLE_OPTIONS = [
   { value: 'staff', label: '의료진' },
   { value: 'admin', label: '관리자' },
 ] as const;
 type SignUpRole = (typeof ROLE_OPTIONS)[number]['value'];
+const USERNAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{2,49}$/;
 
 export default function SignUp() {
   const navigate = useNavigate();
@@ -42,6 +41,18 @@ export default function SignUp() {
 
     if (password !== passwordConfirm) {
       setError('비밀번호 확인이 일치하지 않습니다.');
+      return;
+    }
+    if (!USERNAME_PATTERN.test(username.trim())) {
+      setError("아이디는 3~50자의 영문, 숫자, '.', '_', '-'만 사용할 수 있습니다.");
+      return;
+    }
+    if (displayName.trim().length === 0) {
+      setError('이름을 입력하세요.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('비밀번호는 8자 이상이어야 합니다.');
       return;
     }
 
@@ -172,7 +183,7 @@ export default function SignUp() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="1234"
+                placeholder="8자 이상 입력"
                 required
               />
             </div>
