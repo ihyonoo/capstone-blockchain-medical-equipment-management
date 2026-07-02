@@ -65,7 +65,7 @@ export default function AppShell({
               <ShieldCheck className="h-4 w-4" />
             </div>
             <div className="brand-copy">
-              <strong>MediLedger Operations</strong>
+              <strong>MediLedger &amp; EquipTrace</strong>
             </div>
           </div>
           <div className="app-shell__actions flex items-center gap-2">

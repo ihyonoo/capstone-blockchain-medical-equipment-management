@@ -33,6 +33,9 @@ pnpm-debug.log*
 backups/
 .local-backups/
 .postgres-data/
+.gitignore
+AGENTS.md
+DESIGN.md
 
 # OS / Editor
 .DS_Store
