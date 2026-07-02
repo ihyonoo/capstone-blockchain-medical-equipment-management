@@ -237,18 +237,7 @@ export default function NfcMapping() {
           </Button>
         </>
       }
-      headerAside={
-        <div className="metric-grid w-[18rem] max-w-full" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-          <div className="metric-card text-center">
-            <div className="metric-label">활성 장비</div>
-            <div className="metric-value">{items.length}</div>
-          </div>
-          <div className="metric-card text-center">
-            <div className="metric-label">매핑 완료</div>
-            <div className="metric-value">{mappedCount}</div>
-          </div>
-        </div>
-      }
+      contentClassName="pt-4 sm:pt-5"
     >
       <div className="space-y-4">
         <section className="surface-panel p-5 fade-rise">
@@ -276,10 +265,14 @@ export default function NfcMapping() {
                 장비별 NFC 토큰
               </div>
             </div>
-            <Button variant="outline" onClick={fetchMappings} disabled={isRefreshing}>
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              새로고침
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Badge variant="outline">활성 장비 {items.length}개</Badge>
+              <Badge variant="outline">매핑 완료 {mappedCount}개</Badge>
+              <Button variant="outline" onClick={fetchMappings} disabled={isRefreshing}>
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                새로고침
+              </Button>
+            </div>
           </div>
 
           <div className="relative mb-4">

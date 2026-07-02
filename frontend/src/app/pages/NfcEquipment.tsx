@@ -162,19 +162,19 @@ export default function NfcEquipment() {
       }
       headerAside={
         <div className="grid w-full grid-cols-3 gap-2 sm:gap-3">
-          <div className="rounded-[1.35rem] border border-white/70 bg-white/58 p-4">
+          <div className="rounded-[1.35rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-4">
             <div className="metric-label">스캔 토큰</div>
             <div className="mt-2 break-all text-xs font-semibold leading-5 text-foreground sm:text-sm sm:leading-6">
               {token || '-'}
             </div>
           </div>
-          <div className="rounded-[1.35rem] border border-white/70 bg-white/58 p-4">
+          <div className="rounded-[1.35rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-4">
             <div className="metric-label">장비 상태</div>
             <div className="mt-2 text-sm font-semibold tracking-[-0.03em] text-foreground sm:text-lg">
               {item ? getAssetStatusLabel(item.asset_status) : '-'}
             </div>
           </div>
-          <div className="rounded-[1.35rem] border border-white/70 bg-white/58 p-4">
+          <div className="rounded-[1.35rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-4">
             <div className="metric-label">현재 위치</div>
             <div className="mt-2 text-sm font-semibold tracking-[-0.03em] text-foreground sm:text-lg">
               {item?.location ?? '미수신'}

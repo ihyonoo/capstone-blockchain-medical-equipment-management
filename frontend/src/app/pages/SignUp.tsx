@@ -135,8 +135,8 @@ export default function SignUp() {
                       className={cn(
                         'rounded-3xl border px-4 py-4 text-left transition-all duration-200',
                         selected
-                          ? 'border-primary bg-primary/8 shadow-[0_10px_24px_rgba(0,113,227,0.12)]'
-                          : 'border-white/70 bg-white/72 hover:-translate-y-0.5 hover:bg-white/88',
+                          ? 'border-[rgba(20,20,19,0.22)] bg-accent shadow-[0_10px_24px_rgba(20,20,19,0.08)]'
+                          : 'border-[rgba(20,20,19,0.1)] bg-white/72 hover:-translate-y-0.5 hover:bg-white/92',
                       )}
                     >
                       <div className="text-base font-semibold text-foreground">{item.label}</div>

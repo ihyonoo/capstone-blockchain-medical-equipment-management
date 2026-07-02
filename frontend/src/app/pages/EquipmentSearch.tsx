@@ -288,18 +288,7 @@ export default function EquipmentSearch() {
           </Button>
         </>
       }
-      headerAside={
-        <div className="metric-grid w-full max-w-[32rem]" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-          <div className="metric-card">
-            <div className="metric-label">추적 중인 장비</div>
-            <div className="metric-value">{equipment.length}</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">활성 위치 구역</div>
-            <div className="metric-value">{locationPanels.length}</div>
-          </div>
-        </div>
-      }
+      contentClassName="pt-4 sm:pt-5"
     >
       <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <section className="space-y-3 fade-rise">
@@ -364,8 +353,8 @@ export default function EquipmentSearch() {
             <div className="panel-header px-2 pt-2">
               <div>
                 <div className="panel-title">장비 목록</div>
-                <p className="panel-copy mt-2">{filteredEquipment.length}개 항목이 현재 필터에 맞습니다.</p>
               </div>
+              <Badge variant="outline">추적 중 {equipment.length}개</Badge>
             </div>
             <div className="max-h-[720px] space-y-2 overflow-y-auto px-2 pb-2">
               {isLoading ? (
@@ -383,8 +372,8 @@ export default function EquipmentSearch() {
                     onClick={() => setSelectedEquipment(item.id)}
                     className={`w-full rounded-[1.5rem] border p-4 text-left transition-all ${
                       selectedEquipment === item.id
-                        ? 'border-primary/20 bg-white shadow-[0_18px_32px_rgba(0,113,227,0.08)]'
-                        : 'border-white/60 bg-white/55 hover:bg-white/78'
+                        ? 'border-[rgba(20,20,19,0.22)] bg-white shadow-[0_18px_32px_rgba(20,20,19,0.08)]'
+                        : 'border-[rgba(20,20,19,0.1)] bg-white/62 hover:bg-white/86'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -437,6 +426,7 @@ export default function EquipmentSearch() {
                   리더 위치 패널
                 </div>
               </div>
+              <Badge variant="outline">활성 수신 구역 {locationPanels.length}개</Badge>
             </div>
 
             {locationPanels.length === 0 ? (
@@ -446,7 +436,7 @@ export default function EquipmentSearch() {
                 {locationPanels.map((location) => {
                   const roomItems = filteredEquipment.filter((eq) => eq.location === location);
                   return (
-                    <section key={location} className="rounded-[1.6rem] border border-white/70 bg-white/58 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                    <section key={location} className="rounded-[1.6rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div>
                           <h3 className="text-[1.02rem]">{location}</h3>
@@ -467,8 +457,8 @@ export default function EquipmentSearch() {
                               onClick={() => setSelectedEquipment(eq.id)}
                               className={`flex w-full items-center justify-between gap-3 rounded-[1.2rem] border px-4 py-3 text-left transition-all ${
                                 selectedEquipment === eq.id
-                                  ? 'border-primary/20 bg-white shadow-[0_14px_28px_rgba(0,113,227,0.08)]'
-                                  : 'border-white/60 bg-white/48 hover:bg-white/76'
+                                  ? 'border-[rgba(20,20,19,0.22)] bg-white shadow-[0_14px_28px_rgba(20,20,19,0.08)]'
+                                  : 'border-[rgba(20,20,19,0.1)] bg-white/58 hover:bg-white/82'
                               }`}
                             >
                               <div className="min-w-0">
@@ -506,19 +496,19 @@ export default function EquipmentSearch() {
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">
+                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
                   <div className="metric-label">장비명</div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">{selectedItem.name}</div>
                 </div>
-                <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">
+                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
                   <div className="metric-label">현재 위치</div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">{selectedItem.location}</div>
                 </div>
-                <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">
+                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
                   <div className="metric-label">리더 ID</div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">{selectedItem.readerId}</div>
                 </div>
-                <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">
+                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
                   <div className="metric-label">업데이트 상태</div>
                   <div className="mt-3">
                     <div className="flex items-center gap-3 text-lg font-semibold tracking-[-0.04em]">
@@ -530,14 +520,14 @@ export default function EquipmentSearch() {
                     </div>
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">
+                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
                   <div className="metric-label">사용 상태</div>
                   <div className="mt-3 flex items-center gap-3 text-xl font-semibold tracking-[-0.04em]">
                     <span className={getAssetStatusColor(selectedItem.assetStatus)} />
                     {getAssetStatusLabel(selectedItem.assetStatus)}
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-white/70 bg-white/58 p-5">
+                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
                   <div className="metric-label">현재 사용자</div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">{selectedItem.currentHolderName ?? '-'}</div>
                 </div>
