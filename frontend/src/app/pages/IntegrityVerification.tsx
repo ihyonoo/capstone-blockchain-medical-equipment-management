@@ -149,21 +149,27 @@ function getLocationLabel(location: string | null, readerId: string | null) {
 }
 
 function getOnchainRecordNotice(value: boolean | null | undefined) {
-  if (value === true) return '블록체인에 저장된 값과 동일합니다.';
-  if (value === false) return '블록체인에 저장된 값과 일치하지 않습니다.';
-  return '블록체인 저장 값과의 비교 결과를 확인할 수 없습니다.';
+  if (value === true) return '온체인 원문 일치';
+  if (value === false) return '온체인 원문 불일치';
+  return '온체인 원문 비교 불가';
 }
 
 function getMerkleVerificationNotice(value: boolean | null | undefined) {
-  if (value === true) return '머클루트 재계산 결과가 블록의 원본 값과 동일합니다.';
-  if (value === false) return '머클루트 재계산 결과가 블록의 원본 값과 일치하지 않습니다.';
-  return '머클루트 재계산 결과를 확인할 수 없습니다.';
+  if (value === true) return '머클루트 일치';
+  if (value === false) return '머클루트 불일치';
+  return '머클루트 검증 불가';
 }
 
-function getNoticeToneClasses(value: boolean | null | undefined) {
-  if (value === true) return 'border-[#b7c8aa] bg-[#f0f5ec] text-[#36513b]';
-  if (value === false) return 'border-[#d8b0a2] bg-[#f7ece7] text-[#6f3527]';
-  return 'border-border bg-white/80 text-foreground';
+function VerificationNotice({ value, children }: { value: boolean | null | undefined; children: string }) {
+  const Icon = value === true ? CheckCircle2 : value === false ? AlertTriangle : HelpCircle;
+  const iconTone = value === true ? 'text-[#1f8a5b]' : value === false ? 'text-[#b42318]' : 'text-muted-foreground';
+
+  return (
+    <div className="mt-3 flex items-center gap-2 border-t border-border/70 pt-3 text-[0.92rem] font-medium text-muted-foreground">
+      <Icon className={`h-4 w-4 shrink-0 ${iconTone}`} />
+      <span>{children}</span>
+    </div>
+  );
 }
 
 function getDisplayDepartment(item: UsageHistoryItem) {
@@ -286,9 +292,7 @@ function RecordSnapshot({
             <div>반납 위치: {record.returnLocation || '-'}</div>
             <div>대여 시각: {formatDateTime(record.checkoutAt)}</div>
             <div>반납 시각: {formatDateTime(record.returnedAt)}</div>
-            {notice ? (
-              <div className={`mt-3 rounded-xl border px-3 py-2 text-[0.95rem] ${getNoticeToneClasses(noticeState)}`}>{notice}</div>
-            ) : null}
+            {notice ? <VerificationNotice value={noticeState}>{notice}</VerificationNotice> : null}
           </>
         )}
       </div>
@@ -882,13 +886,9 @@ export default function IntegrityVerification() {
                             <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
                             <div className="break-all">원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}</div>
                             <div className="break-all">재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}</div>
-                            <div
-                              className={`mt-3 rounded-xl border px-3 py-2 text-[0.95rem] ${getNoticeToneClasses(
-                                blockchain?.transactions_root_matches,
-                              )}`}
-                            >
+                            <VerificationNotice value={blockchain?.transactions_root_matches}>
                               {getMerkleVerificationNotice(blockchain?.transactions_root_matches)}
-                            </div>
+                            </VerificationNotice>
                           </div>
                         </div>
                       </div>
