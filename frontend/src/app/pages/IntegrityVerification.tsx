@@ -277,9 +277,9 @@ function RecordSnapshot({
   noticeState?: boolean | null;
 }) {
   return (
-    <div>
+    <div className="rounded-[1.1rem] border border-border/70 bg-card/80 p-4 shadow-[0_8px_24px_rgba(20,20,19,0.035)]">
       <div className="text-[1.08rem] font-semibold text-foreground">{title}</div>
-      <div className="mt-2 rounded-[1.1rem] border border-border/80 bg-muted/55 p-4 text-[1rem] leading-7 text-foreground">
+      <div className="mt-3 border-t border-border/70 pt-3 text-[1rem] leading-7 text-foreground">
         {!record ? (
           <div>기록 없음</div>
         ) : (
@@ -871,7 +871,7 @@ export default function IntegrityVerification() {
                     </div>
 
                     {isExpanded ? (
-                      <div className="mt-4 space-y-3 rounded-[1.5rem] border border-border/80 bg-muted/55 p-4">
+                      <div className="mt-5 space-y-3 border-t border-border/70 pt-5">
                         <RecordSnapshot
                           title="의료 장비 사용 이력"
                           record={blockchain?.db_record ?? null}
@@ -879,9 +879,9 @@ export default function IntegrityVerification() {
                           noticeState={blockchain?.tx_input_matches_db}
                         />
 
-                        <div>
+                        <div className="rounded-[1.1rem] border border-border/70 bg-card/80 p-4 shadow-[0_8px_24px_rgba(20,20,19,0.035)]">
                           <div className="text-[1.08rem] font-semibold text-foreground">머클 검증 결과</div>
-                          <div className="mt-2 rounded-[1.1rem] border border-border/80 bg-muted/55 p-4 text-[1rem] leading-7 text-foreground">
+                          <div className="mt-3 border-t border-border/70 pt-3 text-[1rem] leading-7 text-foreground">
                             <div>블록 번호: {blockchain?.anchor?.block_number ?? '-'}</div>
                             <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
                             <div className="break-all">원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}</div>
