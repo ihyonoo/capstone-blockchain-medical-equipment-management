@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -265,6 +266,15 @@ function VerificationStatusPill({ status, label }: { status: string; label: stri
   );
 }
 
+function SnapshotCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-[1.1rem] border border-border/70 bg-card/80 p-4 shadow-[0_8px_24px_rgba(20,20,19,0.035)]">
+      <div className="text-[1.08rem] font-semibold text-foreground">{title}</div>
+      <div className="mt-3 border-t border-border/70 pt-3 text-[1rem] leading-7 text-foreground">{children}</div>
+    </div>
+  );
+}
+
 function RecordSnapshot({
   title,
   record,
@@ -277,26 +287,23 @@ function RecordSnapshot({
   noticeState?: boolean | null;
 }) {
   return (
-    <div className="rounded-[1.1rem] border border-border/70 bg-card/80 p-4 shadow-[0_8px_24px_rgba(20,20,19,0.035)]">
-      <div className="text-[1.08rem] font-semibold text-foreground">{title}</div>
-      <div className="mt-3 border-t border-border/70 pt-3 text-[1rem] leading-7 text-foreground">
-        {!record ? (
-          <div>기록 없음</div>
-        ) : (
-          <>
-            <div>usage_id: {record.usageId}</div>
-            <div>tag_id: {record.tagId || '-'}</div>
-            <div>사용 시작자 ID: {record.checkoutUserId ?? '-'}</div>
-            <div>사용 종료자 ID: {record.returnUserId ?? '-'}</div>
-            <div>대여 위치: {record.checkoutLocation || '-'}</div>
-            <div>반납 위치: {record.returnLocation || '-'}</div>
-            <div>대여 시각: {formatDateTime(record.checkoutAt)}</div>
-            <div>반납 시각: {formatDateTime(record.returnedAt)}</div>
-            {notice ? <VerificationNotice value={noticeState}>{notice}</VerificationNotice> : null}
-          </>
-        )}
-      </div>
-    </div>
+    <SnapshotCard title={title}>
+      {!record ? (
+        <div>기록 없음</div>
+      ) : (
+        <>
+          <div>usage_id: {record.usageId}</div>
+          <div>tag_id: {record.tagId || '-'}</div>
+          <div>사용 시작자 ID: {record.checkoutUserId ?? '-'}</div>
+          <div>사용 종료자 ID: {record.returnUserId ?? '-'}</div>
+          <div>대여 위치: {record.checkoutLocation || '-'}</div>
+          <div>반납 위치: {record.returnLocation || '-'}</div>
+          <div>대여 시각: {formatDateTime(record.checkoutAt)}</div>
+          <div>반납 시각: {formatDateTime(record.returnedAt)}</div>
+          {notice ? <VerificationNotice value={noticeState}>{notice}</VerificationNotice> : null}
+        </>
+      )}
+    </SnapshotCard>
   );
 }
 
@@ -879,18 +886,15 @@ export default function IntegrityVerification() {
                           noticeState={blockchain?.tx_input_matches_db}
                         />
 
-                        <div className="rounded-[1.1rem] border border-border/70 bg-card/80 p-4 shadow-[0_8px_24px_rgba(20,20,19,0.035)]">
-                          <div className="text-[1.08rem] font-semibold text-foreground">머클 검증 결과</div>
-                          <div className="mt-3 border-t border-border/70 pt-3 text-[1rem] leading-7 text-foreground">
-                            <div>블록 번호: {blockchain?.anchor?.block_number ?? '-'}</div>
-                            <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
-                            <div className="break-all">원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}</div>
-                            <div className="break-all">재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}</div>
-                            <VerificationNotice value={blockchain?.transactions_root_matches}>
-                              {getMerkleVerificationNotice(blockchain?.transactions_root_matches)}
-                            </VerificationNotice>
-                          </div>
-                        </div>
+                        <SnapshotCard title="머클 검증 결과">
+                          <div>블록 번호: {blockchain?.anchor?.block_number ?? '-'}</div>
+                          <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
+                          <div className="break-all">원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}</div>
+                          <div className="break-all">재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}</div>
+                          <VerificationNotice value={blockchain?.transactions_root_matches}>
+                            {getMerkleVerificationNotice(blockchain?.transactions_root_matches)}
+                          </VerificationNotice>
+                        </SnapshotCard>
                       </div>
                     ) : null}
                   </div>
