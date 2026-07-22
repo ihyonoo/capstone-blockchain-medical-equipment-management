@@ -42,3 +42,6 @@ Thumbs.db
 .idea/
 .vscode/
 .gstack/
+
+# 로컬 전용 프로젝트 지침 (공유 저장소에는 올리지 않음)
+CLAUDE.md
