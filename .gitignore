@@ -45,3 +45,7 @@ Thumbs.db
 
 # 로컬 전용 프로젝트 지침 (공유 저장소에는 올리지 않음)
 CLAUDE.md
+
+# 문서 (README용 figure 이미지는 커밋 대상으로 예외 처리)
+/docs/*
+!/docs/figure/
