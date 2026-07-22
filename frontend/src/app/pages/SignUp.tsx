@@ -133,10 +133,10 @@ export default function SignUp() {
                       aria-checked={selected}
                       onClick={() => setRole(item.value)}
                       className={cn(
-                        'rounded-3xl border px-4 py-4 text-left transition-all duration-200',
+                        'rounded-lg border px-4 py-4 text-left transition-all duration-200',
                         selected
-                          ? 'border-[rgba(20,20,19,0.22)] bg-accent shadow-[0_10px_24px_rgba(20,20,19,0.08)]'
-                          : 'border-[rgba(20,20,19,0.1)] bg-white/72 hover:-translate-y-0.5 hover:bg-white/92',
+                          ? 'border-foreground bg-secondary'
+                          : 'border-border bg-card hover:-translate-y-0.5 hover:bg-card',
                       )}
                     >
                       <div className="text-base font-semibold text-foreground">{item.label}</div>
@@ -201,12 +201,12 @@ export default function SignUp() {
             </div>
 
             {error ? (
-              <div className="md:col-span-2 rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
+              <div className="md:col-span-2 rounded-lg border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
                 {error}
               </div>
             ) : null}
             {success ? (
-              <div className="md:col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+              <div className="md:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
                 {success}
               </div>
             ) : null}

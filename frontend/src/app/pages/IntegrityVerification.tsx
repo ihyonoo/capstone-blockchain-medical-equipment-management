@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import AppShell from '../components/layout/AppShell';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
-import { AlertTriangle, CheckCircle2, ChevronDown, CircleMinus, HelpCircle, ListFilter, LogOut, ShieldCheck, User } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, CircleMinus, HelpCircle, LogOut, User } from 'lucide-react';
 
 type UsageChainRecord = {
   usageId: string;
@@ -268,7 +268,7 @@ function VerificationStatusPill({ status, label }: { status: string; label: stri
 
 function SnapshotCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-[1.1rem] border border-border/70 bg-card/80 p-4 shadow-[0_8px_24px_rgba(20,20,19,0.035)]">
+    <div className="rounded-lg border border-border bg-card p-4">
       <div className="text-[1.08rem] font-semibold text-foreground">{title}</div>
       <div className="mt-3 border-t border-border/70 pt-3 text-[1rem] leading-7 text-foreground">{children}</div>
     </div>
@@ -572,10 +572,7 @@ export default function IntegrityVerification() {
         <section className="surface-panel p-5 fade-rise">
           <div className="panel-header">
             <div>
-              <div className="panel-title flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-primary" />
-                실사용 이력 무결성 검증
-              </div>
+              <div className="panel-title">실사용 이력 무결성 검증</div>
               <div className="mt-1 text-sm text-muted-foreground">
                 DB에 저장된 반납 완료 이력과 온체인 원문을 비교하고, 해당 트랜잭션이 포함된 블록의 transactionsRoot를 재계산해 검증합니다.
               </div>
@@ -587,10 +584,7 @@ export default function IntegrityVerification() {
         <section className="surface-panel p-5 fade-rise">
           <div className="panel-header">
             <div>
-              <div className="panel-title flex items-center gap-2">
-                <ListFilter className="h-5 w-5 text-primary" />
-                검색 조건
-              </div>
+              <div className="panel-title">검색 조건</div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Badge variant="outline">최대 200건</Badge>
@@ -758,7 +752,7 @@ export default function IntegrityVerification() {
           </form>
 
           {error ? (
-            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
               {error}
             </div>
           ) : null}
@@ -767,10 +761,7 @@ export default function IntegrityVerification() {
         <section className="surface-panel p-5 fade-rise-delay">
           <div className="panel-header">
             <div>
-              <div className="panel-title flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-primary" />
-                장비 사용 이력
-              </div>
+              <div className="panel-title">장비 사용 이력</div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Badge variant="outline">검증 완료 {visibleVerifiedCount}건</Badge>
@@ -803,7 +794,7 @@ export default function IntegrityVerification() {
                 return (
                   <div
                     key={item.usage_id}
-                    className="relative overflow-hidden rounded-[1.7rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5 pl-6 transition-all"
+                    className="relative overflow-hidden rounded-[1.7rem] border border-border bg-card p-5 pl-6 transition-all"
                   >
                     <div className={`absolute left-0 top-0 h-full w-1.5 ${getVerificationCardTone(verificationStatus)}`} />
                     <button
@@ -831,13 +822,13 @@ export default function IntegrityVerification() {
                         />
                       </div>
                     </button>
-                    <div className="mb-4 flex items-start gap-2 rounded-[1.15rem] border border-[rgba(20,20,19,0.08)] bg-[#fcfbfa]/72 px-3.5 py-2.5 text-[0.94rem] leading-6 text-muted-foreground">
+                    <div className="mb-4 flex items-start gap-2 rounded-[1.15rem] border border-border bg-card/72 px-3.5 py-2.5 text-[0.94rem] leading-6 text-muted-foreground">
                       <VerificationStatusIcon status={verificationStatus} />
                       <span>{verificationSummary}</span>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-[1.2rem] border border-[rgba(20,20,19,0.1)] bg-white/72 p-4">
+                      <div className="rounded-lg border border-border bg-card p-4">
                         <div className="metric-label text-[1rem]">대여자</div>
                         <div className="mt-2 flex items-center gap-2 text-[1.08rem] leading-7 text-foreground">
                           <User className="h-[1.05rem] w-[1.05rem] text-muted-foreground" />
@@ -848,7 +839,7 @@ export default function IntegrityVerification() {
                           </div>
                         </div>
                       </div>
-                      <div className="rounded-[1.2rem] border border-[rgba(20,20,19,0.1)] bg-white/72 p-4">
+                      <div className="rounded-lg border border-border bg-card p-4">
                         <div className="metric-label text-[1rem]">반납자</div>
                         <div className="mt-2 flex items-center gap-2 text-[1.08rem] leading-7 text-foreground">
                           <User className="h-[1.05rem] w-[1.05rem] text-muted-foreground" />
@@ -859,7 +850,7 @@ export default function IntegrityVerification() {
                           </div>
                         </div>
                       </div>
-                      <div className="rounded-[1.2rem] border border-[rgba(20,20,19,0.1)] bg-white/72 p-4">
+                      <div className="rounded-lg border border-border bg-card p-4">
                         <div className="metric-label text-[1rem]">장소</div>
                         <div className="mt-2 text-[1.08rem] leading-7 text-foreground">
                           대여: {checkoutLocation}
@@ -867,7 +858,7 @@ export default function IntegrityVerification() {
                           반납: {returnLocation}
                         </div>
                       </div>
-                      <div className="rounded-[1.2rem] border border-[rgba(20,20,19,0.1)] bg-white/72 p-4">
+                      <div className="rounded-lg border border-border bg-card p-4">
                         <div className="metric-label text-[1rem]">시각</div>
                         <div className="mt-2 text-[0.9rem] leading-6 tracking-[-0.02em] text-foreground">
                           대여: {formatDateTime(item.checkout.at)}

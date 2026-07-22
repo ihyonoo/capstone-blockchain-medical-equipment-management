@@ -5,7 +5,6 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
-import { ArrowRight, Lock, Mail } from 'lucide-react';
 import { getRedirectTarget, storeAuthSession, withRedirectQuery } from '../lib/auth';
 import { API_BASE_URL } from '../lib/runtime';
 
@@ -82,34 +81,26 @@ export default function Login() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">아이디</Label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="text"
-                  placeholder="test"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-11"
-                  required
-                />
-              </div>
+              <Input
+                id="email"
+                type="text"
+                placeholder="test"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="password">비밀번호</Label>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-11"
-                  required
-                />
-              </div>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
             </div>
 
             <div className="space-y-2">
@@ -129,7 +120,7 @@ export default function Login() {
             </div>
 
             {error ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                 {error}
               </div>
             ) : null}
@@ -137,7 +128,6 @@ export default function Login() {
             <div className="flex flex-col gap-3 pt-2 sm:flex-row">
               <Button type="submit" className="flex-1" size="lg" disabled={isLoading}>
                 {isLoading ? '로그인 중...' : '로그인'}
-                {!isLoading ? <ArrowRight className="h-4 w-4" /> : null}
               </Button>
               <Button type="button" variant="outline" size="lg" className="flex-1" onClick={handleSignUp}>
                 회원가입

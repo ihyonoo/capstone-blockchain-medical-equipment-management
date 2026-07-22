@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
 import { API_BASE_URL, PUBLIC_APP_URL } from '../lib/runtime';
-import { Link2, LogOut, RefreshCw, Save, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { LogOut, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
 
 type MappingItem = {
   tag_id: string;
@@ -243,16 +243,13 @@ export default function NfcMapping() {
         <section className="surface-panel p-5 fade-rise">
           <div className="panel-header">
             <div>
-              <div className="panel-title flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-primary" />
-                매핑 가이드
-              </div>
+              <div className="panel-title">매핑 가이드</div>
               <p className="panel-copy mt-2">
                 NTAG215에는 <strong>{`${PUBLIC_APP_URL}/nfc/<token>`}</strong> 형식의 URL을 기록하면 됩니다.
               </p>
             </div>
           </div>
-          <div className="rounded-3xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">
             같은 토큰은 한 장비에만 매핑할 수 있습니다. 저장 후 휴대폰으로 태그를 읽으면 해당 장비 상세 페이지로 진입합니다.
           </div>
         </section>
@@ -260,10 +257,7 @@ export default function NfcMapping() {
         <section className="surface-panel p-5 fade-rise-delay">
           <div className="panel-header">
             <div>
-              <div className="panel-title flex items-center gap-2">
-                <Link2 className="h-5 w-5 text-primary" />
-                장비별 NFC 토큰
-              </div>
+              <div className="panel-title">장비별 NFC 토큰</div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Badge variant="outline">활성 장비 {items.length}개</Badge>
@@ -285,17 +279,17 @@ export default function NfcMapping() {
             />
           </div>
 
-          {error ? <div className="rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+          {error ? <div className="rounded-lg border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">{error}</div> : null}
           {notice ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">{notice}</div>
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">{notice}</div>
           ) : null}
 
           {isLoading ? (
-            <div className="rounded-3xl border border-dashed border-border/70 px-6 py-12 text-center text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border/70 px-6 py-12 text-center text-muted-foreground">
               매핑 목록을 불러오는 중입니다.
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-border/70 px-6 py-12 text-center text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border/70 px-6 py-12 text-center text-muted-foreground">
               표시할 장비가 없습니다.
             </div>
           ) : (
@@ -333,7 +327,7 @@ export default function NfcMapping() {
                           }
                           placeholder="예: defib-001"
                         />
-                        <div className="rounded-2xl border border-border/70 bg-secondary/35 px-4 py-3 text-xs text-muted-foreground break-all">
+                        <div className="rounded-lg border border-border/70 bg-secondary/35 px-4 py-3 text-xs text-muted-foreground break-all">
                           {nfcUrl ?? '토큰을 입력하면 여기에 태그에 기록할 URL이 표시됩니다.'}
                         </div>
                         <div className="flex flex-wrap gap-2">

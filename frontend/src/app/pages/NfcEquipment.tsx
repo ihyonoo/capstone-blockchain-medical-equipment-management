@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession, getStoredAuthUser, withRedirectQuery } from '../lib/auth';
 import { API_BASE_URL } from '../lib/runtime';
-import { Fingerprint, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 type NfcEquipmentItem = {
   tag_id: string;
@@ -162,19 +162,19 @@ export default function NfcEquipment() {
       }
       headerAside={
         <div className="grid w-full grid-cols-3 gap-2 sm:gap-3">
-          <div className="rounded-[1.35rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-4">
+          <div className="rounded-[1.35rem] border border-border bg-card p-4">
             <div className="metric-label">스캔 토큰</div>
             <div className="mt-2 break-all text-xs font-semibold leading-5 text-foreground sm:text-sm sm:leading-6">
               {token || '-'}
             </div>
           </div>
-          <div className="rounded-[1.35rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-4">
+          <div className="rounded-[1.35rem] border border-border bg-card p-4">
             <div className="metric-label">장비 상태</div>
             <div className="mt-2 text-sm font-semibold tracking-[-0.03em] text-foreground sm:text-lg">
               {item ? getAssetStatusLabel(item.asset_status) : '-'}
             </div>
           </div>
-          <div className="rounded-[1.35rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-4">
+          <div className="rounded-[1.35rem] border border-border bg-card p-4">
             <div className="metric-label">현재 위치</div>
             <div className="mt-2 text-sm font-semibold tracking-[-0.03em] text-foreground sm:text-lg">
               {item?.location ?? '미수신'}
@@ -187,28 +187,25 @@ export default function NfcEquipment() {
         <section className="surface-panel p-5 fade-rise">
           <div className="panel-header">
             <div>
-              <div className="panel-title flex items-center gap-2">
-                <Fingerprint className="h-5 w-5 text-primary" />
-                {item?.equipment_name ?? '장비 정보'}
-              </div>
+              <div className="panel-title">{item?.equipment_name ?? '장비 정보'}</div>
               {item ? <p className="panel-copy mt-2">tag ID: {item.tag_id}</p> : null}
             </div>
           </div>
 
           {isLoading ? (
-            <div className="rounded-3xl border border-dashed border-border/70 px-6 py-12 text-center text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border/70 px-6 py-12 text-center text-muted-foreground">
               장비 정보를 불러오는 중입니다.
             </div>
           ) : error ? (
-            <div className="rounded-3xl border border-red-200 bg-red-50/80 px-5 py-5 text-red-700">{error}</div>
+            <div className="rounded-lg border border-red-200 bg-red-50/80 px-5 py-5 text-red-700">{error}</div>
           ) : !item ? (
-            <div className="rounded-3xl border border-dashed border-border/70 px-6 py-12 text-center text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border/70 px-6 py-12 text-center text-muted-foreground">
               매핑된 장비를 찾을 수 없습니다.
             </div>
           ) : (
             <div className="space-y-4">
               {notice ? (
-                <div className="rounded-3xl border border-emerald-200 bg-emerald-50/80 px-5 py-4 text-sm text-emerald-700">{notice}</div>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-5 py-4 text-sm text-emerald-700">{notice}</div>
               ) : null}
 
               <section className="rounded-[28px] border border-border/70 bg-background/80 p-5">

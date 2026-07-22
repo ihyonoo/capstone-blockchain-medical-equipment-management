@@ -7,18 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import AppShell from '../components/layout/AppShell';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
-import {
-  Search,
-  MapPin,
-  Activity,
-  Stethoscope,
-  Heart,
-  BedDouble,
-  Thermometer,
-  ScanLine,
-  LogOut,
-  Navigation,
-} from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 type LiveLocationItem = {
   tag_id: string;
@@ -52,25 +41,6 @@ type EquipmentViewItem = {
   currentHolderUserId: number | null;
   currentHolderName: string | null;
 };
-
-function getEquipmentIcon(type: string) {
-  switch (type) {
-    case '모니터링':
-      return <Activity className="w-5 h-5" />;
-    case '치료':
-      return <Heart className="w-5 h-5" />;
-    case '응급':
-      return <ScanLine className="w-5 h-5" />;
-    case '병실':
-      return <BedDouble className="w-5 h-5" />;
-    case '측정':
-      return <Thermometer className="w-5 h-5" />;
-    case '영상':
-      return <Stethoscope className="w-5 h-5" />;
-    default:
-      return <Activity className="w-5 h-5" />;
-  }
-}
 
 function getStatusColor(isStale: boolean) {
   return isStale ? 'h-2.5 w-2.5 rounded-full bg-amber-500' : 'h-2.5 w-2.5 rounded-full bg-green-500';
@@ -299,15 +269,11 @@ export default function EquipmentSearch() {
               </div>
             </div>
             <div className="space-y-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="태그 ID, 장비명, 위치 검색"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-11"
-                />
-              </div>
+              <Input
+                placeholder="태그 ID, 장비명, 위치 검색"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">장비 유형</label>
@@ -342,7 +308,7 @@ export default function EquipmentSearch() {
               </div>
 
               {fetchError ? (
-                <div className="rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
+                <div className="rounded-lg border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
                   {fetchError}
                 </div>
               ) : null}
@@ -360,38 +326,29 @@ export default function EquipmentSearch() {
               {isLoading ? (
                 <div className="empty-state">실시간 데이터 로딩 중입니다.</div>
               ) : filteredEquipment.length === 0 ? (
-                <div className="empty-state">
-                  <Search className="mx-auto mb-3 h-10 w-10 text-muted-foreground/70" />
-                  표시할 실시간 태그가 없습니다.
-                </div>
+                <div className="empty-state">표시할 실시간 태그가 없습니다.</div>
               ) : (
                 filteredEquipment.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => setSelectedEquipment(item.id)}
-                    className={`w-full rounded-[1.5rem] border p-4 text-left transition-all ${
+                    className={`w-full rounded-lg border p-4 text-left transition-all ${
                       selectedEquipment === item.id
-                        ? 'border-[rgba(20,20,19,0.22)] bg-white shadow-[0_18px_32px_rgba(20,20,19,0.08)]'
-                        : 'border-[rgba(20,20,19,0.1)] bg-white/62 hover:bg-white/86'
+                        ? 'border-foreground bg-secondary'
+                        : 'border-border bg-card hover:bg-secondary'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div className="brand-mark h-11 w-11 shrink-0">{getEquipmentIcon(item.type)}</div>
-                        <div className="space-y-2">
-                          <div>
-                            <h3 className="text-[1rem] leading-5">{item.name}</h3>
-                            <p className="text-sm text-muted-foreground" title={item.id}>
-                              {getShortTagId(item.id)}
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                            <span className="inline-flex items-center gap-2">
-                              <MapPin className="h-4 w-4" />
-                              {item.location}
-                            </span>
-                          </div>
+                      <div className="space-y-2">
+                        <div>
+                          <h3 className="text-[1rem] leading-5">{item.name}</h3>
+                          <p className="text-sm text-muted-foreground" title={item.id}>
+                            {getShortTagId(item.id)}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                          <span>{item.location}</span>
                         </div>
                       </div>
                       <span className={getAssetStatusColor(item.assetStatus)} />
@@ -421,10 +378,7 @@ export default function EquipmentSearch() {
           <div className="surface-panel p-5">
             <div className="panel-header">
               <div>
-                <div className="panel-title flex items-center gap-2">
-                  <Navigation className="h-5 w-5 text-primary" />
-                  리더 위치 패널
-                </div>
+                <div className="panel-title">리더 위치 패널</div>
               </div>
               <Badge variant="outline">활성 수신 구역 {locationPanels.length}개</Badge>
             </div>
@@ -436,7 +390,7 @@ export default function EquipmentSearch() {
                 {locationPanels.map((location) => {
                   const roomItems = filteredEquipment.filter((eq) => eq.location === location);
                   return (
-                    <section key={location} className="rounded-[1.6rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+                    <section key={location} className="rounded-lg border border-border bg-card p-4">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div>
                           <h3 className="text-[1.02rem]">{location}</h3>
@@ -446,7 +400,7 @@ export default function EquipmentSearch() {
                       </div>
                       <div className="space-y-2">
                         {roomItems.length === 0 ? (
-                          <div className="rounded-[1.2rem] border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+                          <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
                             현재 태그 없음
                           </div>
                         ) : (
@@ -455,10 +409,10 @@ export default function EquipmentSearch() {
                               key={eq.id}
                               type="button"
                               onClick={() => setSelectedEquipment(eq.id)}
-                              className={`flex w-full items-center justify-between gap-3 rounded-[1.2rem] border px-4 py-3 text-left transition-all ${
+                              className={`flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-all ${
                                 selectedEquipment === eq.id
-                                  ? 'border-[rgba(20,20,19,0.22)] bg-white shadow-[0_14px_28px_rgba(20,20,19,0.08)]'
-                                  : 'border-[rgba(20,20,19,0.1)] bg-white/58 hover:bg-white/82'
+                                  ? 'border-foreground bg-secondary'
+                                  : 'border-border bg-card hover:bg-secondary'
                               }`}
                             >
                               <div className="min-w-0">
@@ -491,24 +445,24 @@ export default function EquipmentSearch() {
             </div>
 
             {!selectedItem ? (
-              <div className="rounded-[1.6rem] border border-dashed border-border px-6 py-10 text-center text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border px-6 py-10 text-center text-muted-foreground">
                 좌측 목록 또는 위치 패널에서 장비를 선택해 주세요.
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
+                <div className="rounded-lg border border-border bg-card p-5">
                   <div className="metric-label">장비명</div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">{selectedItem.name}</div>
                 </div>
-                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
+                <div className="rounded-lg border border-border bg-card p-5">
                   <div className="metric-label">현재 위치</div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">{selectedItem.location}</div>
                 </div>
-                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
+                <div className="rounded-lg border border-border bg-card p-5">
                   <div className="metric-label">리더 ID</div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">{selectedItem.readerId}</div>
                 </div>
-                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
+                <div className="rounded-lg border border-border bg-card p-5">
                   <div className="metric-label">업데이트 상태</div>
                   <div className="mt-3">
                     <div className="flex items-center gap-3 text-lg font-semibold tracking-[-0.04em]">
@@ -520,14 +474,14 @@ export default function EquipmentSearch() {
                     </div>
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
+                <div className="rounded-lg border border-border bg-card p-5">
                   <div className="metric-label">사용 상태</div>
                   <div className="mt-3 flex items-center gap-3 text-xl font-semibold tracking-[-0.04em]">
                     <span className={getAssetStatusColor(selectedItem.assetStatus)} />
                     {getAssetStatusLabel(selectedItem.assetStatus)}
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-[rgba(20,20,19,0.1)] bg-white/66 p-5">
+                <div className="rounded-lg border border-border bg-card p-5">
                   <div className="metric-label">현재 사용자</div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">{selectedItem.currentHolderName ?? '-'}</div>
                 </div>

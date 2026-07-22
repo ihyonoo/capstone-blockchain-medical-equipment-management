@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Moon, ShieldCheck, Sun } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import { cn } from '../ui/utils';
 
 type ColorMode = 'light' | 'dark';
@@ -57,31 +57,31 @@ export default function AppShell({
 
   return (
     <div className="app-shell">
-      <div className="app-shell__ambient" />
-      <div className="app-shell__container">
-        <header className="app-shell__nav fade-rise">
-          <div className="brand-lockup">
-            <div className="brand-mark">
-              <ShieldCheck className="h-4 w-4" />
+      <header className="app-shell__topbar">
+        <div className="app-shell__container">
+          <nav className="app-shell__nav">
+            <div className="brand-lockup">
+              <div className="brand-copy">
+                <strong>MediLedger EquipTrace</strong>
+              </div>
             </div>
-            <div className="brand-copy">
-              <strong>MediLedger &amp; EquipTrace</strong>
+            <div className="app-shell__actions flex items-center gap-2">
+              {actions}
+              <button
+                type="button"
+                className="theme-toggle"
+                onClick={() => setColorMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
+                aria-label={isDarkMode ? '라이트 모드로 전환' : '다크 모드로 전환'}
+                title={isDarkMode ? '라이트 모드' : '다크 모드'}
+              >
+                {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
             </div>
-          </div>
-          <div className="app-shell__actions flex items-center gap-2">
-            {actions}
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={() => setColorMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
-              aria-label={isDarkMode ? '라이트 모드로 전환' : '다크 모드로 전환'}
-              title={isDarkMode ? '라이트 모드' : '다크 모드'}
-            >
-              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-          </div>
-        </header>
+          </nav>
+        </div>
+      </header>
 
+      <div className="app-shell__container">
         {hasHero ? (
           <section
             className={cn(
