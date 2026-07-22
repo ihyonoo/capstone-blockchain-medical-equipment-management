@@ -1,12 +1,17 @@
-# MediLedger EquipTrace
+# MediLedger & EquipTrace
 
-IoT 기술을 활용한 실내 의료 장비 실시간 위치 추적 및
-블록체인을 활용한 의료 장비 사용 이력 무결성 검증 시스템
+- IoT 기술을 활용한 실내 의료 장비 실시간 위치 추적 및
+
+- 블록체인을 활용한 의료 장비 사용 이력 무결성 검증 시스템
 
 의료 장비에 BLE iBeacon Tag를 부착하고, BLE 리더가 신호 세기를 보고하면 백엔드가 각 장비의 현재 위치를 산출한다.
+
 의료진은 시스템을 통해 실시간으로 장비의 위치를 확인할 수 있다.
+
 사용하고자 하는 의료 장비에 의료진이 자신의 스마트폰으로 NFC 태깅을 하면 대여 및 반납 처리가 이루어진다.
+
 의료 장비 사용 이력은 **프라이빗 Hyperledger Besu 블록체인에 앵커링**되어 이후 위·변조 여부를 검증할 수 있다.
+
 의료 장비 사용 이력의 구성: {장비 사용자, 사용 장비, 사용 시간, 반납 시간, 사용 위치}
 
 ---
@@ -20,7 +25,7 @@ IoT 기술을 활용한 실내 의료 장비 실시간 위치 추적 및
 - [빠른 시작](#빠른-시작)
 - [핵심 동작 원리](#핵심-동작-원리)
 - [블록체인 무결성 검증](#블록체인-무결성-검증)
-- [⚠️ 현재 구성의 한계와 분산의 중요성](#-현재-구성의-한계와-분산의-중요성)
+- [현재 구성의 한계와 분산의 중요성](#현재-구성의-한계와-분산의-중요성)
 - [설계 문서](#설계-문서)
 
 ---
@@ -62,14 +67,6 @@ IoT 기술을 활용한 실내 의료 장비 실시간 위치 추적 및
 - **`frontend/`** — React 18 + Vite + TailwindCSS SPA
 - **`rtls/`** — BLE 태그 브로드캐스터 및 리더 엣지 스크립트 (Python)
 - **`blockchain/besu/`** — 프라이빗 Besu QBFT 네트워크 + Solidity `UsageRecordRegistry` 컨트랙트 + 백엔드가 호출하는 Node.js 스크립트
-
-### 배포 구조
-
-![배포 다이어그램](docs/figure/deployment.png)
-
-*물리 노드와 통신 프로토콜 — BLE(무선 Broadcast/Scan), NFC(근거리 무선, 13.56MHz), 유선 LAN(HTTP · JSON-RPC · SQL)*
-
----
 
 ## 기술 스택
 
@@ -141,17 +138,15 @@ RPC 엔드포인트: `http://127.0.0.1:8549` (chain ID 1337, QBFT). 블록체인
 
 ```bash
 pip install -r requirements.txt
-python rtls_tag/ibeacon_broadcast.py   # 태그: iBeacon UUID 방송
-python rtls_reader/send_to_server.py   # 리더: RSSI 스캔 후 /ingest 로 POST
+python rtls_tag/ibeacon_broadcast.py   # Tag: iBeacon UUID Broadcast
+python rtls_reader/send_to_server.py   # Reader: RSSI 스캔 후 /ingest 로 POST
 ```
 
 ---
 
 ## 핵심 동작 원리
 
-![전체 사용 시나리오](docs/figure/scenario.png)
-
-*전체 사용 시나리오 — 의료진이 NFC 태깅으로 장비를 대여/반납하고, 서버가 사용 이력을 생성해 DB와 블록체인(Hash)에 저장하며, 관리자가 이력을 조회한다.*
+<img src="docs/figure/scenario.png" alt="전체 사용 시나리오" width="50%">
 
 ### 위치 산출 파이프라인
 
@@ -166,9 +161,7 @@ python rtls_reader/send_to_server.py   # 리더: RSSI 스캔 후 /ingest 로 POS
 2. 반납 시 완료 기록을 온체인에 앵커링. 백엔드는 라이브러리 대신 **`subprocess`로 `blockchain/besu/scripts/`의 Node 스크립트를 호출**한다 (`record-usage-record.mjs` 등)
 3. 이름·부서 등 표시용 필드는 앵커링에서 **의도적으로 제외**, 최소 사실 기록만 온체인에 저장
 
-![시퀀스 다이어그램](docs/figure/sequence.png)
-
-*시퀀스 다이어그램 — NFC 태깅 → 사용 상태 갱신 → BLE 위치 보고 → 사용 이력 생성·해시 → DB 및 블록체인 저장 → 이력 분석의 전체 메시지 흐름*
+<img src="docs/figure/sequence.png" alt="시퀀스 다이어그램" width="50%">
 
 ---
 
@@ -187,8 +180,6 @@ python rtls_reader/send_to_server.py   # 리더: RSSI 스캔 후 /ingest 로 POS
 ---
 
 ## 현재 구성의 한계와 분산의 중요성
-
-> **이 절은 논문에도 반드시 포함되어야 하는 핵심 논지다.**
 
 ### 현재(개발) 구성의 한계
 
