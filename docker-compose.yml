@@ -1,0 +1,73 @@
+# docker-compose.yml (repo 루트)
+name: mediledger
+
+include:
+  - blockchain/besu/docker-compose.yml   # besu validator1~4 + rpc-node + redis + besu-qbft 네트워크
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: mediledger-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mediledger_db
+      POSTGRES_USER: mediledger
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data     # named 볼륨 (익명 금지)
+    networks:
+      - besu-qbft
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: mediledger-backend
+    container_name: mediledger-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      BESU_RPC_URL: http://besu-rpc-node:8545
+    volumes:
+      # 이관된 컨트랙트 배포 파일을 런타임에 참조(체인과 주소 일치)
+      - ./blockchain/besu/deployments:/app/blockchain/besu/deployments:ro
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "192.168.0.53:8000:8000"   # 리더기(LAN) 직결용. 외부 노출 아님
+    networks:
+      - besu-qbft
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: mediledger-web
+    container_name: mediledger-web
+    restart: unless-stopped
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - besu-qbft
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: mediledger-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - web
+    networks:
+      - besu-qbft
+
+volumes:
+  pgdata:
+
+networks:
+  besu-qbft:
+    external: false

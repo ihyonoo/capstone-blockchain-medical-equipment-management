@@ -1,0 +1,13 @@
+.git
+**/.env
+*.log
+.postgres-data
+frontend/node_modules
+frontend/dist
+blockchain/besu/node_modules
+blockchain/besu/build
+blockchain/besu/validators
+blockchain/besu/rpc-node
+blockchain/besu/config
+blockchain/besu/deployments
+docs
