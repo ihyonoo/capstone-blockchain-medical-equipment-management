@@ -232,6 +232,9 @@ export default function NfcMapping() {
           <Button variant="secondary" onClick={() => navigate('/admin/nfc-mapping')}>
             NFC 매핑
           </Button>
+          <Button variant="outline" onClick={() => navigate('/me')}>
+            마이페이지
+          </Button>
           <Button variant="outline" onClick={logout}>
             <LogOut className="h-4 w-4" />
             로그아웃

@@ -154,6 +154,14 @@ export default function NfcEquipment() {
     <AppShell
       actions={
         <>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2.5 text-[11px]"
+            onClick={() => navigate('/me')}
+          >
+            마이페이지
+          </Button>
           <Button variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={logout}>
             <LogOut className="h-2.5 w-2.5" />
             로그아웃

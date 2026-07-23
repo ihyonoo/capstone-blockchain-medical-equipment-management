@@ -575,3 +575,44 @@ def query_usage_history_rows(
         raise HTTPException(500, "사용 이력 조회 중 데이터베이스 오류가 발생했습니다.")
 
     return safe_limit, rows
+
+
+def query_my_usage_history_rows(user_id: int, limit: int):
+    """특정 사용자가 직접 체크아웃한 사용 이력을 최신순으로 조회한다(검증/블록체인 없음).
+
+    이름 substring 매칭은 부정확하므로 user_id 로 정확히 필터링한다.
+    """
+    safe_limit = max(1, min(limit, 200))
+    sql = """
+    SELECT
+      h.usage_id,
+      h.usage_status,
+      h.equipment_name,
+      h.equipment_type,
+      h.checkout_location,
+      h.checkout_reader_id,
+      EXTRACT(EPOCH FROM h.checkout_at)::BIGINT AS checkout_at_epoch,
+      h.return_location,
+      h.return_reader_id,
+      EXTRACT(EPOCH FROM h.returned_at)::BIGINT AS returned_at_epoch
+    FROM usage_history h
+    WHERE h.user_id = %s
+    ORDER BY h.checkout_at DESC, h.usage_id DESC
+    LIMIT %s
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql, (user_id, safe_limit))
+            return cur.fetchall()
+    except Exception:
+        raise HTTPException(500, "내 사용 이력 조회 중 데이터베이스 오류가 발생했습니다.")
+
+
+def build_my_usage_history_item(row) -> dict:
+    return {
+        "usage_id": row[0],
+        "usage_status": row[1],
+        "equipment": {"name": row[2], "type": row[3]},
+        "checkout": {"location": row[4] or row[5], "at": row[6]},
+        "return": {"location": row[7] or row[8], "at": row[9]},
+    }

@@ -16,6 +16,29 @@ BESU_DIR = Path(__file__).resolve().parents[1] / "blockchain" / "besu"
 BESU_DEPLOYMENT_PATH = BESU_DIR / "deployments" / "usage-registry.json"
 AUTH_TOKEN_SECRET = os.getenv("AUTH_TOKEN_SECRET", "dev-auth-secret")
 AUTH_TOKEN_TTL_SEC = max(300, int(os.getenv("AUTH_TOKEN_TTL_SEC", "43200")))
+
+# 프론트엔드 공개 URL — 인증/재설정 메일 링크와 OAuth 콜백 이후 리다이렉트의 기준.
+APP_PUBLIC_URL = os.getenv("APP_PUBLIC_URL", "http://localhost:5173").rstrip("/")
+
+# 이메일 기반 액션 토큰(인증/재설정/OAuth handoff) 유효 시간.
+EMAIL_VERIFY_TTL_SEC = max(300, int(os.getenv("EMAIL_VERIFY_TTL_SEC", "86400")))     # 기본 24h
+PASSWORD_RESET_TTL_SEC = max(300, int(os.getenv("PASSWORD_RESET_TTL_SEC", "3600")))  # 기본 1h
+OAUTH_STATE_TTL_SEC = max(60, int(os.getenv("OAUTH_STATE_TTL_SEC", "600")))          # 기본 10m
+OAUTH_HANDOFF_TTL_SEC = max(30, int(os.getenv("OAUTH_HANDOFF_TTL_SEC", "120")))      # 기본 2m
+OAUTH_PENDING_TTL_SEC = max(300, int(os.getenv("OAUTH_PENDING_TTL_SEC", "1800")))    # 기본 30m
+
+# Gmail SMTP (앱 비밀번호). 값이 비어 있으면 email_utils가 dev 폴백(로그 출력)으로 동작한다.
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM = os.getenv("SMTP_FROM", "") or SMTP_USER
+
+# Google OAuth 2.0 (authorization code / redirect).
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback")
+
 REDIS_LOCATION_KEY_PREFIX = "rtls:tag:"
 REDIS_CONNECT_TIMEOUT_SEC = 0.2
 REDIS_RETRY_COOLDOWN_SEC = 5

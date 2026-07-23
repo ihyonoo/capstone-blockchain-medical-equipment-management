@@ -7,6 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import AppShell from '../components/layout/AppShell';
 import { ChevronLeft } from 'lucide-react';
 import { cn } from '../components/ui/utils';
+import GoogleButton from '../components/GoogleButton';
+import PasswordChecklist from '../components/PasswordChecklist';
+import PasswordMatchHint from '../components/PasswordMatchHint';
+import { getPasswordError } from '../lib/passwordPolicy';
 import { getRedirectTarget, withRedirectQuery } from '../lib/auth';
 import { API_BASE_URL } from '../lib/runtime';
 
@@ -24,6 +28,7 @@ export default function SignUp() {
   const redirectTarget = getRedirectTarget(location.search);
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
   const [department, setDepartment] = useState('');
   const [position, setPosition] = useState('간호사');
   const [role, setRole] = useState<SignUpRole>('staff');
@@ -51,8 +56,9 @@ export default function SignUp() {
       setError('이름을 입력하세요.');
       return;
     }
-    if (password.length < 8) {
-      setError('비밀번호는 8자 이상이어야 합니다.');
+    const policyError = getPasswordError(password);
+    if (policyError) {
+      setError(policyError);
       return;
     }
 
@@ -65,6 +71,7 @@ export default function SignUp() {
           username: username.trim(),
           display_name: displayName.trim(),
           password,
+          email: email.trim(),
           department: isAdminRole ? null : department.trim() || null,
           position: isAdminRole ? null : position,
           role,
@@ -72,11 +79,12 @@ export default function SignUp() {
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.detail ?? '회원가입에 실패했습니다.');
+        const detail = payload?.detail;
+        throw new Error(typeof detail === 'string' ? detail : '회원가입에 실패했습니다.');
       }
 
-      setSuccess('회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.');
-      setTimeout(() => navigate(withRedirectQuery('/', redirectTarget), { replace: true }), 700);
+      setSuccess('가입이 접수되었습니다. 입력하신 이메일로 보낸 인증 링크를 확인해 주세요. 인증 후 로그인할 수 있습니다.');
+      setTimeout(() => navigate(withRedirectQuery('/', redirectTarget), { replace: true }), 2500);
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -116,6 +124,18 @@ export default function SignUp() {
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="홍길동"
+                required
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="email">이메일</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@example.com"
                 required
               />
             </div>
@@ -183,9 +203,10 @@ export default function SignUp() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="8자 이상 입력"
+                placeholder="영문·숫자·특수문자 포함 8자 이상"
                 required
               />
+              <PasswordChecklist value={password} />
             </div>
 
             <div className="space-y-2">
@@ -198,6 +219,7 @@ export default function SignUp() {
                 placeholder="비밀번호 다시 입력"
                 required
               />
+              <PasswordMatchHint password={password} confirm={passwordConfirm} />
             </div>
 
             {error ? (
@@ -225,6 +247,17 @@ export default function SignUp() {
                 <ChevronLeft className="h-4 w-4" />
                 로그인으로 돌아가기
               </Button>
+            </div>
+
+            <div className="md:col-span-2 relative py-1">
+              <div className="border-t border-border" />
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground">
+                또는
+              </span>
+            </div>
+
+            <div className="md:col-span-2">
+              <GoogleButton mode="signup" label="Google로 가입하기" />
             </div>
           </form>
         </section>

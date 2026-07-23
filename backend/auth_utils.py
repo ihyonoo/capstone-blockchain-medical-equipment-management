@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import time
 
 import psycopg
@@ -47,6 +48,20 @@ def normalize_optional_text(raw: str | None, field_name: str, max_len: int = 50)
     return value
 
 
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def normalize_email(raw: str | None) -> str:
+    if raw is None:
+        raise HTTPException(400, "email은 비어 있을 수 없습니다.")
+    email = raw.strip().lower()
+    if not email:
+        raise HTTPException(400, "email은 비어 있을 수 없습니다.")
+    if len(email) > 254 or not EMAIL_PATTERN.fullmatch(email):
+        raise HTTPException(400, "email 형식이 올바르지 않습니다.")
+    return email
+
+
 def validate_password(raw: str) -> str:
     if not raw:
         raise HTTPException(400, "password는 비어 있을 수 없습니다.")
@@ -54,6 +69,12 @@ def validate_password(raw: str) -> str:
         raise HTTPException(400, "password는 8자 이상이어야 합니다.")
     if len(raw) > 128:
         raise HTTPException(400, "password는 128자를 초과할 수 없습니다.")
+    if not re.search(r"[A-Za-z]", raw):
+        raise HTTPException(400, "password는 영문자를 1자 이상 포함해야 합니다.")
+    if not re.search(r"[0-9]", raw):
+        raise HTTPException(400, "password는 숫자를 1자 이상 포함해야 합니다.")
+    if not re.search(r"[^A-Za-z0-9]", raw):
+        raise HTTPException(400, "password는 특수문자를 1자 이상 포함해야 합니다.")
     return raw
 
 
@@ -66,11 +87,12 @@ def decode_token_segment(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + padding)
 
 
-def build_auth_token(*, user_id: int) -> tuple[str, int]:
+def build_auth_token(*, user_id: int, token_version: int = 0) -> tuple[str, int]:
     issued_at = int(time.time())
     expires_at = issued_at + AUTH_TOKEN_TTL_SEC
     payload = {
         "sub": user_id,
+        "tv": token_version,
         "iat": issued_at,
         "exp": expires_at,
     }
@@ -120,6 +142,7 @@ def decode_auth_token(token: str) -> dict:
 
 
 def build_user_payload(row) -> dict:
+    # row 컬럼 순서 계약: user_id, username, display_name, role, department, position, email, email_verified
     return {
         "user_id": row[0],
         "username": row[1],
@@ -127,12 +150,15 @@ def build_user_payload(row) -> dict:
         "role": row[3],
         "department": row[4],
         "position": row[5],
+        "email": row[6],
+        "email_verified": row[7],
     }
 
 
 def fetch_user_by_id(user_id: int):
     sql = """
-    SELECT user_id, username, display_name, role, department, position, is_active
+    SELECT user_id, username, display_name, role, department, position,
+           email, email_verified, is_active, token_version
     FROM users
     WHERE user_id = %s
     LIMIT 1
@@ -160,8 +186,11 @@ def require_authenticated_user(
     row = fetch_user_by_id(payload["sub"])
     if not row:
         raise HTTPException(401, "존재하지 않는 사용자입니다.")
-    if not row[6]:
+    # row[8]=is_active, row[9]=token_version (fetch_user_by_id 컬럼 순서 기준)
+    if not row[8]:
         raise HTTPException(403, "비활성화된 계정입니다.")
+    if int(payload.get("tv", 0)) != int(row[9]):
+        raise HTTPException(401, "인증 토큰이 더 이상 유효하지 않습니다. 다시 로그인해 주세요.")
 
     user = build_user_payload(row)
     role = str(user["role"]).lower()

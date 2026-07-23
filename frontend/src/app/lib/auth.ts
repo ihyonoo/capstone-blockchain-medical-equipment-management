@@ -5,6 +5,8 @@ export type AuthUser = {
   role: string;
   department?: string | null;
   position?: string | null;
+  email?: string | null;
+  email_verified?: boolean;
 };
 
 export type AuthSession = {

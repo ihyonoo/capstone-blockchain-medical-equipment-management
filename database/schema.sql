@@ -139,8 +139,54 @@ CREATE TABLE IF NOT EXISTS usage_nfc_events (
         CHECK (result IN ('accepted', 'rejected', 'ignored'))
 );
 
+CREATE TABLE IF NOT EXISTS user_oauth_identities (
+    identity_id      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id          BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    provider         TEXT NOT NULL,              -- 'google'
+    provider_subject TEXT NOT NULL,              -- 공급자 고유 식별자(Google 'sub')
+    email            TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT user_oauth_identities_provider_subject_unique UNIQUE (provider, provider_subject)
+);
+
+CREATE TABLE IF NOT EXISTS auth_action_tokens (
+    token_id    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id     BIGINT REFERENCES users(user_id) ON DELETE CASCADE,  -- oauth_handoff/pending은 NULL 가능
+    purpose     TEXT NOT NULL,      -- 'email_verify' | 'password_reset' | 'oauth_handoff' | 'oauth_pending'
+    token_hash  TEXT NOT NULL,      -- 원문 토큰의 SHA-256 (원문은 메일 링크/리다이렉트 URL에만 존재)
+    payload     JSONB,              -- oauth pending 시 provider/sub/email/name 등
+    expires_at  TIMESTAMPTZ NOT NULL,
+    used_at     TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_action_tokens_hash
+    ON auth_action_tokens (token_hash);
+
 ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ADD COLUMN IF NOT EXISTS email TEXT,
+    ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
+
+-- Google 전용 가입 계정은 비밀번호가 없을 수 있으므로 password_hash를 NULL 허용으로 완화한다.
+ALTER TABLE users
+    ALTER COLUMN password_hash DROP NOT NULL;
+
+-- 이메일 인증 컬럼은 최초 도입 시에만 기존 계정을 인증됨(TRUE)으로 백필한다(로그인 잠김 방지).
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'email_verified'
+    ) THEN
+        ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+        UPDATE users SET email_verified = TRUE;  -- 인증 기능 도입 이전 계정
+    END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique
+    ON users (email)
+    WHERE email IS NOT NULL;
 
 ALTER TABLE readers
     ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ,

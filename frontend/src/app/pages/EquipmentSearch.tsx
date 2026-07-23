@@ -252,6 +252,9 @@ export default function EquipmentSearch() {
     <AppShell
       actions={
         <>
+          <Button variant="outline" onClick={() => navigate('/me')}>
+            마이페이지
+          </Button>
           <Button variant="outline" onClick={logout}>
             <LogOut className="h-4 w-4" />
             로그아웃

@@ -1,22 +1,32 @@
 import datetime as dt
 import os
 import time
+import urllib.parse
 from typing import Dict, List
 
 import psycopg
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 try:
     from backend.auth_utils import (
         build_auth_token,
         build_user_payload,
         normalize_display_name,
+        normalize_email,
         normalize_optional_text,
         normalize_username,
         pwd,
         require_authenticated_user,
         validate_password,
+    )
+    from backend.auth_tokens import consume_action_token, create_action_token
+    from backend import google_oauth
+    from backend.email_utils import (
+        send_find_id_email,
+        send_reset_email,
+        send_verification_email,
     )
     from backend.demo_history import build_blockchain_demo_history
     from backend.rtls_utils import (
@@ -31,17 +41,40 @@ try:
         upsert_readers_from_ingest,
     )
     from backend.schemas import (
+        ChangeEmailRequest,
+        ChangePasswordRequest,
+        FindIdRequest,
+        ForgotPasswordRequest,
+        GoogleCompleteRequest,
         LoginRequest,
         NfcMappingUpsertRequest,
         NfcUsageActionRequest,
         Payload,
         RegisterRequest,
+        ResendVerificationRequest,
+        ResetPasswordRequest,
+        SessionExchangeRequest,
+        VerifyEmailRequest,
+        WithdrawRequest,
     )
-    from backend.settings import DATABASE_URL, DWELL_SEC, HYST_DB, READER_LOCATION, STALE_SEC
+    from backend.settings import (
+        APP_PUBLIC_URL,
+        DATABASE_URL,
+        DWELL_SEC,
+        EMAIL_VERIFY_TTL_SEC,
+        HYST_DB,
+        OAUTH_HANDOFF_TTL_SEC,
+        OAUTH_PENDING_TTL_SEC,
+        PASSWORD_RESET_TTL_SEC,
+        READER_LOCATION,
+        STALE_SEC,
+    )
     from backend.usage_history_service import (
         anchor_usage_record_to_chain,
+        build_my_usage_history_item,
         build_usage_history_item,
         persist_usage_chain_anchor_metadata,
+        query_my_usage_history_rows,
         query_usage_history_rows,
         verify_usage_history_integrity,
     )
@@ -52,11 +85,19 @@ except ModuleNotFoundError as exc:
         build_auth_token,
         build_user_payload,
         normalize_display_name,
+        normalize_email,
         normalize_optional_text,
         normalize_username,
         pwd,
         require_authenticated_user,
         validate_password,
+    )
+    from auth_tokens import consume_action_token, create_action_token
+    import google_oauth
+    from email_utils import (
+        send_find_id_email,
+        send_reset_email,
+        send_verification_email,
     )
     from demo_history import build_blockchain_demo_history
     from rtls_utils import (
@@ -71,17 +112,40 @@ except ModuleNotFoundError as exc:
         upsert_readers_from_ingest,
     )
     from schemas import (
+        ChangeEmailRequest,
+        ChangePasswordRequest,
+        FindIdRequest,
+        ForgotPasswordRequest,
+        GoogleCompleteRequest,
         LoginRequest,
         NfcMappingUpsertRequest,
         NfcUsageActionRequest,
         Payload,
         RegisterRequest,
+        ResendVerificationRequest,
+        ResetPasswordRequest,
+        SessionExchangeRequest,
+        VerifyEmailRequest,
+        WithdrawRequest,
     )
-    from settings import DATABASE_URL, DWELL_SEC, HYST_DB, READER_LOCATION, STALE_SEC
+    from settings import (
+        APP_PUBLIC_URL,
+        DATABASE_URL,
+        DWELL_SEC,
+        EMAIL_VERIFY_TTL_SEC,
+        HYST_DB,
+        OAUTH_HANDOFF_TTL_SEC,
+        OAUTH_PENDING_TTL_SEC,
+        PASSWORD_RESET_TTL_SEC,
+        READER_LOCATION,
+        STALE_SEC,
+    )
     from usage_history_service import (
         anchor_usage_record_to_chain,
+        build_my_usage_history_item,
         build_usage_history_item,
         persist_usage_chain_anchor_metadata,
+        query_my_usage_history_rows,
         query_usage_history_rows,
         verify_usage_history_integrity,
     )
@@ -185,12 +249,24 @@ def pick_best_reader(tag_id: str, now: int):
     return candidates[0]
 
 
+def _send_verification_email_for(user_id: int, email: str) -> None:
+    """이메일 인증 토큰을 발급하고 인증 메일을 발송한다."""
+    raw_token = create_action_token(
+        purpose="email_verify",
+        ttl_sec=EMAIL_VERIFY_TTL_SEC,
+        user_id=user_id,
+    )
+    link = f"{APP_PUBLIC_URL}/verify-email?token={urllib.parse.quote(raw_token)}"
+    send_verification_email(email, link)
+
+
 @app.post("/auth/register")
 def register(body: RegisterRequest):
     username = normalize_username(body.username)
     display_name = normalize_display_name(body.display_name)
     role = body.role.strip().lower()
     password = validate_password(body.password)
+    email = normalize_email(body.email)
     position = normalize_optional_text(body.position, "position")
     department = normalize_optional_text(body.department, "department")
 
@@ -205,9 +281,10 @@ def register(body: RegisterRequest):
     password_hash = pwd.hash(password)
 
     sql = """
-    INSERT INTO users (username, display_name, role, department, position, password_hash, is_active, created_at)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, now())
-    RETURNING user_id, username, display_name, role, department, position, is_active
+    INSERT INTO users (username, display_name, role, department, position, email,
+                       password_hash, email_verified, is_active, created_at)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE, %s, now())
+    RETURNING user_id, username, display_name, role, department, position, email, email_verified, is_active
     """
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
@@ -219,21 +296,28 @@ def register(body: RegisterRequest):
                     role,
                     department,
                     position,
+                    email,
                     password_hash,
                     body.is_active,
                 ),
             )
             row = cur.fetchone()
-    except psycopg.errors.UniqueViolation:
+    except psycopg.errors.UniqueViolation as exc:
+        # username 또는 email 중복 — 어느 쪽인지 제약 이름으로 구분한다.
+        if "email" in str(getattr(exc, "diag", None) and exc.diag.constraint_name or "").lower():
+            raise HTTPException(409, "이미 사용 중인 이메일입니다.")
         raise HTTPException(409, "이미 존재하는 username입니다.")
     except Exception:
         raise HTTPException(500, "회원가입 처리 중 데이터베이스 오류가 발생했습니다.")
 
+    _send_verification_email_for(row[0], email)
+
     return {
         "ok": True,
+        "email_verification_sent": True,
         "user": {
             **build_user_payload(row),
-            "is_active": row[6],
+            "is_active": row[8],
         },
     }
 
@@ -251,7 +335,8 @@ def login(body: LoginRequest):
         raise HTTPException(400, "role은 admin 또는 staff여야 합니다.")
 
     sql = """
-    SELECT user_id, username, display_name, role, department, position, password_hash, is_active
+    SELECT user_id, username, display_name, role, department, position,
+           email, email_verified, password_hash, is_active, token_version
     FROM users
     WHERE username = %s
     """
@@ -265,16 +350,38 @@ def login(body: LoginRequest):
     if not row:
         raise HTTPException(401, "아이디 또는 비밀번호가 올바르지 않습니다.")
 
-    user_id, db_username, display_name, role, department, position, password_hash, is_active = row
+    (
+        user_id,
+        db_username,
+        display_name,
+        role,
+        department,
+        position,
+        email,
+        email_verified,
+        password_hash,
+        is_active,
+        token_version,
+    ) = row
 
     if not is_active:
         raise HTTPException(403, "비활성화된 계정입니다.")
-    if not pwd.verify(password, password_hash):
+    if not password_hash or not pwd.verify(password, password_hash):
+        # 비밀번호 미설정(Google 전용) 계정은 아이디/비밀번호 로그인을 허용하지 않는다.
         raise HTTPException(401, "아이디 또는 비밀번호가 올바르지 않습니다.")
     if role != requested_role:
         raise HTTPException(403, "선택한 권한과 계정 권한이 일치하지 않습니다.")
+    if not email_verified:
+        raise HTTPException(
+            403,
+            detail={
+                "code": "email_unverified",
+                "message": "이메일 인증이 필요합니다. 메일함의 인증 링크를 확인해 주세요.",
+                "email": email,
+            },
+        )
 
-    token, expires_at = build_auth_token(user_id=user_id)
+    token, expires_at = build_auth_token(user_id=user_id, token_version=token_version)
 
     return {
         "ok": True,
@@ -287,8 +394,446 @@ def login(body: LoginRequest):
             "role": role,
             "department": department,
             "position": position,
+            "email": email,
+            "email_verified": email_verified,
         },
     }
+
+
+def _issue_session_for_user(user_id: int) -> dict:
+    """user_id로 로그인 세션(bearer 토큰 + user)을 발급한다."""
+    sql = """
+    SELECT user_id, username, display_name, role, department, position,
+           email, email_verified, is_active, token_version
+    FROM users
+    WHERE user_id = %s
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql, (user_id,))
+            row = cur.fetchone()
+    except Exception:
+        raise HTTPException(500, "세션 발급 중 데이터베이스 오류가 발생했습니다.")
+    if not row:
+        raise HTTPException(404, "사용자를 찾을 수 없습니다.")
+    if not row[8]:
+        raise HTTPException(403, "비활성화된 계정입니다.")
+    token, expires_at = build_auth_token(user_id=row[0], token_version=row[9])
+    return {
+        "ok": True,
+        "token": token,
+        "expires_at": expires_at,
+        "user": build_user_payload(row),
+    }
+
+
+@app.post("/auth/verify-email")
+def verify_email(body: VerifyEmailRequest):
+    consumed = consume_action_token(body.token.strip(), "email_verify")
+    if not consumed or not consumed.get("user_id"):
+        raise HTTPException(400, "유효하지 않거나 만료된 인증 링크입니다.")
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET email_verified = TRUE, updated_at = NOW() WHERE user_id = %s",
+                (consumed["user_id"],),
+            )
+    except Exception:
+        raise HTTPException(500, "이메일 인증 처리 중 데이터베이스 오류가 발생했습니다.")
+    return {"ok": True, "message": "이메일 인증이 완료되었습니다. 이제 로그인할 수 있습니다."}
+
+
+@app.post("/auth/resend-verification")
+def resend_verification(body: ResendVerificationRequest):
+    email = normalize_email(body.email)
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT user_id, email_verified FROM users WHERE email = %s",
+                (email,),
+            )
+            row = cur.fetchone()
+    except Exception:
+        raise HTTPException(500, "요청 처리 중 데이터베이스 오류가 발생했습니다.")
+    # 계정 존재 여부를 노출하지 않도록 항상 동일한 응답을 반환한다.
+    if row and not row[1]:
+        _send_verification_email_for(row[0], email)
+    return {"ok": True, "message": "인증 메일을 다시 보냈습니다. 메일함을 확인해 주세요."}
+
+
+@app.post("/auth/find-id")
+def find_id(body: FindIdRequest):
+    email = normalize_email(body.email)
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT username FROM users WHERE email = %s ORDER BY created_at",
+                (email,),
+            )
+            usernames = [r[0] for r in cur.fetchall()]
+    except Exception:
+        raise HTTPException(500, "요청 처리 중 데이터베이스 오류가 발생했습니다.")
+    if usernames:
+        send_find_id_email(email, usernames)
+    return {"ok": True, "message": "가입된 계정이 있다면 아이디를 메일로 보냈습니다."}
+
+
+@app.post("/auth/forgot-password")
+def forgot_password(body: ForgotPasswordRequest):
+    email = normalize_email(body.email)
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+            row = cur.fetchone()
+    except Exception:
+        raise HTTPException(500, "요청 처리 중 데이터베이스 오류가 발생했습니다.")
+    if row:
+        raw_token = create_action_token(
+            purpose="password_reset",
+            ttl_sec=PASSWORD_RESET_TTL_SEC,
+            user_id=row[0],
+        )
+        link = f"{APP_PUBLIC_URL}/reset-password?token={urllib.parse.quote(raw_token)}"
+        send_reset_email(email, link)
+    return {"ok": True, "message": "가입된 계정이 있다면 비밀번호 재설정 메일을 보냈습니다."}
+
+
+@app.post("/auth/reset-password")
+def reset_password(body: ResetPasswordRequest):
+    password = validate_password(body.password)
+    consumed = consume_action_token(body.token.strip(), "password_reset")
+    if not consumed or not consumed.get("user_id"):
+        raise HTTPException(400, "유효하지 않거나 만료된 재설정 링크입니다.")
+    password_hash = pwd.hash(password)
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            # token_version 을 증가시켜 기존에 발급된 모든 세션 토큰을 무효화한다.
+            cur.execute(
+                """
+                UPDATE users
+                SET password_hash = %s,
+                    token_version = token_version + 1,
+                    updated_at = NOW()
+                WHERE user_id = %s
+                """,
+                (password_hash, consumed["user_id"]),
+            )
+    except Exception:
+        raise HTTPException(500, "비밀번호 재설정 중 데이터베이스 오류가 발생했습니다.")
+    return {"ok": True, "message": "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요."}
+
+
+# ---------------------------------------------------------------------------
+# 마이페이지 / 계정 관리 (로그인 상태에서 본인 계정을 조회·변경)
+# ---------------------------------------------------------------------------
+def _verify_current_password(user_id: int, current_password: str) -> None:
+    """본인 확인용으로 현재 비밀번호를 검증한다. 불일치 시 400."""
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute("SELECT password_hash FROM users WHERE user_id = %s", (user_id,))
+            row = cur.fetchone()
+    except Exception:
+        raise HTTPException(500, "계정 처리 중 데이터베이스 오류가 발생했습니다.")
+    if not row or not row[0]:
+        raise HTTPException(400, "비밀번호가 설정되어 있지 않습니다.")
+    if not current_password or not pwd.verify(current_password, row[0]):
+        raise HTTPException(400, "현재 비밀번호가 올바르지 않습니다.")
+
+
+@app.get("/auth/me")
+def auth_me(authorization: str | None = Header(default=None)):
+    user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute("SELECT created_at FROM users WHERE user_id = %s", (user["user_id"],))
+            created_row = cur.fetchone()
+            cur.execute(
+                "SELECT 1 FROM user_oauth_identities WHERE user_id = %s AND provider = 'google' LIMIT 1",
+                (user["user_id"],),
+            )
+            google_linked = cur.fetchone() is not None
+    except Exception:
+        raise HTTPException(500, "내 정보 조회 중 데이터베이스 오류가 발생했습니다.")
+    return {
+        "ok": True,
+        "user": {
+            **user,
+            "created_at": created_row[0] if created_row else None,
+            "google_linked": google_linked,
+        },
+    }
+
+
+@app.post("/auth/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    authorization: str | None = Header(default=None),
+):
+    user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+    _verify_current_password(user["user_id"], body.current_password)
+    new_hash = pwd.hash(validate_password(body.new_password))
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            # token_version++ 로 다른 기기의 기존 세션을 무효화한다.
+            cur.execute(
+                """
+                UPDATE users
+                SET password_hash = %s,
+                    token_version = token_version + 1,
+                    updated_at = NOW()
+                WHERE user_id = %s
+                """,
+                (new_hash, user["user_id"]),
+            )
+    except Exception:
+        raise HTTPException(500, "비밀번호 변경 중 데이터베이스 오류가 발생했습니다.")
+    # 현재 창은 로그아웃되지 않도록 새 token_version 기준의 세션 토큰을 재발급한다.
+    return _issue_session_for_user(user["user_id"])
+
+
+@app.post("/auth/change-email")
+def change_email(
+    body: ChangeEmailRequest,
+    authorization: str | None = Header(default=None),
+):
+    user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+    _verify_current_password(user["user_id"], body.current_password)
+    new_email = normalize_email(body.new_email)
+    if new_email == (user.get("email") or "").strip().lower():
+        raise HTTPException(400, "현재 이메일과 동일합니다.")
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE users
+                SET email = %s, email_verified = FALSE, updated_at = NOW()
+                WHERE user_id = %s
+                """,
+                (new_email, user["user_id"]),
+            )
+    except psycopg.errors.UniqueViolation:
+        raise HTTPException(409, "이미 사용 중인 이메일입니다.")
+    except Exception:
+        raise HTTPException(500, "이메일 변경 중 데이터베이스 오류가 발생했습니다.")
+    _send_verification_email_for(user["user_id"], new_email)
+    return {
+        "ok": True,
+        "message": "이메일이 변경되었습니다. 새 이메일로 보낸 인증 링크를 확인해 주세요.",
+        "user": {**user, "email": new_email, "email_verified": False},
+    }
+
+
+@app.post("/auth/google/unlink")
+def google_unlink(authorization: str | None = Header(default=None)):
+    user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+    # 모든 계정은 비밀번호 로그인이 가능하므로 연동 해제로 로그인 수단을 잃지 않는다.
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM user_oauth_identities WHERE user_id = %s AND provider = 'google'",
+                (user["user_id"],),
+            )
+    except Exception:
+        raise HTTPException(500, "Google 연동 해제 중 데이터베이스 오류가 발생했습니다.")
+    return {"ok": True, "message": "Google 연동이 해제되었습니다.", "google_linked": False}
+
+
+@app.post("/auth/withdraw")
+def withdraw_account(
+    body: WithdrawRequest,
+    authorization: str | None = Header(default=None),
+):
+    user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+    _verify_current_password(user["user_id"], body.current_password)
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            # 소프트 탈퇴: usage_history FK 보존을 위해 하드 삭제 대신 비활성화하고 세션을 무효화한다.
+            cur.execute(
+                """
+                UPDATE users
+                SET is_active = FALSE,
+                    token_version = token_version + 1,
+                    updated_at = NOW()
+                WHERE user_id = %s
+                """,
+                (user["user_id"],),
+            )
+    except Exception:
+        raise HTTPException(500, "회원 탈퇴 처리 중 데이터베이스 오류가 발생했습니다.")
+    return {"ok": True, "message": "회원 탈퇴가 완료되었습니다."}
+
+
+@app.get("/usage/me/history")
+def usage_my_history(
+    authorization: str | None = Header(default=None),
+    limit: int = 100,
+):
+    user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+    rows = query_my_usage_history_rows(user_id=user["user_id"], limit=limit)
+    items = [build_my_usage_history_item(row) for row in rows]
+    return {"ok": True, "count": len(items), "items": items}
+
+
+# ---------------------------------------------------------------------------
+# Google OAuth 2.0 (authorization code / redirect)
+# ---------------------------------------------------------------------------
+
+
+def _frontend_redirect(path: str, fragment_params: dict) -> RedirectResponse:
+    fragment = urllib.parse.urlencode(fragment_params)
+    return RedirectResponse(url=f"{APP_PUBLIC_URL}{path}#{fragment}", status_code=302)
+
+
+@app.get("/auth/google/start")
+def google_start(mode: str = Query(default="login")):
+    if not google_oauth.is_google_configured():
+        raise HTTPException(503, "Google 로그인이 설정되지 않았습니다.")
+    mode = mode if mode in ("login", "signup") else "login"
+    state = google_oauth.sign_state(mode)
+    return RedirectResponse(url=google_oauth.build_authorization_url(state), status_code=302)
+
+
+@app.get("/auth/google/callback")
+def google_callback(
+    code: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+):
+    if error or not code or not state:
+        return _frontend_redirect("/", {"oauth_error": error or "google_login_failed"})
+
+    google_oauth.verify_state(state)
+    info = google_oauth.exchange_code(code)
+    provider = "google"
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            # 1) 이미 연동된 신원인가?
+            cur.execute(
+                "SELECT user_id FROM user_oauth_identities WHERE provider = %s AND provider_subject = %s",
+                (provider, info["sub"]),
+            )
+            identity = cur.fetchone()
+            linked_user_id = identity[0] if identity else None
+
+            # 2) 미연동이면, 동일 이메일의 인증된 계정에 자동 연동한다.
+            if linked_user_id is None:
+                cur.execute(
+                    "SELECT user_id FROM users WHERE email = %s AND email_verified = TRUE",
+                    (info["email"],),
+                )
+                existing = cur.fetchone()
+                if existing:
+                    linked_user_id = existing[0]
+                    cur.execute(
+                        """
+                        INSERT INTO user_oauth_identities (user_id, provider, provider_subject, email)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (provider, provider_subject) DO NOTHING
+                        """,
+                        (linked_user_id, provider, info["sub"], info["email"]),
+                    )
+    except Exception:
+        return _frontend_redirect("/", {"oauth_error": "google_login_failed"})
+
+    if linked_user_id is not None:
+        # 로그인 성립 → 일회성 handoff code 발급, 토큰은 URL에 직접 노출하지 않는다.
+        handoff = create_action_token(
+            purpose="oauth_handoff",
+            ttl_sec=OAUTH_HANDOFF_TTL_SEC,
+            user_id=linked_user_id,
+        )
+        return _frontend_redirect("/auth/callback", {"code": handoff})
+
+    # 3) 계정 없음 → pending 토큰 발급 후 추가정보 입력 화면으로 유도한다.
+    pending = create_action_token(
+        purpose="oauth_pending",
+        ttl_sec=OAUTH_PENDING_TTL_SEC,
+        payload={"provider": provider, "sub": info["sub"], "email": info["email"], "name": info["name"]},
+    )
+    return _frontend_redirect(
+        "/signup/complete",
+        {"pending": pending, "email": info["email"], "name": info["name"]},
+    )
+
+
+@app.post("/auth/session/exchange")
+def session_exchange(body: SessionExchangeRequest):
+    consumed = consume_action_token(body.code.strip(), "oauth_handoff")
+    if not consumed or not consumed.get("user_id"):
+        raise HTTPException(400, "유효하지 않거나 만료된 로그인 코드입니다.")
+    return _issue_session_for_user(consumed["user_id"])
+
+
+@app.post("/auth/google/complete")
+def google_complete(body: GoogleCompleteRequest):
+    consumed = consume_action_token(body.pending_token.strip(), "oauth_pending")
+    payload = consumed.get("payload") if consumed else None
+    if not payload or not payload.get("email") or not payload.get("sub"):
+        raise HTTPException(400, "유효하지 않거나 만료된 가입 요청입니다. 다시 시도해 주세요.")
+
+    provider = payload.get("provider", "google")
+    google_email = normalize_email(payload["email"])
+    google_email_verified = True  # Google userinfo email은 신뢰 가능하다고 간주
+
+    username = normalize_username(body.username)
+    display_name = normalize_display_name(body.display_name or payload.get("name") or username)
+    role = (body.role or "staff").strip().lower()
+    position = normalize_optional_text(body.position, "position")
+    department = normalize_optional_text(body.department, "department")
+
+    if role not in ("admin", "staff"):
+        raise HTTPException(400, "role은 admin 또는 staff여야 합니다.")
+    if role == "staff" and not position:
+        raise HTTPException(400, "staff 계정은 position이 필수입니다.")
+    if role == "admin":
+        position = None
+        department = None
+
+    # Google 첫 가입도 비밀번호를 필수로 받는다(아이디/비밀번호 로그인도 가능하도록).
+    if not body.password:
+        raise HTTPException(400, "비밀번호를 입력해 주세요.")
+    password_hash = pwd.hash(validate_password(body.password))
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO users (username, display_name, role, department, position, email,
+                                   password_hash, email_verified, is_active, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, now())
+                RETURNING user_id
+                """,
+                (
+                    username,
+                    display_name,
+                    role,
+                    department,
+                    position,
+                    google_email,
+                    password_hash,
+                    google_email_verified,
+                ),
+            )
+            new_user_id = cur.fetchone()[0]
+            cur.execute(
+                """
+                INSERT INTO user_oauth_identities (user_id, provider, provider_subject, email)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (new_user_id, provider, payload["sub"], google_email),
+            )
+    except psycopg.errors.UniqueViolation as exc:
+        constraint = str(getattr(exc, "diag", None) and exc.diag.constraint_name or "").lower()
+        if "email" in constraint:
+            raise HTTPException(409, "이미 사용 중인 이메일입니다.")
+        if "provider_subject" in constraint:
+            raise HTTPException(409, "이미 연동된 Google 계정입니다.")
+        raise HTTPException(409, "이미 존재하는 username입니다.")
+    except Exception:
+        raise HTTPException(500, "가입 처리 중 데이터베이스 오류가 발생했습니다.")
+
+    return _issue_session_for_user(new_user_id)
 
 
 @app.post("/ingest")
