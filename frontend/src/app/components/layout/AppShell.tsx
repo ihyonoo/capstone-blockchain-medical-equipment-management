@@ -34,6 +34,7 @@ type AppShellProps = {
   headerAside?: ReactNode;
   children: ReactNode;
   contentClassName?: string;
+  wide?: boolean;
 };
 
 export default function AppShell({
@@ -43,7 +44,9 @@ export default function AppShell({
   headerAside,
   children,
   contentClassName,
+  wide = false,
 }: AppShellProps) {
+  const containerClass = cn('app-shell__container', wide && 'app-shell__container--wide');
   const hasHero = Boolean(title || subtitle || headerAside);
   const headerOnly = Boolean(headerAside && !title && !subtitle);
   const [colorMode, setColorMode] = useState<ColorMode>(getInitialColorMode);
@@ -58,11 +61,11 @@ export default function AppShell({
   return (
     <div className="app-shell">
       <header className="app-shell__topbar">
-        <div className="app-shell__container">
+        <div className={containerClass}>
           <nav className="app-shell__nav">
             <div className="brand-lockup">
               <div className="brand-copy">
-                <strong>MediLedger EquipTrace</strong>
+                <strong>MediLedger &amp; EquipTrace</strong>
               </div>
             </div>
             <div className="app-shell__actions flex items-center gap-2">
@@ -81,7 +84,7 @@ export default function AppShell({
         </div>
       </header>
 
-      <div className="app-shell__container">
+      <div className={containerClass}>
         {hasHero ? (
           <section
             className={cn(

@@ -18,10 +18,10 @@
   --accent-foreground: #111111;
   --destructive: #b42318;
   --destructive-foreground: #ffffff;
-  --border: #e6e6e6;
-  --input: #d9d9d9;
+  --border: #141414;
+  --input: #3a3a3a;
   --input-background: #ffffff;
-  --switch-background: #d4d4d4;
+  --switch-background: #2b2b2b;
   --font-weight-medium: 600;
   --font-weight-normal: 450;
   --ring: rgba(17, 17, 17, 0.32);
@@ -39,21 +39,34 @@
   --sidebar-accent-foreground: #111111;
   --sidebar-border: #e6e6e6;
   --sidebar-ring: rgba(17, 17, 17, 0.32);
-  --app-body-background: #ffffff;
+  --app-body-background: #f6f6f7;
   --app-ambient-background: none;
-  --app-nav-background: #ffffff;
-  --app-nav-border: #e6e6e6;
+  --app-nav-background: #ededef;
+  --app-nav-border: #111111;
   --app-nav-shadow: none;
   --app-panel-background: #ffffff;
-  --app-panel-border: #e6e6e6;
+  --app-panel-border: #111111;
   --app-panel-highlight: transparent;
   --app-panel-shadow: none;
   --app-soft-panel-background: #fafafa;
-  --app-soft-panel-border: #e6e6e6;
+  --app-soft-panel-border: #333333;
   --app-soft-panel-highlight: none;
-  --status-live: #1f8a5b;
-  --status-warn: #b7791f;
-  --status-fail: #b42318;
+  /* 상태 색: 무채색에 자연스럽게 녹아들되 식별 가능한 톤다운 팔레트 */
+  --ok-fg: #35543c;
+  --ok-bg: #eef4ea;
+  --ok-border: #b3c6a6;
+  --ok-solid: #3f7d54;
+  --warn-fg: #6a4a15;
+  --warn-bg: #faf3df;
+  --warn-border: #e0c489;
+  --warn-solid: #ab8130;
+  --err-fg: #6f3527;
+  --err-bg: #f7ece7;
+  --err-border: #d6ad9e;
+  --err-solid: #b26550;
+  --status-live: var(--ok-solid);
+  --status-warn: var(--warn-solid);
+  --status-fail: var(--err-solid);
 }
 
 .dark {
@@ -73,10 +86,10 @@
   --accent-foreground: #f5f5f5;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #2a2a2a;
-  --input: #333333;
+  --border: #4a4a4a;
+  --input: #4d4d4d;
   --input-background: #141414;
-  --switch-background: #3a3a3a;
+  --switch-background: #4a4a4a;
   --ring: rgba(245, 245, 245, 0.34);
   --chart-1: #f5f5f5;
   --chart-2: #bdbdbd;
@@ -93,19 +106,31 @@
   --sidebar-ring: rgba(245, 245, 245, 0.34);
   --app-body-background: #0a0a0a;
   --app-ambient-background: none;
-  --app-nav-background: #0a0a0a;
-  --app-nav-border: #2a2a2a;
+  --app-nav-background: #131315;
+  --app-nav-border: #454545;
   --app-nav-shadow: none;
   --app-panel-background: #141414;
-  --app-panel-border: #2a2a2a;
+  --app-panel-border: #4a4a4a;
   --app-panel-highlight: transparent;
   --app-panel-shadow: none;
   --app-soft-panel-background: #161616;
-  --app-soft-panel-border: #2a2a2a;
+  --app-soft-panel-border: #454545;
   --app-soft-panel-highlight: none;
-  --status-live: #35b07d;
-  --status-warn: #c99a3f;
-  --status-fail: #ef4444;
+  --ok-fg: #a9d2b4;
+  --ok-bg: #16241a;
+  --ok-border: #2f4a37;
+  --ok-solid: #4ea67d;
+  --warn-fg: #e6c98a;
+  --warn-bg: #241d10;
+  --warn-border: #4a3c1f;
+  --warn-solid: #c9a24e;
+  --err-fg: #e0a99b;
+  --err-bg: #241512;
+  --err-border: #4a2e26;
+  --err-solid: #c07a64;
+  --status-live: var(--ok-solid);
+  --status-warn: var(--warn-solid);
+  --status-fail: var(--err-solid);
 }
 
 @theme inline {
@@ -269,6 +294,10 @@
     padding-inline: clamp(1.15rem, 4vw, 2.5rem);
   }
 
+  .app-shell__container--wide {
+    max-width: 1440px;
+  }
+
   .app-shell__nav {
     display: flex;
     align-items: center;
@@ -309,7 +338,7 @@
   .brand-copy strong {
     display: block;
     color: var(--foreground);
-    font-size: 1rem;
+    font-size: 1.3rem;
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.2;
@@ -458,6 +487,65 @@
     background: var(--status-warn);
   }
 
+  /* 상태 시맨틱 유틸 — 라이트/다크 모두 자동 적응 */
+  .tone-ok {
+    border-color: var(--ok-border);
+    background: var(--ok-bg);
+    color: var(--ok-fg);
+  }
+
+  .tone-warn {
+    border-color: var(--warn-border);
+    background: var(--warn-bg);
+    color: var(--warn-fg);
+  }
+
+  .tone-err {
+    border-color: var(--err-border);
+    background: var(--err-bg);
+    color: var(--err-fg);
+  }
+
+  .tone-neutral {
+    border-color: var(--border);
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  .solid-ok { background: var(--ok-solid); }
+  .solid-warn { background: var(--warn-solid); }
+  .solid-err { background: var(--err-solid); }
+  .solid-neutral { background: var(--muted-foreground); }
+
+  .dot-ok { background: var(--ok-solid); }
+  .dot-warn { background: var(--warn-solid); }
+  .dot-err { background: var(--err-solid); }
+
+  .text-ok { color: var(--ok-solid); }
+  .text-warn { color: var(--warn-solid); }
+  .text-err { color: var(--err-solid); }
+
+  .alert {
+    border-radius: var(--radius-md);
+    border-width: 1px;
+    border-style: solid;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .alert-error {
+    border-color: var(--err-border);
+    background: var(--err-bg);
+    color: var(--err-fg);
+  }
+
+  .alert-success {
+    border-color: var(--ok-border);
+    background: var(--ok-bg);
+    color: var(--ok-fg);
+  }
+
   .fade-rise {
     animation: fade-rise 0.4s ease both;
   }
@@ -507,4 +595,22 @@
       display: none;
     }
   }
+}
+
+/* 상단바 우측 메뉴: 박스·폰트 축소 (레이어 밖 규칙으로 Tailwind 유틸리티 우선순위 상회) */
+.app-shell__actions button:not(.theme-toggle) {
+  height: 2.15rem;
+  padding-inline: 0.85rem;
+  font-size: 0.8rem;
+  gap: 0.4rem;
+}
+
+.app-shell__actions button:not(.theme-toggle) svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.app-shell__actions .theme-toggle {
+  width: 2.15rem;
+  height: 2.15rem;
 }

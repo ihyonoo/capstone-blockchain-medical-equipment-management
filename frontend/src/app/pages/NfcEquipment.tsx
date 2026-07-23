@@ -197,7 +197,7 @@ export default function NfcEquipment() {
               장비 정보를 불러오는 중입니다.
             </div>
           ) : error ? (
-            <div className="rounded-lg border border-red-200 bg-red-50/80 px-5 py-5 text-red-700">{error}</div>
+            <div className="alert alert-error px-5 py-5">{error}</div>
           ) : !item ? (
             <div className="rounded-lg border border-dashed border-border/70 px-6 py-12 text-center text-muted-foreground">
               매핑된 장비를 찾을 수 없습니다.
@@ -205,7 +205,7 @@ export default function NfcEquipment() {
           ) : (
             <div className="space-y-4">
               {notice ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-5 py-4 text-sm text-emerald-700">{notice}</div>
+                <div className="alert alert-success px-5 py-4">{notice}</div>
               ) : null}
 
               <section className="rounded-[28px] border border-border/70 bg-background/80 p-5">

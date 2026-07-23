@@ -223,6 +223,7 @@ export default function NfcMapping() {
 
   return (
     <AppShell
+      wide
       actions={
         <>
           <Button variant="outline" onClick={() => navigate('/verification')}>
@@ -279,9 +280,9 @@ export default function NfcMapping() {
             />
           </div>
 
-          {error ? <div className="rounded-lg border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+          {error ? <div className="alert alert-error">{error}</div> : null}
           {notice ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">{notice}</div>
+            <div className="alert alert-success">{notice}</div>
           ) : null}
 
           {isLoading ? (

@@ -43,7 +43,7 @@ type EquipmentViewItem = {
 };
 
 function getStatusColor(isStale: boolean) {
-  return isStale ? 'h-2.5 w-2.5 rounded-full bg-amber-500' : 'h-2.5 w-2.5 rounded-full bg-green-500';
+  return isStale ? 'h-2.5 w-2.5 rounded-full dot-warn' : 'h-2.5 w-2.5 rounded-full dot-ok';
 }
 
 function getStatusLabel(isStale: boolean) {
@@ -58,13 +58,13 @@ function formatLastReceivedAt(epoch: number | null) {
 function getAssetStatusColor(status: string) {
   switch (status) {
     case 'checked_out':
-      return 'h-2.5 w-2.5 rounded-full bg-red-500';
+      return 'h-2.5 w-2.5 rounded-full dot-err';
     case 'maintenance':
-      return 'h-2.5 w-2.5 rounded-full bg-amber-500';
+      return 'h-2.5 w-2.5 rounded-full dot-warn';
     case 'inactive':
-      return 'h-2.5 w-2.5 rounded-full bg-slate-400';
+      return 'h-2.5 w-2.5 rounded-full solid-neutral';
     default:
-      return 'h-2.5 w-2.5 rounded-full bg-green-500';
+      return 'h-2.5 w-2.5 rounded-full dot-ok';
   }
 }
 
@@ -308,7 +308,7 @@ export default function EquipmentSearch() {
               </div>
 
               {fetchError ? (
-                <div className="rounded-lg border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
+                <div className="alert alert-error">
                   {fetchError}
                 </div>
               ) : null}

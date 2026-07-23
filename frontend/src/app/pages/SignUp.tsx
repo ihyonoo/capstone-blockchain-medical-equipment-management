@@ -201,12 +201,12 @@ export default function SignUp() {
             </div>
 
             {error ? (
-              <div className="md:col-span-2 rounded-lg border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
+              <div className="md:col-span-2 alert alert-error">
                 {error}
               </div>
             ) : null}
             {success ? (
-              <div className="md:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+              <div className="md:col-span-2 alert alert-success">
                 {success}
               </div>
             ) : null}

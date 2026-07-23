@@ -163,7 +163,7 @@ function getMerkleVerificationNotice(value: boolean | null | undefined) {
 
 function VerificationNotice({ value, children }: { value: boolean | null | undefined; children: string }) {
   const Icon = value === true ? CheckCircle2 : value === false ? AlertTriangle : HelpCircle;
-  const iconTone = value === true ? 'text-[#1f8a5b]' : value === false ? 'text-[#b42318]' : 'text-muted-foreground';
+  const iconTone = value === true ? 'text-ok' : value === false ? 'text-err' : 'text-muted-foreground';
 
   return (
     <div className="mt-3 flex items-center gap-2 border-t border-border/70 pt-3 text-[0.92rem] font-medium text-muted-foreground">
@@ -191,58 +191,22 @@ function getDisplayReturnedByPosition(item: UsageHistoryItem) {
 
 function getStatusTone(status: string) {
   if (status === 'verified') {
-    return 'border-[#b7c8aa] bg-[#f0f5ec] text-[#36513b]';
+    return 'tone-ok';
   }
   if (status === 'not_eligible') {
-    return 'border-border bg-muted/70 text-muted-foreground';
+    return 'tone-neutral';
   }
   if (status === 'chain_error' || status === 'not_configured') {
-    return 'border-[#e3c58d] bg-[#fbf3df] text-[#684715]';
+    return 'tone-warn';
   }
-  return 'border-[#d8b0a2] bg-[#f7ece7] text-[#6f3527]';
-}
-
-function getVerificationLabel(status: string) {
-  if (status === 'verified') return '검증 완료';
-  if (status === 'not_eligible') return '검증 제외';
-  if (status === 'chain_error' || status === 'not_configured') return '확인 필요';
-  return '검증 실패';
+  return 'tone-err';
 }
 
 function getVerificationCardTone(status: string) {
-  if (status === 'verified') return 'bg-[#8fa17f]';
-  if (status === 'not_eligible') return 'bg-[#b7afa6]';
-  if (status === 'chain_error' || status === 'not_configured') return 'bg-[#c4984a]';
-  return 'bg-[#b87964]';
-}
-
-function getVerificationSummary(status: string, label: string) {
-  switch (status) {
-    case 'verified':
-      return '반납 완료 이력이 온체인 기록과 일치합니다.';
-    case 'not_eligible':
-      return '아직 온체인 검증에서 제외된 이력입니다.';
-    case 'onchain_missing':
-      return '온체인 기록을 찾지 못했습니다.';
-    case 'db_mismatch':
-      return 'DB에 저장된 값과 온체인 값이 일치하지 않습니다.';
-    case 'tx_input_mismatch':
-      return '트랜잭션 입력값이 DB 기록과 다릅니다.';
-    case 'anchor_unresolved':
-      return '앵커 트랜잭션을 확인하지 못했습니다.';
-    case 'transaction_missing':
-      return '블록에서 대상 트랜잭션을 조회하지 못했습니다.';
-    case 'tx_not_in_block':
-      return '앵커 트랜잭션이 지정된 블록에 포함되어 있지 않습니다.';
-    case 'transactions_root_mismatch':
-      return '블록 머클루트 재계산 결과가 원본 값과 다릅니다.';
-    case 'not_configured':
-      return '체인 검증 환경 설정이 필요합니다.';
-    case 'chain_error':
-      return '체인 검증 중 오류가 발생했습니다.';
-    default:
-      return `${label} 상태입니다. 세부 정보를 펼쳐 확인하세요.`;
-  }
+  if (status === 'verified') return 'solid-ok';
+  if (status === 'not_eligible') return 'solid-neutral';
+  if (status === 'chain_error' || status === 'not_configured') return 'solid-warn';
+  return 'solid-err';
 }
 
 function VerificationStatusIcon({ status }: { status: string }) {
@@ -254,14 +218,11 @@ function VerificationStatusIcon({ status }: { status: string }) {
 
 function VerificationStatusPill({ status, label }: { status: string; label: string }) {
   const tone = getStatusTone(status);
-  const headline = getVerificationLabel(status);
 
   return (
-    <span className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-semibold ${tone}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[0.82rem] font-semibold ${tone}`}>
       <VerificationStatusIcon status={status} />
-      <span>{headline}</span>
-      <span className="h-1 w-1 rounded-full bg-current/35" />
-      <span className="font-medium opacity-80">{label}</span>
+      <span>{label}</span>
     </span>
   );
 }
@@ -552,6 +513,7 @@ export default function IntegrityVerification() {
 
   return (
     <AppShell
+      wide
       actions={
         <>
           <Button variant="secondary" onClick={() => navigate('/verification')}>
@@ -569,18 +531,6 @@ export default function IntegrityVerification() {
       contentClassName="pt-4 sm:pt-5"
     >
       <div className="space-y-4">
-        <section className="surface-panel p-5 fade-rise">
-          <div className="panel-header">
-            <div>
-              <div className="panel-title">실사용 이력 무결성 검증</div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                DB에 저장된 반납 완료 이력과 온체인 원문을 비교하고, 해당 트랜잭션이 포함된 블록의 transactionsRoot를 재계산해 검증합니다.
-              </div>
-            </div>
-            <Badge variant="outline">Real On-chain Verification</Badge>
-          </div>
-        </section>
-
         <section className="surface-panel p-5 fade-rise">
           <div className="panel-header">
             <div>
@@ -752,7 +702,7 @@ export default function IntegrityVerification() {
           </form>
 
           {error ? (
-            <div className="mt-4 rounded-lg border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700">
+            <div className="alert alert-error mt-4">
               {error}
             </div>
           ) : null}
@@ -789,24 +739,23 @@ export default function IntegrityVerification() {
                 const transactionIndex = blockchain?.anchor?.transaction_index ?? null;
                 const verificationStatus = blockchain?.verification_status ?? 'chain_error';
                 const verificationLabel = blockchain?.verification_label ?? '검증 중 오류';
-                const verificationSummary = getVerificationSummary(verificationStatus, verificationLabel);
 
                 return (
                   <div
                     key={item.usage_id}
-                    className="relative overflow-hidden rounded-[1.7rem] border border-border bg-card p-5 pl-6 transition-all"
+                    className="relative overflow-hidden rounded-[1.25rem] border border-border bg-card p-4 pl-5 transition-all"
                   >
                     <div className={`absolute left-0 top-0 h-full w-1.5 ${getVerificationCardTone(verificationStatus)}`} />
                     <button
                       type="button"
                       onClick={() => setExpandedUsageId(isExpanded ? null : item.usage_id)}
-                      className="mb-3 flex w-full flex-wrap items-center justify-between gap-3 text-left"
+                      className="mb-2.5 flex w-full flex-wrap items-center justify-between gap-3 text-left"
                     >
-                      <div>
-                        <div className="text-[1.42rem] font-semibold tracking-[-0.04em] text-foreground">
+                      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                        <div className="text-[1.2rem] font-semibold tracking-[-0.04em] text-foreground">
                           {item.equipment.name}
                         </div>
-                        <div className="mt-1 text-[1.02rem] text-muted-foreground">
+                        <div className="text-[0.95rem] text-muted-foreground">
                           usage_id {item.usage_id} · tag {item.equipment.tag_id}
                         </div>
                       </div>
@@ -822,16 +771,11 @@ export default function IntegrityVerification() {
                         />
                       </div>
                     </button>
-                    <div className="mb-4 flex items-start gap-2 rounded-[1.15rem] border border-border bg-card/72 px-3.5 py-2.5 text-[0.94rem] leading-6 text-muted-foreground">
-                      <VerificationStatusIcon status={verificationStatus} />
-                      <span>{verificationSummary}</span>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-lg border border-border bg-card p-4">
-                        <div className="metric-label text-[1rem]">대여자</div>
-                        <div className="mt-2 flex items-center gap-2 text-[1.08rem] leading-7 text-foreground">
-                          <User className="h-[1.05rem] w-[1.05rem] text-muted-foreground" />
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-lg border border-border bg-card p-3">
+                        <div className="metric-label text-[0.92rem]">대여자</div>
+                        <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
+                          <User className="h-4 w-4 text-muted-foreground" />
                           <div>
                             <div>이름: {item.user.name}</div>
                             <div>부서: {displayDepartment}</div>
@@ -839,10 +783,10 @@ export default function IntegrityVerification() {
                           </div>
                         </div>
                       </div>
-                      <div className="rounded-lg border border-border bg-card p-4">
-                        <div className="metric-label text-[1rem]">반납자</div>
-                        <div className="mt-2 flex items-center gap-2 text-[1.08rem] leading-7 text-foreground">
-                          <User className="h-[1.05rem] w-[1.05rem] text-muted-foreground" />
+                      <div className="rounded-lg border border-border bg-card p-3">
+                        <div className="metric-label text-[0.92rem]">반납자</div>
+                        <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
+                          <User className="h-4 w-4 text-muted-foreground" />
                           <div>
                             <div>이름: {returnedByName}</div>
                             <div>부서: {returnedByDepartment}</div>
@@ -850,17 +794,17 @@ export default function IntegrityVerification() {
                           </div>
                         </div>
                       </div>
-                      <div className="rounded-lg border border-border bg-card p-4">
-                        <div className="metric-label text-[1rem]">장소</div>
-                        <div className="mt-2 text-[1.08rem] leading-7 text-foreground">
+                      <div className="rounded-lg border border-border bg-card p-3">
+                        <div className="metric-label text-[0.92rem]">장소</div>
+                        <div className="mt-1.5 text-[1rem] leading-6 text-foreground">
                           대여: {checkoutLocation}
                           <br />
                           반납: {returnLocation}
                         </div>
                       </div>
-                      <div className="rounded-lg border border-border bg-card p-4">
-                        <div className="metric-label text-[1rem]">시각</div>
-                        <div className="mt-2 text-[0.9rem] leading-6 tracking-[-0.02em] text-foreground">
+                      <div className="rounded-lg border border-border bg-card p-3">
+                        <div className="metric-label text-[0.92rem]">시각</div>
+                        <div className="mt-1.5 text-[0.85rem] leading-5 tracking-[-0.02em] text-foreground">
                           대여: {formatDateTime(item.checkout.at)}
                           <br />
                           반납: {formatDateTime(item.return.at)}
