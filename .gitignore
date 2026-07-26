@@ -37,8 +37,14 @@ backups/
 AGENTS.md
 DESIGN.md
 
+# 로컬 상태 스냅샷 / DB 덤프 (대용량·민감 데이터, 저장소 대상 아님)
+# database/schema.sql 은 스키마 원본이므로 제외되지 않는다.
+*.tgz
+*_dump.sql
+
 # OS / Editor
 .DS_Store
+._*
 Thumbs.db
 .idea/
 .vscode/
