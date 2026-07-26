@@ -1,0 +1,80 @@
+%% MediLedger EquipTrace — 통신 구조 (프로토콜 · 포트)
+%% 렌더링: mermaid.live 에 붙여넣거나, ```mermaid 코드펜스로 마크다운에 삽입
+
+flowchart LR
+    %% ── 엣지: 무선 구간 (포트 개념 없음) ──
+    subgraph EDGE["엣지 — 무선 (포트 없음)"]
+        direction TB
+        BTAG["BLE 태그<br/>iBeacon 광고 200ms"]
+        READER["RTLS 리더<br/>bleak 스캔 · 2초 윈도우 중앙값"]
+        NTAG["NFC 태그<br/>13.56MHz"]
+        PHONE["의료진 스마트폰"]
+    end
+
+    %% ── 클라이언트 ──
+    BROWSER["브라우저 SPA<br/>React · 1초 폴링"]
+
+    %% ── 공개 경로 ──
+    subgraph PUBLIC["공개 경로"]
+        direction TB
+        CFEDGE["Cloudflare 엣지<br/>TLS 종단"]
+        CFD["cloudflared<br/>포트 노출 없음"]
+        NGINX["nginx (web)<br/>:80 · 호스트 미노출"]
+    end
+
+    %% ── 애플리케이션 ──
+    subgraph APP["애플리케이션 (Docker)"]
+        direction TB
+        BE["backend — FastAPI<br/>:8000 · 192.168.0.53 바인딩"]
+        PG[("postgres<br/>:5432 · 호스트 미노출")]
+        RD[("redis<br/>:6379")]
+        NODE["Node 스크립트<br/>ethers · subprocess"]
+    end
+
+    %% ── 블록체인 ──
+    subgraph CHAIN["Besu QBFT — 172.28.0.0/24"]
+        direction TB
+        RPC["besu-rpc-node<br/>172.28.0.21 · :8545 → 호스트 8549"]
+        V["validator1~4<br/>172.28.0.11~14<br/>:8545 → 8545~8548"]
+    end
+
+    %% ── 외부 서비스 ──
+    subgraph EXT["외부 서비스"]
+        direction TB
+        SMTP["Gmail SMTP"]
+        GOOG["Google OAuth<br/>token · userinfo"]
+    end
+
+    %% ── 흐름 ──
+    BTAG -->|"BLE 광고 · 단방향"| READER
+    READER -->|"POST /ingest<br/>HTTP :8000 · 1초 주기<br/>LAN 직결 (프록시 우회)"| BE
+
+    NTAG -->|"태깅 → URL 오픈"| PHONE
+    PHONE --> BROWSER
+
+    BROWSER -->|"HTTPS :443"| CFEDGE
+    CFEDGE -->|"터널 :7844<br/>아웃바운드 전용"| CFD
+    CFD -->|"HTTP :80"| NGINX
+    NGINX -->|"/api/ → backend:8000<br/>접두어 제거"| BE
+    NGINX -.->|"/ → 정적 SPA"| BROWSER
+
+    BE -->|"TCP :5432 · psycopg3"| PG
+    BE -->|"TCP :6379 · write-through 캐시"| RD
+    BE -->|"fork/exec · argv → stdout JSON<br/>timeout 30s"| NODE
+    NODE -->|"JSON-RPC HTTP :8545"| RPC
+    RPC <-->|"devp2p :30303 · QBFT 합의"| V
+
+    BE -->|"SMTP STARTTLS :587"| SMTP
+    BE -->|"HTTPS :443"| GOOG
+
+    %% ── 개발 환경 (프로덕션과 경로 상이) ──
+    DEV["개발: Vite :5173<br/>API는 :8000 직결 → 별도 오리진 (CORS 발동)"]
+    DEV -.->|"프록시 없음"| BE
+
+    %% ── 스타일 (흑백 톤) ──
+    classDef box fill:#F4F4F5,stroke:#111111,color:#111111
+    classDef store fill:#E5E7EB,stroke:#111111,color:#111111
+    classDef ext fill:#FFFFFF,stroke:#9CA3AF,color:#111111,stroke-dasharray:4 3
+    class BTAG,READER,NTAG,PHONE,BROWSER,CFEDGE,CFD,NGINX,BE,NODE,RPC,V box
+    class PG,RD store
+    class SMTP,GOOG,DEV ext
