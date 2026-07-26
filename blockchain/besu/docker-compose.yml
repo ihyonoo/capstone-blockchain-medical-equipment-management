@@ -5,8 +5,10 @@ services:
     image: redis:7-alpine
     container_name: capstone-redis
     restart: unless-stopped
+    # 컨테이너 배포는 redis://redis:6379 로 접근하므로 호스트 매핑이 불필요하다.
+    # 호스트에서 uvicorn을 직접 띄우는 로컬 개발용으로만 루프백에 남긴다.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     networks:
       besu-qbft:
         ipv4_address: 172.28.0.10
@@ -27,10 +29,9 @@ services:
       - --host-allowlist=*
       - --rpc-http-cors-origins=all
       - --profile=ENTERPRISE
-    ports:
-      - "8545:8545"
-      - "30303:30303/tcp"
-      - "30303:30303/udp"
+    # 검증자는 호스트 포트를 열지 않는다.
+    # P2P는 BOOTNODE_ENODE(172.28.0.11:30303)를 통해 브리지 네트워크 안에서만 이뤄지고,
+    # 애플리케이션은 rpc-node 한 곳만 사용한다.
     networks:
       besu-qbft:
         ipv4_address: 172.28.0.11
@@ -54,10 +55,6 @@ services:
       - --host-allowlist=*
       - --rpc-http-cors-origins=all
       - --profile=ENTERPRISE
-    ports:
-      - "8546:8545"
-      - "30304:30303/tcp"
-      - "30304:30303/udp"
     networks:
       besu-qbft:
         ipv4_address: 172.28.0.12
@@ -81,10 +78,6 @@ services:
       - --host-allowlist=*
       - --rpc-http-cors-origins=all
       - --profile=ENTERPRISE
-    ports:
-      - "8547:8545"
-      - "30305:30303/tcp"
-      - "30305:30303/udp"
     networks:
       besu-qbft:
         ipv4_address: 172.28.0.13
@@ -108,10 +101,6 @@ services:
       - --host-allowlist=*
       - --rpc-http-cors-origins=all
       - --profile=ENTERPRISE
-    ports:
-      - "8548:8545"
-      - "30306:30303/tcp"
-      - "30306:30303/udp"
     networks:
       besu-qbft:
         ipv4_address: 172.28.0.14
@@ -136,10 +125,10 @@ services:
       - --rpc-http-cors-origins=all
       - --profile=ENTERPRISE
       - --sync-mode=FULL
+    # backend는 http://besu-rpc-node:8545 로 접근한다.
+    # 8549는 호스트에서 배포·점검 스크립트를 돌릴 때만 쓰므로 루프백으로 제한한다.
     ports:
-      - "8549:8545"
-      - "30307:30303/tcp"
-      - "30307:30303/udp"
+      - "127.0.0.1:8549:8545"
     networks:
       besu-qbft:
         ipv4_address: 172.28.0.21
