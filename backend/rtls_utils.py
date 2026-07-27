@@ -67,6 +67,50 @@ def get_tag_location_cache_key(tag_id: str) -> str:
     return f"{REDIS_LOCATION_KEY_PREFIX}{tag_id}:current"
 
 
+def get_tag_seen_cache_key(tag_id: str) -> str:
+    return f"{REDIS_LOCATION_KEY_PREFIX}{tag_id}:seen"
+
+
+def mark_tags_seen(tag_ids: set[str], seen_epoch: int) -> None:
+    if not tag_ids:
+        return
+    client = get_redis_client()
+    if client is None:
+        return
+    try:
+        pipe = client.pipeline()
+        for tag_id in tag_ids:
+            pipe.set(get_tag_seen_cache_key(tag_id), seen_epoch)
+        pipe.execute()
+    except Exception:
+        pass
+
+
+def load_tags_last_seen(tag_ids: set[str]) -> dict[str, int]:
+    if not tag_ids:
+        return {}
+    client = get_redis_client()
+    if client is None:
+        return {}
+    keys = {tag_id: get_tag_seen_cache_key(tag_id) for tag_id in tag_ids}
+    try:
+        pipe = client.pipeline()
+        for key in keys.values():
+            pipe.get(key)
+        raw_values = pipe.execute()
+    except Exception:
+        return {}
+    results: dict[str, int] = {}
+    for tag_id, raw in zip(keys.keys(), raw_values):
+        if raw is None:
+            continue
+        try:
+            results[tag_id] = int(raw)
+        except (TypeError, ValueError):
+            continue
+    return results
+
+
 def read_cached_tag_location(tag_id: str) -> dict | None:
     client = get_redis_client()
     if client is None:
@@ -253,12 +297,13 @@ def upsert_readers_from_ingest(reader_ids: set[str]) -> None:
         return
 
     sql = """
-    INSERT INTO readers (reader_id, location_name, is_active, created_at)
-    VALUES (%s, %s, TRUE, now())
+    INSERT INTO readers (reader_id, location_name, is_active, last_seen_at, created_at)
+    VALUES (%s, %s, TRUE, now(), now())
     ON CONFLICT (reader_id) DO UPDATE
     SET
       location_name = COALESCE(readers.location_name, EXCLUDED.location_name),
-      is_active = TRUE
+      is_active = TRUE,
+      last_seen_at = now()
     """
     try:
         rows = [(reader_id, READER_LOCATION.get(reader_id, reader_id)) for reader_id in reader_ids]
@@ -320,6 +365,37 @@ def load_reader_location_map() -> dict[str, str]:
     return mapping
 
 
+def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
+    sql = """
+    SELECT
+      reader_id,
+      COALESCE(location_name, reader_id) AS location,
+      EXTRACT(EPOCH FROM last_seen_at)::bigint AS last_seen
+    FROM readers
+    ORDER BY reader_id
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+    except Exception:
+        return []
+
+    readers: list[dict] = []
+    for reader_id, location, last_seen in rows:
+        last_seen_int = int(last_seen) if last_seen is not None else None
+        is_online = last_seen_int is not None and (now_epoch - last_seen_int) <= offline_sec
+        readers.append(
+            {
+                "reader_id": reader_id,
+                "location": location,
+                "last_seen": last_seen_int,
+                "is_online": is_online,
+            }
+        )
+    return readers
+
+
 def load_tag_metadata(tag_ids: set[str]) -> dict[str, dict]:
     if not tag_ids:
         return {}
@@ -355,6 +431,17 @@ def load_tag_metadata(tag_ids: set[str]) -> dict[str, dict]:
         }
         for row in rows
     }
+
+
+def load_active_tag_ids() -> set[str]:
+    sql = "SELECT tag_id FROM tags WHERE is_active = TRUE"
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+    except Exception:
+        return set()
+    return {row[0] for row in rows}
 
 
 def normalize_nfc_token(raw: str) -> str:

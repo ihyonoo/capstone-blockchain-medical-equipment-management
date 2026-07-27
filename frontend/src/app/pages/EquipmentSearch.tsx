@@ -17,16 +17,20 @@ type LiveLocationItem = {
   asset_status: string;
   current_holder_user_id: number | null;
   current_holder_name: string | null;
-  reader_id: string;
-  location: string;
+  reader_id: string | null;
+  location: string | null;
   rssi: number | null;
   updated_at: number | null;
   is_stale: boolean;
+  is_online: boolean;
+  last_seen: number | null;
 };
 
 type LiveReaderItem = {
   reader_id: string;
   location: string;
+  is_online: boolean;
+  last_seen: number | null;
 };
 
 type EquipmentViewItem = {
@@ -37,17 +41,19 @@ type EquipmentViewItem = {
   readerId: string;
   updatedAt: number | null;
   isStale: boolean;
+  isOnline: boolean;
+  lastSeen: number | null;
   assetStatus: string;
   currentHolderUserId: number | null;
   currentHolderName: string | null;
 };
 
-function getStatusColor(isStale: boolean) {
-  return isStale ? 'h-2.5 w-2.5 rounded-full dot-warn' : 'h-2.5 w-2.5 rounded-full dot-ok';
+function getOnlineDotClass(isOnline: boolean) {
+  return isOnline ? 'h-2.5 w-2.5 rounded-full dot-ok' : 'h-2.5 w-2.5 rounded-full dot-warn';
 }
 
-function getStatusLabel(isStale: boolean) {
-  return isStale ? '수신 지연' : '수신 정상';
+function getOnlineLabel(isOnline: boolean) {
+  return isOnline ? '감지 중' : '감지 안 됨';
 }
 
 function formatLastReceivedAt(epoch: number | null) {
@@ -86,6 +92,10 @@ function getShortTagId(tagId: string) {
   return head.split('-')[0] ?? head;
 }
 
+// 위치 미확인(오프라인) 태그의 표시용 라벨. 좌측 "장비 목록"에는 그대로 노출되어야 하지만,
+// 우측 위치 패널 그리드·위치 필터 드롭다운에는 실제 위치가 아니므로 절대 새어 들어가면 안 된다.
+const UNLOCATED_LABEL = '감지 안 됨';
+
 export default function EquipmentSearch() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,7 +109,7 @@ export default function EquipmentSearch() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [lastSyncTs, setLastSyncTs] = useState<number | null>(null);
-  const [readerLocations, setReaderLocations] = useState<string[]>([]);
+  const [readers, setReaders] = useState<LiveReaderItem[]>([]);
 
   const logout = () => {
     clearStoredAuthSession();
@@ -111,10 +121,12 @@ export default function EquipmentSearch() {
       id: item.tag_id,
       name: item.equipment_name?.trim() || item.tag_id,
       type: item.equipment_type?.trim() || '미분류',
-      location: item.location || item.reader_id,
-      readerId: item.reader_id,
+      location: item.location ?? UNLOCATED_LABEL,
+      readerId: item.reader_id ?? '-',
       updatedAt: item.updated_at,
       isStale: item.is_stale,
+      isOnline: item.is_online,
+      lastSeen: item.last_seen,
       assetStatus: item.asset_status,
       currentHolderUserId: item.current_holder_user_id,
       currentHolderName: item.current_holder_name,
@@ -127,12 +139,27 @@ export default function EquipmentSearch() {
   }, [equipment]);
 
   const locations = useMemo(() => {
-    const set = new Set(equipment.map((e) => e.location));
+    const set = new Set(equipment.map((e) => e.location).filter((location) => location !== UNLOCATED_LABEL));
     return ['전체', ...Array.from(set)];
   }, [equipment]);
 
+  const readerLocations = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          readers
+            .map((reader) => reader.location)
+            .filter((location) => location.length > 0 && location !== UNLOCATED_LABEL),
+        ),
+      ),
+    [readers],
+  );
+
   const locationPanels = useMemo(
-    () => Array.from(new Set([...readerLocations, ...locations.filter((loc) => loc !== '전체')])),
+    () =>
+      Array.from(
+        new Set([...readerLocations, ...locations.filter((loc) => loc !== '전체' && loc !== UNLOCATED_LABEL)]),
+      ),
     [readerLocations, locations],
   );
 
@@ -201,20 +228,16 @@ export default function EquipmentSearch() {
 
         if (cancelled) return;
         const serverItems = Array.isArray(payload.items) ? (payload.items as LiveLocationItem[]) : [];
-        const serverReaders = Array.isArray(payload.readers)
-          ? (payload.readers as LiveReaderItem[])
-              .map((reader) => reader.location)
-              .filter((location): location is string => typeof location === 'string' && location.length > 0)
-          : [];
+        const serverReaders = Array.isArray(payload.readers) ? (payload.readers as LiveReaderItem[]) : [];
         const responseTs = payload.ts ?? Math.floor(Date.now() / 1000);
         setLiveItems(serverItems);
-        setReaderLocations(Array.from(new Set(serverReaders)));
+        setReaders(serverReaders);
         setLastSyncTs(responseTs * 1000);
         setFetchError('');
       } catch (err) {
         if (cancelled) return;
         setLiveItems([]);
-        setReaderLocations([]);
+        setReaders([]);
         setLastSyncTs(null);
         if (err instanceof Error) setFetchError(err.message);
         else setFetchError('실시간 위치 조회 중 오류가 발생했습니다.');
@@ -363,8 +386,8 @@ export default function EquipmentSearch() {
                         <Badge variant="outline">{getAssetStatusLabel(item.assetStatus)}</Badge>
                       </div>
                       <div className="text-right text-xs text-muted-foreground">
-                        <div>추적: {getStatusLabel(item.isStale)}</div>
-                        {item.isStale ? <div>마지막 수신: {formatLastReceivedAt(item.updatedAt)}</div> : null}
+                        <div>추적: {getOnlineLabel(item.isOnline)}</div>
+                        {!item.isOnline ? <div>마지막 수신: {formatLastReceivedAt(item.lastSeen)}</div> : null}
                       </div>
                     </div>
                     {item.currentHolderName ? (
@@ -392,11 +415,20 @@ export default function EquipmentSearch() {
               <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
                 {locationPanels.map((location) => {
                   const roomItems = filteredEquipment.filter((eq) => eq.location === location);
+                  const readerForLocation = readers.find((r) => r.location === location);
                   return (
                     <section key={location} className="rounded-lg border border-border bg-card p-4">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div>
-                          <h3 className="text-[1.02rem]">{location}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-[1.02rem]">{location}</h3>
+                            {readerForLocation ? (
+                              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span className={getOnlineDotClass(readerForLocation.is_online)} />
+                                {readerForLocation.is_online ? '온라인' : '오프라인'}
+                              </span>
+                            ) : null}
+                          </div>
                           <p className="mt-1 text-sm text-muted-foreground">{roomItems.length}개 장비 수신</p>
                         </div>
                         <Badge variant="outline">{location}</Badge>
@@ -469,11 +501,11 @@ export default function EquipmentSearch() {
                   <div className="metric-label">업데이트 상태</div>
                   <div className="mt-3">
                     <div className="flex items-center gap-3 text-lg font-semibold tracking-[-0.04em]">
-                      <span className={getStatusColor(selectedItem.isStale)} />
-                      {getStatusLabel(selectedItem.isStale)}
+                      <span className={getOnlineDotClass(selectedItem.isOnline)} />
+                      {getOnlineLabel(selectedItem.isOnline)}
                     </div>
                     <div className="mt-2 text-sm text-muted-foreground">
-                      마지막 수신 시각: {formatLastReceivedAt(selectedItem.updatedAt)}
+                      마지막 수신 시각: {formatLastReceivedAt(selectedItem.lastSeen)}
                     </div>
                   </div>
                 </div>

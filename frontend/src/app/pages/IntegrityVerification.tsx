@@ -522,6 +522,9 @@ export default function IntegrityVerification() {
           <Button variant="outline" onClick={() => navigate('/admin/nfc-mapping')}>
             NFC 매핑
           </Button>
+          <Button variant="outline" onClick={() => navigate('/admin/devices')}>
+            기기 상태
+          </Button>
           <Button variant="outline" onClick={() => navigate('/me')}>
             마이페이지
           </Button>
