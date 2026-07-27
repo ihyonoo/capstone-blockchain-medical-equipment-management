@@ -24,6 +24,7 @@
 - [디렉토리 구조](#디렉토리-구조)
 - [빠른 시작](#빠른-시작)
 - [핵심 동작 원리](#핵심-동작-원리)
+- [NFC 태깅과 사용 이력](#nfc-태깅과-사용-이력)
 - [블록체인 무결성 검증](#블록체인-무결성-검증)
 - [현재 구성의 한계와 분산의 중요성](#현재-구성의-한계와-분산의-중요성)
 - [설계 문서](#설계-문서)
@@ -162,6 +163,32 @@ python rtls_reader/send_to_server.py   # Reader: RSSI 스캔 후 /ingest 로 POS
 3. 이름·부서 등 표시용 필드는 앵커링에서 **의도적으로 제외**, 최소 사실 기록만 온체인에 저장
 
 <img src="docs/figure/sequence.png" alt="시퀀스 다이어그램" width="50%">
+
+---
+
+## NFC 태깅과 사용 이력
+
+BLE 태그가 **위치추적**을 담당한다면, NFC는 같은 장비(`tags` 테이블의 같은 행)에
+붙는 **대여/반납 트리거**다. 물리 태그는 NTAG215를 사용하며, NFC Tools 같은 앱으로
+`{PUBLIC_APP_URL}/nfc/<token>` 형식의 URL을 태그에 기록해 장비에 부착한다.
+
+### 관리자: 태그-NFC 매핑
+
+- `/admin/nfc-mapping` 페이지에서 장비(BLE 태그)에 NFC 토큰을 매핑
+- `GET/POST/DELETE /admin/nfc-mappings` 로 매핑 CRUD
+
+### 의료진: 태깅으로 대여/반납
+
+1. 스마트폰으로 장비의 NFC 태그를 스캔 → `/nfc/:token` 진입
+2. 장비 현재 상태·위치 확인 (`GET /nfc/{token}`)
+3. "사용 시작"/"사용 종료" 버튼 → `POST /usage/checkout` / `POST /usage/return`
+4. 반납 시 완료 기록이 자동으로 블록체인에 앵커링
+
+### 이벤트 로그
+
+모든 태깅 시도(성공/거부/무시)는 `usage_nfc_events` 테이블에 감사 로그로 남는다
+(리더/위치/사유 포함). `usage_history.checkout_method`/`return_method` 필드로
+NFC 처리와 수동(manual) 처리를 구분한다.
 
 ---
 
