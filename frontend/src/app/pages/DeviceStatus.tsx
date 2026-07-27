@@ -1,0 +1,243 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import AppShell from '../components/layout/AppShell';
+import { API_BASE_URL } from '../lib/runtime';
+import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
+import { LogOut } from 'lucide-react';
+
+type LiveReaderItem = {
+  reader_id: string;
+  location: string;
+  is_online: boolean;
+  last_seen: number | null;
+};
+
+type LiveTagItem = {
+  tag_id: string;
+  equipment_name: string | null;
+  reader_id: string | null;
+  location: string | null;
+  is_online: boolean;
+  last_seen: number | null;
+};
+
+function dotClass(isOnline: boolean) {
+  return isOnline ? 'h-2.5 w-2.5 rounded-full dot-ok' : 'h-2.5 w-2.5 rounded-full dot-warn';
+}
+
+function formatSeen(epoch: number | null) {
+  if (!epoch) return '-';
+  return new Date(epoch * 1000).toLocaleString('ko-KR', { hour12: false });
+}
+
+function shortTag(tagId: string) {
+  const head = tagId.split(':')[0] ?? tagId;
+  return head.split('-')[0] ?? head;
+}
+
+export default function DeviceStatus() {
+  const navigate = useNavigate();
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [readers, setReaders] = useState<LiveReaderItem[]>([]);
+  const [tags, setTags] = useState<LiveTagItem[]>([]);
+  const [readersOnline, setReadersOnline] = useState(0);
+  const [tagsOnline, setTagsOnline] = useState(0);
+  const [error, setError] = useState('');
+
+  const logout = () => {
+    clearStoredAuthSession();
+    navigate('/', { replace: true });
+  };
+
+  useEffect(() => {
+    try {
+      const session = getStoredAuthSession();
+      if (!session?.token || !session.user) {
+        navigate('/', { replace: true });
+        return;
+      }
+      if (session.user.role !== 'admin') {
+        navigate('/equipment', { replace: true });
+        return;
+      }
+      setIsAuthorized(true);
+    } catch {
+      navigate('/', { replace: true });
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!isAuthorized) return;
+    let cancelled = false;
+
+    const fetchLive = async () => {
+      try {
+        const session = getStoredAuthSession();
+        if (!session?.token) {
+          logout();
+          return;
+        }
+        const response = await fetch(`${API_BASE_URL}/rtls/live`, {
+          method: 'GET',
+          cache: 'no-store',
+          headers: buildAuthHeaders(session.token),
+        });
+        const payload = await response.json().catch(() => null);
+        if (response.status === 401 || response.status === 403) {
+          logout();
+          return;
+        }
+        if (!response.ok || !payload?.ok) {
+          throw new Error(payload?.detail ?? '기기 상태를 가져오지 못했습니다.');
+        }
+        if (cancelled) return;
+        setReaders(Array.isArray(payload.readers) ? payload.readers : []);
+        setTags(Array.isArray(payload.items) ? payload.items : []);
+        setReadersOnline(typeof payload.readers_online === 'number' ? payload.readers_online : 0);
+        setTagsOnline(typeof payload.tags_online === 'number' ? payload.tags_online : 0);
+        setError('');
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof Error) setError(err.message);
+        else setError('기기 상태 조회 중 오류가 발생했습니다.');
+      }
+    };
+
+    fetchLive();
+    const intervalId = window.setInterval(fetchLive, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isAuthorized]);
+
+  const readersTotal = readers.length;
+  const tagsTotal = tags.length;
+  const sortedTags = useMemo(
+    () => [...tags].sort((a, b) => Number(b.is_online) - Number(a.is_online)),
+    [tags],
+  );
+
+  if (!isAuthorized) return null;
+
+  return (
+    <AppShell
+      wide
+      actions={
+        <>
+          <Button variant="outline" onClick={() => navigate('/verification')}>
+            장비 사용 이력 조회
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/admin/nfc-mapping')}>
+            NFC 매핑
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/me')}>
+            마이페이지
+          </Button>
+          <Button variant="outline" onClick={logout}>
+            <LogOut className="h-4 w-4" />
+            로그아웃
+          </Button>
+        </>
+      }
+      contentClassName="pt-4 sm:pt-5"
+    >
+      <div className="space-y-4">
+        <section className="surface-panel p-5 fade-rise">
+          <div className="panel-header">
+            <div>
+              <div className="panel-title">기기 상태</div>
+            </div>
+          </div>
+          {error ? <div className="alert alert-error mb-3">{error}</div> : null}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-border bg-card p-5">
+              <div className="metric-label">리더 온라인</div>
+              <div className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
+                {readersOnline} / {readersTotal}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-5">
+              <div className="metric-label">태그 감지</div>
+              <div className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
+                {tagsOnline} / {tagsTotal}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="surface-panel p-5 fade-rise">
+          <div className="panel-header">
+            <div>
+              <div className="panel-title">리더</div>
+            </div>
+            <Badge variant="outline">{readersTotal}대</Badge>
+          </div>
+          <div className="space-y-2">
+            {readersTotal === 0 ? (
+              <div className="empty-state">등록된 리더가 없습니다.</div>
+            ) : (
+              readers.map((r) => (
+                <div
+                  key={r.reader_id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground">{r.location}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{r.reader_id}</div>
+                  </div>
+                  <div className="text-right text-xs text-muted-foreground">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className={dotClass(r.is_online)} />
+                      {r.is_online ? '온라인' : '오프라인'}
+                    </div>
+                    <div className="mt-1">마지막 수신: {formatSeen(r.last_seen)}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="surface-panel p-5 fade-rise">
+          <div className="panel-header">
+            <div>
+              <div className="panel-title">태그</div>
+            </div>
+            <Badge variant="outline">{tagsTotal}개</Badge>
+          </div>
+          <div className="space-y-2">
+            {tagsTotal === 0 ? (
+              <div className="empty-state">등록된 태그가 없습니다.</div>
+            ) : (
+              sortedTags.map((t) => (
+                <div
+                  key={t.tag_id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-foreground">
+                      {t.equipment_name?.trim() || t.tag_id}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground" title={t.tag_id}>
+                      {shortTag(t.tag_id)} · {t.location ?? '감지 안 됨'}
+                    </div>
+                  </div>
+                  <div className="text-right text-xs text-muted-foreground">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className={dotClass(t.is_online)} />
+                      {t.is_online ? '감지 중' : '감지 안 됨'}
+                    </div>
+                    <div className="mt-1">마지막 수신: {formatSeen(t.last_seen)}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+    </AppShell>
+  );
+}
