@@ -253,12 +253,13 @@ def upsert_readers_from_ingest(reader_ids: set[str]) -> None:
         return
 
     sql = """
-    INSERT INTO readers (reader_id, location_name, is_active, created_at)
-    VALUES (%s, %s, TRUE, now())
+    INSERT INTO readers (reader_id, location_name, is_active, last_seen_at, created_at)
+    VALUES (%s, %s, TRUE, now(), now())
     ON CONFLICT (reader_id) DO UPDATE
     SET
       location_name = COALESCE(readers.location_name, EXCLUDED.location_name),
-      is_active = TRUE
+      is_active = TRUE,
+      last_seen_at = now()
     """
     try:
         rows = [(reader_id, READER_LOCATION.get(reader_id, reader_id)) for reader_id in reader_ids]
