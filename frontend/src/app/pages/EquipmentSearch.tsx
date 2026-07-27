@@ -92,6 +92,10 @@ function getShortTagId(tagId: string) {
   return head.split('-')[0] ?? head;
 }
 
+// 위치 미확인(오프라인) 태그의 표시용 라벨. 좌측 "장비 목록"에는 그대로 노출되어야 하지만,
+// 우측 위치 패널 그리드·위치 필터 드롭다운에는 실제 위치가 아니므로 절대 새어 들어가면 안 된다.
+const UNLOCATED_LABEL = '감지 안 됨';
+
 export default function EquipmentSearch() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,7 +121,7 @@ export default function EquipmentSearch() {
       id: item.tag_id,
       name: item.equipment_name?.trim() || item.tag_id,
       type: item.equipment_type?.trim() || '미분류',
-      location: item.location ?? '감지 안 됨',
+      location: item.location ?? UNLOCATED_LABEL,
       readerId: item.reader_id ?? '-',
       updatedAt: item.updated_at,
       isStale: item.is_stale,
@@ -135,17 +139,27 @@ export default function EquipmentSearch() {
   }, [equipment]);
 
   const locations = useMemo(() => {
-    const set = new Set(equipment.map((e) => e.location));
+    const set = new Set(equipment.map((e) => e.location).filter((location) => location !== UNLOCATED_LABEL));
     return ['전체', ...Array.from(set)];
   }, [equipment]);
 
   const readerLocations = useMemo(
-    () => Array.from(new Set(readers.map((reader) => reader.location).filter((location) => location.length > 0))),
+    () =>
+      Array.from(
+        new Set(
+          readers
+            .map((reader) => reader.location)
+            .filter((location) => location.length > 0 && location !== UNLOCATED_LABEL),
+        ),
+      ),
     [readers],
   );
 
   const locationPanels = useMemo(
-    () => Array.from(new Set([...readerLocations, ...locations.filter((loc) => loc !== '전체')])),
+    () =>
+      Array.from(
+        new Set([...readerLocations, ...locations.filter((loc) => loc !== '전체' && loc !== UNLOCATED_LABEL)]),
+      ),
     [readerLocations, locations],
   );
 
