@@ -365,6 +365,37 @@ def load_reader_location_map() -> dict[str, str]:
     return mapping
 
 
+def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
+    sql = """
+    SELECT
+      reader_id,
+      COALESCE(location_name, reader_id) AS location,
+      EXTRACT(EPOCH FROM last_seen_at)::bigint AS last_seen
+    FROM readers
+    ORDER BY reader_id
+    """
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+    except Exception:
+        return []
+
+    readers: list[dict] = []
+    for reader_id, location, last_seen in rows:
+        last_seen_int = int(last_seen) if last_seen is not None else None
+        is_online = last_seen_int is not None and (now_epoch - last_seen_int) <= offline_sec
+        readers.append(
+            {
+                "reader_id": reader_id,
+                "location": location,
+                "last_seen": last_seen_int,
+                "is_online": is_online,
+            }
+        )
+    return readers
+
+
 def load_tag_metadata(tag_ids: set[str]) -> dict[str, dict]:
     if not tag_ids:
         return {}
@@ -400,6 +431,17 @@ def load_tag_metadata(tag_ids: set[str]) -> dict[str, dict]:
         }
         for row in rows
     }
+
+
+def load_active_tag_ids() -> set[str]:
+    sql = "SELECT tag_id FROM tags WHERE is_active = TRUE"
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+    except Exception:
+        return set()
+    return {row[0] for row in rows}
 
 
 def normalize_nfc_token(raw: str) -> str:

@@ -32,10 +32,13 @@ try:
     from backend.rtls_utils import (
         cache_location_updates,
         insert_location_history,
+        load_active_tag_ids,
         load_all_cached_tag_locations,
         load_latest_db_tag_locations,
         load_reader_location_map,
+        load_readers_with_status,
         load_tag_metadata,
+        load_tags_last_seen,
         mark_tags_seen,
         normalize_nfc_token,
         resolve_tag_location_snapshot,
@@ -68,7 +71,9 @@ try:
         OAUTH_PENDING_TTL_SEC,
         PASSWORD_RESET_TTL_SEC,
         READER_LOCATION,
+        READER_OFFLINE_SEC,
         STALE_SEC,
+        TAG_OFFLINE_SEC,
     )
     from backend.usage_history_service import (
         anchor_usage_record_to_chain,
@@ -104,10 +109,13 @@ except ModuleNotFoundError as exc:
     from rtls_utils import (
         cache_location_updates,
         insert_location_history,
+        load_active_tag_ids,
         load_all_cached_tag_locations,
         load_latest_db_tag_locations,
         load_reader_location_map,
+        load_readers_with_status,
         load_tag_metadata,
+        load_tags_last_seen,
         mark_tags_seen,
         normalize_nfc_token,
         resolve_tag_location_snapshot,
@@ -140,7 +148,9 @@ except ModuleNotFoundError as exc:
         OAUTH_PENDING_TTL_SEC,
         PASSWORD_RESET_TTL_SEC,
         READER_LOCATION,
+        READER_OFFLINE_SEC,
         STALE_SEC,
+        TAG_OFFLINE_SEC,
     )
     from usage_history_service import (
         anchor_usage_record_to_chain,
@@ -1396,18 +1406,30 @@ def rtls_live(authorization: str | None = Header(default=None)):
             reader_locations=reader_locations,
         )
 
-    tag_metadata = load_tag_metadata(set(merged_locations.keys()))
-    items = []
-    for tag_id, cached_location in merged_locations.items():
-        reader_id = cached_location.get("reader_id")
-        if not reader_id:
-            continue
+    # 전체 활성 태그 로스터 = (등록된 활성 태그) ∪ (위치가 잡힌 태그)
+    roster_tag_ids = load_active_tag_ids() | set(merged_locations.keys())
+    tag_metadata = load_tag_metadata(roster_tag_ids)
+    tag_last_seen = load_tags_last_seen(roster_tag_ids)
 
+    items = []
+    for tag_id in roster_tag_ids:
         metadata = tag_metadata.get(tag_id, {})
-        updated_at_epoch = cached_location.get("changed_at")
-        is_stale = False
-        if isinstance(updated_at_epoch, int):
-            is_stale = (now - updated_at_epoch) > (STALE_SEC * 2)
+        cached_location = merged_locations.get(tag_id) or {}
+        reader_id = cached_location.get("reader_id")
+
+        # last-seen: Redis 값 우선, 없으면 위치 변경 시각으로 폴백
+        seen_epoch = tag_last_seen.get(tag_id)
+        changed_at_epoch = cached_location.get("changed_at")
+        effective_seen = seen_epoch if seen_epoch is not None else changed_at_epoch
+        is_online = (
+            isinstance(effective_seen, int) and (now - effective_seen) <= TAG_OFFLINE_SEC
+        )
+
+        location = None
+        if reader_id:
+            location = cached_location.get("location") or reader_locations.get(
+                reader_id, READER_LOCATION.get(reader_id, reader_id)
+            )
 
         items.append(
             {
@@ -1419,19 +1441,23 @@ def rtls_live(authorization: str | None = Header(default=None)):
                 "current_holder_user_id": metadata.get("current_holder_user_id"),
                 "current_holder_name": metadata.get("current_holder_name"),
                 "reader_id": reader_id,
-                "location": cached_location.get("location")
-                or reader_locations.get(reader_id, READER_LOCATION.get(reader_id, reader_id)),
+                "location": location,
                 "rssi": None,
-                "updated_at": updated_at_epoch,
-                "is_stale": is_stale,
+                "updated_at": changed_at_epoch,
+                "last_seen": effective_seen,
+                "is_online": is_online,
+                "is_stale": not is_online,
             }
         )
 
-    items.sort(key=lambda item: item.get("updated_at") or 0, reverse=True)
-    readers = [
-        {"reader_id": current_reader_id, "location": location}
-        for current_reader_id, location in sorted(reader_locations.items())
-    ]
+    items.sort(
+        key=lambda item: (item["is_online"], item.get("last_seen") or 0),
+        reverse=True,
+    )
+
+    readers = load_readers_with_status(now, READER_OFFLINE_SEC)
+    readers_online = sum(1 for r in readers if r["is_online"])
+    tags_online = sum(1 for item in items if item["is_online"])
 
     return {
         "ok": True,
@@ -1439,6 +1465,10 @@ def rtls_live(authorization: str | None = Header(default=None)):
         "ts": now,
         "items": items,
         "readers": readers,
+        "readers_online": readers_online,
+        "readers_total": len(readers),
+        "tags_online": tags_online,
+        "tags_total": len(items),
     }
 
 
