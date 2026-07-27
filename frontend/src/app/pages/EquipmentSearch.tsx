@@ -5,9 +5,9 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
+import StaffNav from '../components/layout/StaffNav';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
-import { LogOut } from 'lucide-react';
 
 type LiveLocationItem = {
   tag_id: string;
@@ -138,11 +138,6 @@ export default function EquipmentSearch() {
     return ['전체', ...Array.from(set)];
   }, [equipment]);
 
-  const locations = useMemo(() => {
-    const set = new Set(equipment.map((e) => e.location).filter((location) => location !== UNLOCATED_LABEL));
-    return ['전체', ...Array.from(set)];
-  }, [equipment]);
-
   const readerLocations = useMemo(
     () =>
       Array.from(
@@ -155,15 +150,19 @@ export default function EquipmentSearch() {
     [readers],
   );
 
-  const locationPanels = useMemo(
-    () =>
-      Array.from(
-        new Set([...readerLocations, ...locations.filter((loc) => loc !== '전체' && loc !== UNLOCATED_LABEL)]),
-      ),
-    [readerLocations, locations],
-  );
+  // 장비가 아직 하나도 위치하지 않은 활성 리더 구역도 필터·패널에 노출되도록 리더 로스터를 합친다.
+  const locations = useMemo(() => {
+    const set = new Set([
+      ...equipment.map((e) => e.location).filter((location) => location !== UNLOCATED_LABEL),
+      ...readerLocations,
+    ]);
+    return ['전체', ...Array.from(set)];
+  }, [equipment, readerLocations]);
 
-  const filteredEquipment = useMemo(() => {
+  const locationPanels = useMemo(() => locations.filter((loc) => loc !== '전체'), [locations]);
+
+  // 검색어·종류 필터만 반영한 목록. 리더 위치 패널은 위치 필터와 무관하게 항상 이 목록을 사용한다.
+  const searchAndTypeFilteredEquipment = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return equipment.filter((item) => {
       const matchesSearch =
@@ -173,10 +172,15 @@ export default function EquipmentSearch() {
         item.location.toLowerCase().includes(q);
 
       const matchesType = selectedType === '전체' || item.type === selectedType;
-      const matchesLocation = selectedLocation === '전체' || item.location === selectedLocation;
-      return matchesSearch && matchesType && matchesLocation;
+      return matchesSearch && matchesType;
     });
-  }, [equipment, searchQuery, selectedType, selectedLocation]);
+  }, [equipment, searchQuery, selectedType]);
+
+  const filteredEquipment = useMemo(() => {
+    return searchAndTypeFilteredEquipment.filter(
+      (item) => selectedLocation === '전체' || item.location === selectedLocation,
+    );
+  }, [searchAndTypeFilteredEquipment, selectedLocation]);
 
   useEffect(() => {
     try {
@@ -273,17 +277,7 @@ export default function EquipmentSearch() {
 
   return (
     <AppShell
-      actions={
-        <>
-          <Button variant="outline" onClick={() => navigate('/me')}>
-            마이페이지
-          </Button>
-          <Button variant="outline" onClick={logout}>
-            <LogOut className="h-4 w-4" />
-            로그아웃
-          </Button>
-        </>
-      }
+      actions={<StaffNav active="equipment" />}
       contentClassName="pt-4 sm:pt-5"
     >
       <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -414,7 +408,7 @@ export default function EquipmentSearch() {
             ) : (
               <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
                 {locationPanels.map((location) => {
-                  const roomItems = filteredEquipment.filter((eq) => eq.location === location);
+                  const roomItems = searchAndTypeFilteredEquipment.filter((eq) => eq.location === location);
                   const readerForLocation = readers.find((r) => r.location === location);
                   return (
                     <section key={location} className="rounded-lg border border-border bg-card p-4">
@@ -423,10 +417,7 @@ export default function EquipmentSearch() {
                           <div className="flex items-center gap-2">
                             <h3 className="text-[1.02rem]">{location}</h3>
                             {readerForLocation ? (
-                              <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span className={getOnlineDotClass(readerForLocation.is_online)} />
-                                {readerForLocation.is_online ? '온라인' : '오프라인'}
-                              </span>
+                              <span className={getOnlineDotClass(readerForLocation.is_online)} />
                             ) : null}
                           </div>
                           <p className="mt-1 text-sm text-muted-foreground">{roomItems.length}개 장비 수신</p>

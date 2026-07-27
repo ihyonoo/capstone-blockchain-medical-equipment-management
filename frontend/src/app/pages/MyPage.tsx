@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { LogOut } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import AppShell from '../components/layout/AppShell';
+import AdminNav from '../components/layout/AdminNav';
+import StaffNav from '../components/layout/StaffNav';
 import PasswordChecklist from '../components/PasswordChecklist';
 import PasswordMatchHint from '../components/PasswordMatchHint';
 import { getPasswordError } from '../lib/passwordPolicy';
@@ -271,24 +272,15 @@ export default function MyPage() {
   // --- 사용 이력 (staff 전용) ---
   const [history, setHistory] = useState<UsageHistoryItem[]>([]);
 
-  const goHome = () => {
-    const role = (user?.role ?? '').toLowerCase();
-    navigate(role === 'admin' ? '/verification' : '/equipment');
-  };
+  // 세션에 저장된 역할을 즉시 참조해, /auth/me 응답을 기다리는 동안 네비게이션이 깜빡이지 않게 한다.
+  const sessionRole = (getStoredAuthSession()?.user?.role ?? user?.role ?? '').toLowerCase();
 
   return (
     <AppShell
       title="마이페이지"
+      wide={sessionRole === 'admin'}
       actions={
-        <>
-          <Button variant="secondary" onClick={goHome}>
-            뒤로
-          </Button>
-          <Button variant="outline" onClick={logout}>
-            <LogOut className="h-4 w-4" />
-            로그아웃
-          </Button>
-        </>
+        sessionRole === 'admin' ? <AdminNav active="mypage" /> : <StaffNav active="mypage" />
       }
     >
       <div className="mx-auto w-full max-w-3xl space-y-4">

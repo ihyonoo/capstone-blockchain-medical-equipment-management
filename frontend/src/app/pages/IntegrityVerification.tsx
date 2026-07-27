@@ -6,9 +6,10 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
+import AdminNav from '../components/layout/AdminNav';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
-import { AlertTriangle, CheckCircle2, ChevronDown, CircleMinus, HelpCircle, LogOut, User } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, CircleMinus, HelpCircle, User } from 'lucide-react';
 
 type UsageChainRecord = {
   usageId: string;
@@ -116,6 +117,11 @@ const DEFAULT_FILTERS: HistoryFilters = {
   sortField: 'time',
   sortOrder: 'desc',
 };
+
+function getShortTagId(tagId: string) {
+  const head = tagId.split(':')[0] ?? tagId;
+  return head.split('-')[0] ?? head;
+}
 
 function formatDateTime(epoch: number | null | undefined) {
   if (!epoch) return '-';
@@ -254,7 +260,7 @@ function RecordSnapshot({
       ) : (
         <>
           <div>usage_id: {record.usageId}</div>
-          <div>tag_id: {record.tagId || '-'}</div>
+          <div>tag_id: {record.tagId ? getShortTagId(record.tagId) : '-'}</div>
           <div>사용 시작자 ID: {record.checkoutUserId ?? '-'}</div>
           <div>사용 종료자 ID: {record.returnUserId ?? '-'}</div>
           <div>대여 위치: {record.checkoutLocation || '-'}</div>
@@ -514,26 +520,7 @@ export default function IntegrityVerification() {
   return (
     <AppShell
       wide
-      actions={
-        <>
-          <Button variant="secondary" onClick={() => navigate('/verification')}>
-            장비 사용 이력 조회
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/admin/nfc-mapping')}>
-            NFC 매핑
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/admin/devices')}>
-            기기 상태
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/me')}>
-            마이페이지
-          </Button>
-          <Button variant="outline" onClick={logout}>
-            <LogOut className="h-4 w-4" />
-            로그아웃
-          </Button>
-        </>
-      }
+      actions={<AdminNav active="verification" />}
       contentClassName="pt-4 sm:pt-5"
     >
       <div className="space-y-4">
@@ -683,7 +670,7 @@ export default function IntegrityVerification() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-end gap-2 xl:col-span-5">
+            <div className="flex flex-wrap items-end gap-2 xl:col-span-5">
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? '조회 중...' : '조회'}
               </Button>
@@ -762,7 +749,7 @@ export default function IntegrityVerification() {
                           {item.equipment.name}
                         </div>
                         <div className="text-[0.95rem] text-muted-foreground">
-                          usage_id {item.usage_id} · tag {item.equipment.tag_id}
+                          usage_id {item.usage_id} · tag {getShortTagId(item.equipment.tag_id)}
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center justify-end gap-2">

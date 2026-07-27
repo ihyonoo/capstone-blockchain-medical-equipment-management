@@ -68,7 +68,7 @@ export default function AppShell({
                 <strong>MediLedger &amp; EquipTrace</strong>
               </div>
             </div>
-            <div className="app-shell__actions flex items-center gap-2">
+            <div className="app-shell__actions flex flex-wrap items-center justify-end gap-2">
               {actions}
               <button
                 type="button"

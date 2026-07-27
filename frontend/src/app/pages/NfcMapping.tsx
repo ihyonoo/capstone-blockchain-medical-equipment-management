@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import AppShell from '../components/layout/AppShell';
+import AdminNav from '../components/layout/AdminNav';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
 import { API_BASE_URL, PUBLIC_APP_URL } from '../lib/runtime';
-import { LogOut, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
+import { RefreshCw, Save, Search, Trash2 } from 'lucide-react';
 
 type MappingItem = {
   tag_id: string;
@@ -224,26 +225,7 @@ export default function NfcMapping() {
   return (
     <AppShell
       wide
-      actions={
-        <>
-          <Button variant="outline" onClick={() => navigate('/verification')}>
-            장비 사용 이력 조회
-          </Button>
-          <Button variant="secondary" onClick={() => navigate('/admin/nfc-mapping')}>
-            NFC 매핑
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/admin/devices')}>
-            기기 상태
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/me')}>
-            마이페이지
-          </Button>
-          <Button variant="outline" onClick={logout}>
-            <LogOut className="h-4 w-4" />
-            로그아웃
-          </Button>
-        </>
-      }
+      actions={<AdminNav active="nfc-mapping" />}
       contentClassName="pt-4 sm:pt-5"
     >
       <div className="space-y-4">

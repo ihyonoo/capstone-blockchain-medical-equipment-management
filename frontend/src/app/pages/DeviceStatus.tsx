@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import AppShell from '../components/layout/AppShell';
+import AdminNav from '../components/layout/AdminNav';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
-import { LogOut } from 'lucide-react';
 
 type LiveReaderItem = {
   reader_id: string;
@@ -125,23 +124,7 @@ export default function DeviceStatus() {
   return (
     <AppShell
       wide
-      actions={
-        <>
-          <Button variant="outline" onClick={() => navigate('/verification')}>
-            장비 사용 이력 조회
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/admin/nfc-mapping')}>
-            NFC 매핑
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/me')}>
-            마이페이지
-          </Button>
-          <Button variant="outline" onClick={logout}>
-            <LogOut className="h-4 w-4" />
-            로그아웃
-          </Button>
-        </>
-      }
+      actions={<AdminNav active="devices" />}
       contentClassName="pt-4 sm:pt-5"
     >
       <div className="space-y-4">

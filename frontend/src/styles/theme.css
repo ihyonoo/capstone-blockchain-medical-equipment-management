@@ -180,16 +180,34 @@
     box-sizing: border-box;
   }
 
+  /* 네이티브 날짜 입력창(연/월/일 필드·달력 아이콘)은 브라우저가 내부 폭을 자체 계산해서
+     좁은 화면에서 부모 박스를 살짝 넘어서는 경우가 있어, 강제로 폭 안에 맞춘다. */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    min-width: 0;
+  }
+
+  input[type="date"]::-webkit-datetime-edit,
+  input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+    min-width: 0;
+    overflow: hidden;
+  }
+
   html {
     font-size: var(--font-size);
     background: var(--background);
     scroll-behavior: smooth;
+    /* 스크롤 필요 여부에 관계없이 스크롤바 자리를 항상 확보해, 페이지 이동 시 본문이 좌우로 밀리지 않게 한다. */
+    scrollbar-gutter: stable;
   }
 
   body {
     @apply bg-background text-foreground;
     margin: 0;
     min-height: 100vh;
+    /* 개별 요소가 미처 감싸지 못한 넘침이 있어도 페이지 전체가 가로로 밀리지 않게 하는 안전장치 */
+    overflow-x: hidden;
     font-family:
       "Inter",
       "Sofia Sans",
@@ -302,8 +320,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    height: 4rem;
+    flex-wrap: wrap;
+    gap: 0.6rem 1rem;
+    min-height: 4rem;
+    padding-block: 0.6rem;
   }
 
   .app-shell__hero {
@@ -408,8 +428,9 @@
   .panel-header {
     display: flex;
     align-items: flex-start;
+    flex-wrap: wrap;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.6rem 1rem;
     margin-bottom: 1rem;
   }
 
@@ -584,7 +605,12 @@
 
   @media (max-width: 640px) {
     .app-shell__nav {
-      height: 3.5rem;
+      min-height: 3.5rem;
+    }
+
+    .app-shell__actions {
+      width: 100%;
+      justify-content: flex-end;
     }
 
     .app-shell__hero {
