@@ -36,6 +36,7 @@ try:
         load_latest_db_tag_locations,
         load_reader_location_map,
         load_tag_metadata,
+        mark_tags_seen,
         normalize_nfc_token,
         resolve_tag_location_snapshot,
         upsert_readers_from_ingest,
@@ -107,6 +108,7 @@ except ModuleNotFoundError as exc:
         load_latest_db_tag_locations,
         load_reader_location_map,
         load_tag_metadata,
+        mark_tags_seen,
         normalize_nfc_token,
         resolve_tag_location_snapshot,
         upsert_readers_from_ingest,
@@ -922,6 +924,7 @@ def ingest(payload: Payload):
 
     insert_location_history(db_updates)
     cache_location_updates(db_updates, reader_locations=reader_locations)
+    mark_tags_seen({obs.tag_id for obs in payload.observations}, now)
 
     if last_tag_id is not None and last_best is not None:
         print(f"[tag ID]\n{last_tag_id}")

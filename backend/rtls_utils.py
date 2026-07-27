@@ -67,6 +67,50 @@ def get_tag_location_cache_key(tag_id: str) -> str:
     return f"{REDIS_LOCATION_KEY_PREFIX}{tag_id}:current"
 
 
+def get_tag_seen_cache_key(tag_id: str) -> str:
+    return f"{REDIS_LOCATION_KEY_PREFIX}{tag_id}:seen"
+
+
+def mark_tags_seen(tag_ids: set[str], seen_epoch: int) -> None:
+    if not tag_ids:
+        return
+    client = get_redis_client()
+    if client is None:
+        return
+    try:
+        pipe = client.pipeline()
+        for tag_id in tag_ids:
+            pipe.set(get_tag_seen_cache_key(tag_id), seen_epoch)
+        pipe.execute()
+    except Exception:
+        pass
+
+
+def load_tags_last_seen(tag_ids: set[str]) -> dict[str, int]:
+    if not tag_ids:
+        return {}
+    client = get_redis_client()
+    if client is None:
+        return {}
+    keys = {tag_id: get_tag_seen_cache_key(tag_id) for tag_id in tag_ids}
+    try:
+        pipe = client.pipeline()
+        for key in keys.values():
+            pipe.get(key)
+        raw_values = pipe.execute()
+    except Exception:
+        return {}
+    results: dict[str, int] = {}
+    for tag_id, raw in zip(keys.keys(), raw_values):
+        if raw is None:
+            continue
+        try:
+            results[tag_id] = int(raw)
+        except (TypeError, ValueError):
+            continue
+    return results
+
+
 def read_cached_tag_location(tag_id: str) -> dict | None:
     client = get_redis_client()
     if client is None:
