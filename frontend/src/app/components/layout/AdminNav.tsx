@@ -4,7 +4,7 @@ import { LogOut } from 'lucide-react';
 import { clearStoredAuthSession } from '../../lib/auth';
 
 type AdminNavProps = {
-  active: 'verification' | 'nfc-mapping' | 'devices' | 'mypage';
+  active: 'verification' | 'nfc-mapping' | 'devices' | 'ai-report' | 'mypage';
 };
 
 export default function AdminNav({ active }: AdminNavProps) {
@@ -34,6 +34,12 @@ export default function AdminNav({ active }: AdminNavProps) {
         onClick={() => navigate('/admin/devices')}
       >
         기기 상태
+      </Button>
+      <Button
+        variant={active === 'ai-report' ? 'secondary' : 'outline'}
+        onClick={() => navigate('/admin/ai-report')}
+      >
+        AI 기반 레포트
       </Button>
       <Button
         variant={active === 'mypage' ? 'secondary' : 'outline'}
