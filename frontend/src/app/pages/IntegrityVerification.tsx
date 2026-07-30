@@ -283,6 +283,7 @@ export default function IntegrityVerification() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [expandedUsageId, setExpandedUsageId] = useState<number | null>(null);
+  const [locationOptions, setLocationOptions] = useState<Array<{ value: string; label: string }>>([]);
 
   const logout = () => {
     clearStoredAuthSession();
@@ -394,6 +395,44 @@ export default function IntegrityVerification() {
     void fetchHistory(DEFAULT_FILTERS);
   }, [isAuthorized, fetchHistory]);
 
+  useEffect(() => {
+    if (!isAuthorized) return;
+    let cancelled = false;
+
+    const fetchLocations = async () => {
+      try {
+        const session = getStoredAuthSession();
+        if (!session?.token) return;
+        const response = await fetch(`${API_BASE_URL}/rtls/live`, {
+          method: 'GET',
+          cache: 'no-store',
+          headers: buildAuthHeaders(session.token),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.ok || cancelled) return;
+
+        const readers = Array.isArray(payload.readers) ? (payload.readers as Array<{ location?: string | null }>) : [];
+        const seen = new Set<string>();
+        const values: Array<{ value: string; label: string }> = [];
+        readers.forEach((reader) => {
+          const value = (reader.location ?? '').trim();
+          if (!value || seen.has(value)) return;
+          seen.add(value);
+          values.push({ value, label: value });
+        });
+        values.sort((left, right) => left.label.localeCompare(right.label, 'ko'));
+        setLocationOptions(values);
+      } catch {
+        // 위치 목록은 부가 정보이므로 실패 시 조용히 무시한다.
+      }
+    };
+
+    void fetchLocations();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthorized]);
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     void fetchHistory(filters);
@@ -481,32 +520,6 @@ export default function IntegrityVerification() {
     return values;
   }, [allItems]);
 
-  const checkoutLocationOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const values: Array<{ value: string; label: string }> = [];
-    allItems.forEach((item) => {
-      const value = (item.checkout.location ?? item.checkout.reader_id ?? '').trim();
-      if (!value || seen.has(value)) return;
-      seen.add(value);
-      values.push({ value, label: value });
-    });
-    values.sort((left, right) => left.label.localeCompare(right.label, 'ko'));
-    return values;
-  }, [allItems]);
-
-  const returnLocationOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const values: Array<{ value: string; label: string }> = [];
-    allItems.forEach((item) => {
-      const value = (item.return.location ?? item.return.reader_id ?? '').trim();
-      if (!value || seen.has(value)) return;
-      seen.add(value);
-      values.push({ value, label: value });
-    });
-    values.sort((left, right) => left.label.localeCompare(right.label, 'ko'));
-    return values;
-  }, [allItems]);
-
   const visibleVerifiedCount = items.filter((item) => item.blockchain?.verification_status === 'verified').length;
   const visibleIssueCount = items.filter((item) => {
     const status = item.blockchain?.verification_status ?? 'chain_error';
@@ -564,7 +577,7 @@ export default function IntegrityVerification() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">전체 위치</SelectItem>
-                  {checkoutLocationOptions.map((option) => (
+                  {locationOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -583,7 +596,7 @@ export default function IntegrityVerification() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">전체 위치</SelectItem>
-                  {returnLocationOptions.map((option) => (
+                  {locationOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
