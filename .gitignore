@@ -34,6 +34,7 @@ pnpm-debug.log*
 backups/
 .local-backups/
 .postgres-data/
+.postgres-data-migration-backup/
 AGENTS.md
 DESIGN.md
 
