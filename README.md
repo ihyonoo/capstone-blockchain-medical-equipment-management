@@ -86,28 +86,44 @@
 
 ```
 capstone/
-├── backend/            FastAPI 앱 + 로직 모듈 (server.py, *_utils.py, settings.py …)
-├── frontend/           React SPA (src/app/pages, components …)
-├── rtls/               BLE 태그/리더 엣지 스크립트
-├── blockchain/besu/    Besu 네트워크, 컨트랙트, Node 스크립트
-├── database/           schema.sql (스키마 원본)
+├── backend/                 FastAPI 앱 + 로직 모듈 (server.py, *_utils.py, settings.py …)
+├── frontend/                React SPA (src/app/pages, components …)
+├── rtls/                    BLE 태그/리더 엣지 스크립트
+├── blockchain/besu/         Besu 네트워크, 컨트랙트, Node 스크립트
+├── database/                schema.sql (스키마 원본)
+├── docker-compose.dev.yml   로컬 개발 인프라 (postgres + redis + besu)
+└── docker-compose.yml       홈서버 전체 배포 (앱 포함 + Cloudflare Tunnel)
 ```
 
 ---
 
 ## 빠른 시작
 
-### 1) 데이터베이스 (로컬 PostgreSQL)
+로컬 개발은 **하이브리드** 구성이다: DB · Redis · Besu 는 Docker 컨테이너로, 앱(백엔드/프론트)은 호스트에서 직접 실행한다. (홈서버 전체 배포는 루트 `docker-compose.yml`을 사용한다.)
+
+### 0) 최초 1회 준비
 
 ```bash
 # .env 준비 (.env.example 참고)
-# DATABASE_URL=postgresql://localhost:5432/mediledger_db
-
-createdb mediledger_db
-psql "$DATABASE_URL" -f database/schema.sql   # 멱등: 재실행 가능
+# Besu 네트워크 산출물 생성 (genesis, 검증자 키, blockchain/besu/.env)
+bash blockchain/besu/scripts/generate-network.sh
 ```
 
-> DB는 로컬 PostgreSQL로 운영한다. (Docker는 Besu·Redis 전용)
+### 1) 인프라 기동 (DB · Redis · Besu)
+
+`docker-compose.dev.yml`이 postgres · redis · besu(검증자 4 + RPC 노드 1)를 한 번에 띄운다.
+
+```bash
+docker-compose -f docker-compose.dev.yml up -d   # 인프라 기동
+psql "$DATABASE_URL" -f database/schema.sql       # DB 스키마 적용 (멱등: 재실행 가능)
+
+# 컨트랙트 배포 (최초 1회)
+cd blockchain/besu && npm install && node scripts/deploy-usage-registry.mjs && cd -
+```
+
+> DB는 Docker의 named volume `mediledger_pgdata`(컨테이너 `mediledger-postgres-dev`)에 영속된다. 접속: `postgresql://mediledger:mediledger@localhost:5432/mediledger_db` — DBeaver 등 GUI 툴도 `localhost:5432`로 그대로 붙는다. 정지는 `docker-compose -f docker-compose.dev.yml down` (데이터 유지; `-v`는 볼륨까지 지우므로 금지).
+>
+> RPC 엔드포인트: `http://127.0.0.1:8549` (chain ID 1337, QBFT). 블록체인이 준비되지 않으면 백엔드는 앵커링·검증을 **우아하게 건너뛰고** 나머지 기능은 정상 동작한다.
 
 ### 2) 백엔드 (저장소 루트에서 실행)
 
@@ -124,18 +140,7 @@ npm run dev            # Vite dev 서버 :5173
 npm run build          # 변경 후 검증
 ```
 
-### 4) 블록체인 (`blockchain/besu/`)
-
-```bash
-bash scripts/generate-network.sh    # 최초 1회: genesis, 검증자 키, .env 생성
-docker compose up -d                # 검증자 4 + RPC 노드 1 (+ Redis)
-npm install
-node scripts/deploy-usage-registry.mjs   # 컨트랙트 배포
-```
-
-RPC 엔드포인트: `http://127.0.0.1:8549` (chain ID 1337, QBFT). 블록체인이 준비되지 않으면 백엔드는 앵커링·검증을 **우아하게 건너뛰고** 나머지 기능은 정상 동작한다.
-
-### 5) RTLS 엣지 스크립트 (`rtls/`, BLE 하드웨어 필요)
+### 4) RTLS 엣지 스크립트 (`rtls/`, BLE 하드웨어 필요)
 
 ```bash
 pip install -r requirements.txt
