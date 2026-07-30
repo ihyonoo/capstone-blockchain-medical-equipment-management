@@ -36,12 +36,10 @@ services:
       - besu-qbft
 
   backend:
-    build:
-      # 빌드 컨텍스트가 저장소 루트.
-      # backend/Dockerfile 내부 COPY 경로가 루트 기준인 이유.
-      context: .
-      dockerfile: backend/Dockerfile
-    image: mediledger-backend
+    # 이미지는 GitHub Actions CI가 빌드해 GHCR에 push한다.
+    # 홈서버는 이 태그를 pull만 하며 docker compose build를 쓰지 않는다.
+    # .github/workflows/deploy.yml, deploy/ci-deploy.sh 참고.
+    image: ghcr.io/ihyonoo/mediledger-equiptrace-backend:latest
     container_name: mediledger-backend
     restart: unless-stopped
     # DATABASE_URL·AUTH_TOKEN_SECRET 등 나머지 설정은 여기서 주입.
@@ -65,10 +63,8 @@ services:
       - besu-qbft
 
   web:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: mediledger-web
+    # backend와 동일 — GHCR에서 pull만 한다.
+    image: ghcr.io/ihyonoo/mediledger-equiptrace-web:latest
     container_name: mediledger-web
     restart: unless-stopped
     volumes:
