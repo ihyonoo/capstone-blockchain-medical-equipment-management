@@ -1,24 +1,20 @@
+# blockchain/besu/docker-compose.yml
+# 루트 docker-compose.dev.yml·docker-compose.yml 양쪽이 include로 가져다 씀.
+# 단독 실행도 가능: docker compose up -d (blockchain/besu/ 에서)
+# 블록체인 전용 파일. redis는 각 상위 Compose 파일에 직접 정의됨.
+
+# 이 네트워크 이름으로 다른 Compose 파일들과 서비스 디스커버리가 이뤄짐.
 name: besu-qbft
 
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: capstone-redis
-    restart: unless-stopped
-    # 컨테이너 배포는 redis://redis:6379 로 접근하므로 호스트 매핑이 불필요하다.
-    # 호스트에서 uvicorn을 직접 띄우는 로컬 개발용으로만 루프백에 남긴다.
-    ports:
-      - "127.0.0.1:6379:6379"
-    networks:
-      besu-qbft:
-        ipv4_address: 172.28.0.10
-
   validator1:
     image: ${BESU_IMAGE:-hyperledger/besu:latest}
     container_name: besu-validator1
     restart: unless-stopped
     volumes:
+      # genesis.json 등 네트워크 설정.
       - ./config:/opt/besu/config
+      # 이 노드의 체인 데이터. 노드별로 별도 디렉터리를 씀.
       - ./validators/validator1/data:/opt/besu/data
     command:
       - --data-path=/opt/besu/data
@@ -29,13 +25,14 @@ services:
       - --host-allowlist=*
       - --rpc-http-cors-origins=all
       - --profile=ENTERPRISE
-      # Prometheus 메트릭. 호스트 포트는 열지 않고 besu-qbft 네트워크 안에서만 노출한다.
+      # Prometheus 메트릭 노출.
+      # 호스트 포트는 열지 않고 besu-qbft 네트워크 안에서만 접근 가능.
       - --metrics-enabled
       - --metrics-host=0.0.0.0
       - --metrics-port=9545
-    # 검증자는 호스트 포트를 열지 않는다.
-    # P2P는 BOOTNODE_ENODE(172.28.0.11:30303)를 통해 브리지 네트워크 안에서만 이뤄지고,
-    # 애플리케이션은 rpc-node 한 곳만 사용한다.
+    # 검증자는 호스트 포트를 열지 않음.
+    # P2P는 BOOTNODE_ENODE(172.28.0.11:30303)를 통해 브리지 네트워크 안에서만 이뤄짐.
+    # 애플리케이션(backend 등)은 rpc-node 한 곳만 사용.
     networks:
       besu-qbft:
         ipv4_address: 172.28.0.11
@@ -44,6 +41,8 @@ services:
     image: ${BESU_IMAGE:-hyperledger/besu:latest}
     container_name: besu-validator2
     restart: unless-stopped
+    # validator1이 먼저 뜬 뒤에 시작.
+    # bootnode 역할을 validator1이 하므로 순서가 중요함.
     depends_on:
       - validator1
     volumes:
@@ -52,6 +51,8 @@ services:
     command:
       - --data-path=/opt/besu/data
       - --genesis-file=/opt/besu/config/genesis.json
+      # validator1의 enode 주소로 P2P 네트워크에 합류.
+      # BOOTNODE_ENODE는 blockchain/besu/.env에서 옴.
       - --bootnodes=${BOOTNODE_ENODE}
       - --rpc-http-enabled
       - --rpc-http-host=0.0.0.0
@@ -66,6 +67,8 @@ services:
       besu-qbft:
         ipv4_address: 172.28.0.12
 
+  # validator3·validator4는 validator2와 동일 패턴.
+  # container_name·volumes 경로·ipv4_address만 다름.
   validator3:
     image: ${BESU_IMAGE:-hyperledger/besu:latest}
     container_name: besu-validator3
@@ -118,6 +121,8 @@ services:
       besu-qbft:
         ipv4_address: 172.28.0.14
 
+  # validator가 아니라 RPC 전용 노드.
+  # 애플리케이션(backend, 배포/점검 스크립트)은 검증자가 아니라 이 노드만 사용.
   rpc-node:
     image: ${BESU_IMAGE:-hyperledger/besu:latest}
     container_name: besu-rpc-node
@@ -137,12 +142,14 @@ services:
       - --host-allowlist=*
       - --rpc-http-cors-origins=all
       - --profile=ENTERPRISE
+      # 전체 블록을 동기화. 검증에는 참여하지 않고 읽기 전용으로만 씀.
       - --sync-mode=FULL
       - --metrics-enabled
       - --metrics-host=0.0.0.0
       - --metrics-port=9545
-    # backend는 http://besu-rpc-node:8545 로 접근한다.
-    # 8549는 호스트에서 배포·점검 스크립트를 돌릴 때만 쓰므로 루프백으로 제한한다.
+    # backend는 컨테이너 네트워크 안에서 http://besu-rpc-node:8545로 접근.
+    # 8549는 호스트에서 배포·점검 스크립트를 돌릴 때만 씀.
+    # 루프백에만 바인딩해 LAN에는 노출하지 않음.
     ports:
       - "127.0.0.1:8549:8545"
     networks:
@@ -151,7 +158,9 @@ services:
 
 networks:
   besu-qbft:
+    # 브리지 드라이버. 이 파일을 include하는 상위 Compose들과 공유됨.
     driver: bridge
     ipam:
       config:
+        # 위 모든 서비스의 ipv4_address가 이 대역 안에 있어야 함.
         - subnet: 172.28.0.0/24

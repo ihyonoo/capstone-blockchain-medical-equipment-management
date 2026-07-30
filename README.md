@@ -22,6 +22,7 @@
 - [시스템 아키텍처](#시스템-아키텍처)
 - [기술 스택](#기술-스택)
 - [디렉토리 구조](#디렉토리-구조)
+- [Docker 구성](#docker-구성)
 - [빠른 시작](#빠른-시작)
 - [핵심 동작 원리](#핵심-동작-원리)
 - [NFC 태깅과 사용 이력](#nfc-태깅과-사용-이력)
@@ -91,9 +92,60 @@ capstone/
 ├── rtls/                    BLE 태그/리더 엣지 스크립트
 ├── blockchain/besu/         Besu 네트워크, 컨트랙트, Node 스크립트
 ├── database/                schema.sql (스키마 원본)
-├── docker-compose.dev.yml   로컬 개발 인프라 (postgres + redis + besu)
-└── docker-compose.yml       홈서버 전체 배포 (앱 포함 + Cloudflare Tunnel)
+├── docker-compose.dev.yml   로컬 개발 인프라 (postgres + redis + include: besu)
+└── docker-compose.yml       홈서버 전체 배포 (postgres + redis + 앱 + include: besu)
 ```
+
+---
+
+## Docker 구성
+
+`blockchain/besu/docker-compose.yml`은 블록체인 전용(검증자 4 + RPC 노드)이다. 두 최상위 Compose 파일이 이 파일만 `include`로 가져와 재사용하고, redis는 블록체인과 무관하므로 공유하지 않고 각 파일에 직접 정의한다.
+
+```
+                 blockchain/besu/docker-compose.yml
+                 (validator1~4 · rpc-node)
+                          ▲            ▲
+                include   │            │   include
+                          │            │
+        ┌──────────────────┘            └──────────────────┐
+        │                                                   │
+docker-compose.dev.yml                              docker-compose.yml
+(로컬 개발, 저장소 루트)                             (홈서버 배포, 저장소 루트)
+  + postgres, redis                                   + postgres, redis
+                                                        + backend, web, cloudflared
+```
+
+- 로컬 개발용은 postgres·redis만 추가하고 앱은 호스트에서 실행
+- 배포용은 postgres·redis 외에 backend·web(nginx)·cloudflared까지 같은 Compose에 정의해 전부 컨테이너로 묶음
+- redis는 dev/배포용으로 설정(포트 바인딩, 네트워크 소속)이 다르므로 공유 파일로 뽑지 않고 각각 정의 — 설정이 자주 안 바뀌는 서비스라 중복 비용보다 파일 하나 줄이는 단순함이 더 크다고 판단
+- `blockchain/besu/.env`(부트노드 enode 등)는 `env_file:`로 include 시점에 주입됨
+- `blockchain/besu/` 디렉터리에서 `docker compose up -d`로 단독 실행하면 redis 없이 블록체인만 뜬다 (redis는 RTLS 위치 캐시용 best-effort라 블록체인 작업과 무관)
+
+```
+[로컬 개발] docker-compose.dev.yml — 인프라만 컨테이너화
+┌───────────────────────────────────────┐
+│ Docker: postgres · redis · besu(4+1)   │
+└─────────────────┬───────────────────────┘
+                   │ localhost:5432 / :6379 / :8549
+        ┌──────────┴──────────┐
+        ▼                     ▼
+ 호스트: uvicorn        호스트: vite dev
+ backend :8000          frontend :5173
+
+[홈서버 배포] docker-compose.yml — 전부 컨테이너화
+┌───────────────────────────────────────────────────┐
+│ Docker: postgres · backend · web(nginx) · besu(4+1) │
+└──────────────────────┬──────────────────────────────┘
+                        ▼
+                  cloudflared
+                        ▼
+            mediledger.xyz (Cloudflare Tunnel)
+```
+
+- **로컬 개발**: DB·Redis·Besu만 컨테이너, 앱(백엔드/프론트)은 호스트에서 직접 실행 → 코드 변경 시 hot-reload
+- **홈서버 배포**: 앱까지 전부 컨테이너화, `cloudflared`가 외부 포트 개방 없이 터널로 연결
+- `blockchain/besu/docker-compose.yml`은 두 상위 Compose가 공유하는 단일 소스 — validator는 호스트 포트를 열지 않고 컨테이너 네트워크 내부에서만 통신
 
 ---
 
