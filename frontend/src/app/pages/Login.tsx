@@ -19,7 +19,10 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<LoginRole>('staff');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    return params.get('oauth_error') ? 'Google 로그인에 실패했습니다. 다시 시도해 주세요.' : '';
+  });
   const [unverifiedEmail, setUnverifiedEmail] = useState('');
   const [resendMsg, setResendMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -31,7 +34,6 @@ export default function Login() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     if (params.get('oauth_error')) {
-      setError('Google 로그인에 실패했습니다. 다시 시도해 주세요.');
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
   }, []);

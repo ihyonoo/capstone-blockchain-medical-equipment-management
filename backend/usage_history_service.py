@@ -194,7 +194,7 @@ def persist_usage_chain_anchor_metadata(usage_id: int, anchor_result: dict) -> N
     transaction_index = anchor_result.get("transaction_index")
     recorded_at_epoch = anchor_result.get("recorded_at")
     recorded_at = (
-        dt.datetime.fromtimestamp(recorded_at_epoch, dt.timezone.utc)
+        dt.datetime.fromtimestamp(recorded_at_epoch, dt.UTC)
         if isinstance(recorded_at_epoch, int)
         else None
     )

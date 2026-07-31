@@ -1,5 +1,3 @@
-from typing import List
-
 from pydantic import BaseModel
 
 
@@ -13,7 +11,7 @@ class Observation(BaseModel):
 class Payload(BaseModel):
     reader_id: str
     ts: int
-    observations: List[Observation]
+    observations: list[Observation]
 
 
 class LoginRequest(BaseModel):

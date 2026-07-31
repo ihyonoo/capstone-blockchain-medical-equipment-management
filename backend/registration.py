@@ -1,15 +1,15 @@
 # registration.py
 
 import os
+import traceback
 from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from dotenv import load_dotenv
-import traceback
 
 # 회원 등록 API도 저장소 루트의 .env를 기준으로 읽도록 맞춘다.
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -28,8 +28,8 @@ pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")                   # pa
 def get_conn():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL Error")    # raise: error interrupt
-    with psycopg.connect(DATABASE_URL) as conn:     # A as B: A를 B라는 이름으로 쓰겠다. with: 이 블록 안에서만 쓰고 끝나면 close
-        yield conn                                  # yield: 제너레이터 기능, corn을 쓰는 동안만 열어 둘 수 있음
+    with psycopg.connect(DATABASE_URL) as conn:     # with 블록 안에서만 연결을 열어두고 끝나면 자동으로 close
+        yield conn                                  # yield: 제너레이터로 호출자가 쓰는 동안만 연결 유지
 
 
 # ---------- 요청 바디 모델----------
@@ -66,15 +66,15 @@ def create_reader(body: ReaderCreate):
     """
     try:
         with get_conn() as conn, conn.cursor() as cur:
-            cur.execute(sql, (body.reader_id, body.location_name, body.is_active))  # 실제 Query에 인자값 넣어서 실행
-        return {"ok": True, "reader_id": body.reader_id}                            # JSON으로 성공 여부와 등록된 Reader ID 반환
+            cur.execute(sql, (body.reader_id, body.location_name, body.is_active))  # 쿼리에 인자값 넣어서 실행
+        return {"ok": True, "reader_id": body.reader_id}                            # 성공 여부와 등록된 Reader ID 반환
     # 예외처리
     except psycopg.errors.UniqueViolation:  # 만약 중복되는 리더기를 등록한다면
         raise HTTPException(409, "이미 존재하는 reader_id")
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(500, str(e))
-    
+
 
 # 등록된 리더기 조회
 @app.get("/readers")
@@ -116,15 +116,15 @@ def create_tag(body: TagCreate):
                 (body.tag_id, body.equipment_name, body.equipment_type, body.serial_number, body.is_active),
             )
         return {"ok": True, "tag_id": body.tag_id}
-    
+
     # 예외 처리
     except psycopg.errors.UniqueViolation:
         raise HTTPException(409, "이미 존재하는 tag_id 또는 serial_number")
     except Exception as e:
         raise HTTPException(500, str(e))
-    
 
-# 등록된 태그(장비) 조회    
+
+# 등록된 태그(장비) 조회
 @app.get("/tags")
 def list_tags(q: str | None = None):    # 예시: /tags?q=pump 일수도 있고 /tags 일수도 있음
     if q:   # q가 있다면 특정 장비 검색
@@ -188,7 +188,7 @@ def list_tags(q: str | None = None):    # 예시: /tags?q=pump 일수도 있고 
 #         raise HTTPException(409, "이미 존재하는 username")
 #     except Exception as e:
 #         raise HTTPException(500, str(e))
-    
+
 # # 등록된 유저 조회
 # @app.get("/users")
 # def list_users():

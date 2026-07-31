@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -8,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
 import { API_BASE_URL } from '../lib/runtime';
-import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession } from '../lib/auth';
+import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
 import { AlertTriangle, CheckCircle2, ChevronDown, CircleMinus, HelpCircle, User } from 'lucide-react';
 
 type UsageChainRecord = {
@@ -275,8 +275,16 @@ function RecordSnapshot({
 }
 
 export default function IntegrityVerification() {
-  const navigate = useNavigate();
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const isAuthorized = useAuthGuard(() => {
+    try {
+      const session = getStoredAuthSession();
+      if (!session?.token || !session.user) return '/';
+      if (session.user.role !== 'admin') return '/equipment';
+      return null;
+    } catch {
+      return '/';
+    }
+  });
   const [filters, setFilters] = useState<HistoryFilters>(DEFAULT_FILTERS);
   const [allItems, setAllItems] = useState<UsageHistoryItem[]>([]);
   const [items, setItems] = useState<UsageHistoryItem[]>([]);
@@ -285,10 +293,7 @@ export default function IntegrityVerification() {
   const [expandedUsageId, setExpandedUsageId] = useState<number | null>(null);
   const [locationOptions, setLocationOptions] = useState<Array<{ value: string; label: string }>>([]);
 
-  const logout = () => {
-    clearStoredAuthSession();
-    navigate('/', { replace: true });
-  };
+  const logout = useLogout();
 
   const applyClientFilters = useCallback((sourceItems: UsageHistoryItem[], targetFilters: HistoryFilters) => {
     // 텍스트/기간 조건은 서버 조회 시 반영하고, 블록/검증 상태만 화면에서 즉시 재필터링한다.
@@ -320,23 +325,6 @@ export default function IntegrityVerification() {
       endDate: value,
     }));
   };
-
-  useEffect(() => {
-    try {
-      const session = getStoredAuthSession();
-      if (!session?.token || !session.user) {
-        navigate('/', { replace: true });
-        return;
-      }
-      if (session.user.role !== 'admin') {
-        navigate('/equipment', { replace: true });
-        return;
-      }
-      setIsAuthorized(true);
-    } catch {
-      navigate('/', { replace: true });
-    }
-  }, [navigate]);
 
   const fetchHistory = useCallback(
     async (targetFilters: HistoryFilters) => {
@@ -387,13 +375,13 @@ export default function IntegrityVerification() {
         setIsLoading(false);
       }
     },
-    [applyClientFilters, navigate],
+    [applyClientFilters, logout],
   );
 
-  useEffect(() => {
-    if (!isAuthorized) return;
+  const runFetchHistory = useCallback(() => {
     void fetchHistory(DEFAULT_FILTERS);
-  }, [isAuthorized, fetchHistory]);
+  }, [fetchHistory]);
+  useRunWhenReady(isAuthorized, runFetchHistory);
 
   useEffect(() => {
     if (!isAuthorized) return;

@@ -48,6 +48,7 @@ export default function MyPage() {
   const [user, setUser] = useState<MeUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [history, setHistory] = useState<UsageHistoryItem[]>([]);
 
   const isStaff = (user?.role ?? '').toLowerCase() === 'staff';
 
@@ -268,9 +269,6 @@ export default function MyPage() {
       setWithdrawBusy(false);
     }
   };
-
-  // --- 사용 이력 (staff 전용) ---
-  const [history, setHistory] = useState<UsageHistoryItem[]>([]);
 
   // 세션에 저장된 역할을 즉시 참조해, /auth/me 응답을 기다리는 동안 네비게이션이 깜빡이지 않게 한다.
   const sessionRole = (getStoredAuthSession()?.user?.role ?? user?.role ?? '').toLowerCase();

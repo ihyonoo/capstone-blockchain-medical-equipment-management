@@ -2,7 +2,6 @@ import datetime as dt
 import os
 import time
 import urllib.parse
-from typing import Dict, List
 
 import psycopg
 from fastapi import FastAPI, Header, HTTPException, Query
@@ -10,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 try:
+    from backend import google_oauth
+    from backend.auth_tokens import consume_action_token, create_action_token
     from backend.auth_utils import (
         build_auth_token,
         build_user_payload,
@@ -21,14 +22,12 @@ try:
         require_authenticated_user,
         validate_password,
     )
-    from backend.auth_tokens import consume_action_token, create_action_token
-    from backend import google_oauth
+    from backend.demo_history import build_blockchain_demo_history
     from backend.email_utils import (
         send_find_id_email,
         send_reset_email,
         send_verification_email,
     )
-    from backend.demo_history import build_blockchain_demo_history
     from backend.rtls_utils import (
         cache_location_updates,
         insert_location_history,
@@ -87,6 +86,8 @@ try:
 except ModuleNotFoundError as exc:
     if not exc.name or not exc.name.startswith("backend"):
         raise
+    import google_oauth
+    from auth_tokens import consume_action_token, create_action_token
     from auth_utils import (
         build_auth_token,
         build_user_payload,
@@ -98,14 +99,12 @@ except ModuleNotFoundError as exc:
         require_authenticated_user,
         validate_password,
     )
-    from auth_tokens import consume_action_token, create_action_token
-    import google_oauth
+    from demo_history import build_blockchain_demo_history
     from email_utils import (
         send_find_id_email,
         send_reset_email,
         send_verification_email,
     )
-    from demo_history import build_blockchain_demo_history
     from rtls_utils import (
         cache_location_updates,
         insert_location_history,
@@ -165,7 +164,7 @@ except ModuleNotFoundError as exc:
 app = FastAPI()
 
 
-def get_allowed_origins() -> List[str]:
+def get_allowed_origins() -> list[str]:
     raw = os.getenv("CORS_ALLOW_ORIGINS")
     if raw:
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
@@ -195,8 +194,8 @@ app.add_middleware(
 )
 
 # 서버 메모리에서 태그별 관측 상태를 잠시 유지한다.
-tag_obs: Dict[str, Dict[str, dict]] = {}
-tag_state: Dict[str, dict] = {}
+tag_obs: dict[str, dict[str, dict]] = {}
+tag_state: dict[str, dict] = {}
 
 
 def fetch_tag_by_nfc_token(cur, token: str):
@@ -854,7 +853,7 @@ def ingest(payload: Payload):
     reader_id = payload.reader_id
     reader_locations = load_reader_location_map()
     upsert_readers_from_ingest({reader_id})
-    db_updates: Dict[str, tuple[str, int | None, int]] = {}
+    db_updates: dict[str, tuple[str, int | None, int]] = {}
 
     last_tag_id = None
     last_best = None
@@ -1143,7 +1142,7 @@ def get_nfc_equipment(token: str, authorization: str | None = Header(default=Non
 def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Header(default=None)):
     actor = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
     token = normalize_nfc_token(body.nfc_token)
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
 
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
@@ -1169,10 +1168,8 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
             location_name = location_snapshot["location"] if location_snapshot else None
 
             if asset_status == "checked_out":
-                raise HTTPException(
-                    409,
-                    f"이미 사용 중인 장비입니다. 현재 사용자: {current_holder_name or current_holder_user_id or '알 수 없음'}",
-                )
+                current_holder = current_holder_name or current_holder_user_id or "알 수 없음"
+                raise HTTPException(409, f"이미 사용 중인 장비입니다. 현재 사용자: {current_holder}")
             if asset_status != "available":
                 raise HTTPException(409, f"현재 상태({asset_status})에서는 사용 시작할 수 없습니다.")
 
@@ -1264,7 +1261,7 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
 def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header(default=None)):
     actor = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
     token = normalize_nfc_token(body.nfc_token)
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
 
     blockchain_result = None
 

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
 import { Badge } from '../components/ui/badge';
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
 import { API_BASE_URL } from '../lib/runtime';
-import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession } from '../lib/auth';
+import { useAuthGuard, useLogout } from '../lib/useAuthGuard';
 
 type LiveReaderItem = {
   reader_id: string;
@@ -37,35 +37,23 @@ function shortTag(tagId: string) {
 }
 
 export default function DeviceStatus() {
-  const navigate = useNavigate();
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const isAuthorized = useAuthGuard(() => {
+    try {
+      const session = getStoredAuthSession();
+      if (!session?.token || !session.user) return '/';
+      if (session.user.role !== 'admin') return '/equipment';
+      return null;
+    } catch {
+      return '/';
+    }
+  });
   const [readers, setReaders] = useState<LiveReaderItem[]>([]);
   const [tags, setTags] = useState<LiveTagItem[]>([]);
   const [readersOnline, setReadersOnline] = useState(0);
   const [tagsOnline, setTagsOnline] = useState(0);
   const [error, setError] = useState('');
 
-  const logout = () => {
-    clearStoredAuthSession();
-    navigate('/', { replace: true });
-  };
-
-  useEffect(() => {
-    try {
-      const session = getStoredAuthSession();
-      if (!session?.token || !session.user) {
-        navigate('/', { replace: true });
-        return;
-      }
-      if (session.user.role !== 'admin') {
-        navigate('/equipment', { replace: true });
-        return;
-      }
-      setIsAuthorized(true);
-    } catch {
-      navigate('/', { replace: true });
-    }
-  }, [navigate]);
+  const logout = useLogout();
 
   useEffect(() => {
     if (!isAuthorized) return;
@@ -110,7 +98,7 @@ export default function DeviceStatus() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isAuthorized]);
+  }, [isAuthorized, logout]);
 
   const readersTotal = readers.length;
   const tagsTotal = tags.length;

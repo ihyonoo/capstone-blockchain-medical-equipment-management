@@ -71,7 +71,7 @@ async def sender_loop():
 
         observations = []   # 서버로 보낼 태그별 요약값 리스트
         for tag_id, samples in list(tag_samples.items()):   # 현재 버퍼의 모든 태그에 대해 처리
-           
+
             samples = [(t, r) for (t, r) in samples if t >= cutoff]    # 윈도우 밖 데이터 제거
             tag_samples[tag_id] = samples                               # 버퍼 갱신
 
@@ -93,7 +93,7 @@ async def sender_loop():
 
         # HTTP 전송
         if observations:    # 전송할 데이터가 있다면
-            
+
             # 서버로 보낼 전체 페이로드 구성
             payload = {
                 "reader_id": READER_ID,         # 리더기 ID

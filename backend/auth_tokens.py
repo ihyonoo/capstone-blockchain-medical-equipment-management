@@ -35,7 +35,7 @@ def create_action_token(
     """랜덤 원문 토큰을 생성해 해시를 저장하고, 원문을 반환한다."""
     raw_token = secrets.token_urlsafe(32)
     token_hash = _hash_token(raw_token)
-    expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=ttl_sec)
+    expires_at = dt.datetime.now(dt.UTC) + dt.timedelta(seconds=ttl_sec)
 
     sql = """
     INSERT INTO auth_action_tokens (user_id, purpose, token_hash, payload, expires_at)

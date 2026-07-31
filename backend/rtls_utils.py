@@ -1,6 +1,6 @@
+import contextlib
 import json
 import time
-from typing import Dict
 
 import psycopg
 from fastapi import HTTPException
@@ -8,11 +8,11 @@ from fastapi import HTTPException
 try:
     from backend.settings import (
         DATABASE_URL,
+        READER_LOCATION,
         REDIS_CONNECT_TIMEOUT_SEC,
         REDIS_LOCATION_KEY_PREFIX,
         REDIS_RETRY_COOLDOWN_SEC,
         REDIS_URL,
-        READER_LOCATION,
         STALE_SEC,
     )
 except ModuleNotFoundError as exc:
@@ -20,11 +20,11 @@ except ModuleNotFoundError as exc:
         raise
     from settings import (
         DATABASE_URL,
+        READER_LOCATION,
         REDIS_CONNECT_TIMEOUT_SEC,
         REDIS_LOCATION_KEY_PREFIX,
         REDIS_RETRY_COOLDOWN_SEC,
         REDIS_URL,
-        READER_LOCATION,
         STALE_SEC,
     )
 
@@ -77,13 +77,11 @@ def mark_tags_seen(tag_ids: set[str], seen_epoch: int) -> None:
     client = get_redis_client()
     if client is None:
         return
-    try:
+    with contextlib.suppress(Exception):
         pipe = client.pipeline()
         for tag_id in tag_ids:
             pipe.set(get_tag_seen_cache_key(tag_id), seen_epoch)
         pipe.execute()
-    except Exception:
-        pass
 
 
 def load_tags_last_seen(tag_ids: set[str]) -> dict[str, int]:
@@ -101,7 +99,7 @@ def load_tags_last_seen(tag_ids: set[str]) -> dict[str, int]:
     except Exception:
         return {}
     results: dict[str, int] = {}
-    for tag_id, raw in zip(keys.keys(), raw_values):
+    for tag_id, raw in zip(keys.keys(), raw_values, strict=True):
         if raw is None:
             continue
         try:
@@ -150,7 +148,7 @@ def load_cached_tag_locations(tag_ids: set[str]) -> dict[str, dict]:
         return {}
 
     results: dict[str, dict] = {}
-    for tag_id, raw in zip(keys.keys(), raw_values):
+    for tag_id, raw in zip(keys.keys(), raw_values, strict=True):
         if not raw:
             continue
         try:
@@ -273,14 +271,12 @@ def cache_tag_location_snapshot(
         "location": locations.get(reader_id, READER_LOCATION.get(reader_id, reader_id)),
         "changed_at": changed_at_epoch,
     }
-    try:
+    with contextlib.suppress(Exception):
         client.set(get_tag_location_cache_key(tag_id), json.dumps(payload, ensure_ascii=False))
-    except Exception:
-        pass
 
 
 def cache_location_updates(
-    updates: Dict[str, tuple[str, int | None, int]],
+    updates: dict[str, tuple[str, int | None, int]],
     reader_locations: dict[str, str] | None = None,
 ) -> None:
     for tag_id, (reader_id, _last_rssi, changed_at_epoch) in updates.items():
@@ -305,15 +301,13 @@ def upsert_readers_from_ingest(reader_ids: set[str]) -> None:
       is_active = TRUE,
       last_seen_at = now()
     """
-    try:
+    with contextlib.suppress(Exception):
         rows = [(reader_id, READER_LOCATION.get(reader_id, reader_id)) for reader_id in reader_ids]
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
             cur.executemany(sql, rows)
-    except Exception:
-        pass
 
 
-def insert_location_history(updates: Dict[str, tuple[str, int | None, int]]) -> None:
+def insert_location_history(updates: dict[str, tuple[str, int | None, int]]) -> None:
     if not updates:
         return
 
@@ -332,18 +326,15 @@ def insert_location_history(updates: Dict[str, tuple[str, int | None, int]]) -> 
     INSERT INTO tag_state_history (tag_id, reader_id, rssi, decided_at)
     VALUES (%s, %s, %s, to_timestamp(%s))
     """
-    try:
-        rows = [
-            (tag_id, reader_id, last_rssi, changed_at_epoch)
-            for tag_id, (reader_id, last_rssi, changed_at_epoch) in updates.items()
-            if tag_id in known_tag_ids
-        ]
-        if not rows:
-            return
-        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
-            cur.executemany(sql, rows)
-    except Exception:
-        pass
+    rows = [
+        (tag_id, reader_id, last_rssi, changed_at_epoch)
+        for tag_id, (reader_id, last_rssi, changed_at_epoch) in updates.items()
+        if tag_id in known_tag_ids
+    ]
+    if not rows:
+        return
+    with contextlib.suppress(Exception), psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+        cur.executemany(sql, rows)
 
 
 def load_reader_location_map() -> dict[str, str]:
@@ -359,7 +350,7 @@ def load_reader_location_map() -> dict[str, str]:
     except Exception:
         return dict(READER_LOCATION)
 
-    mapping = {reader_id: location for (reader_id, location) in rows}
+    mapping = dict(rows)
     if not mapping:
         return dict(READER_LOCATION)
     return mapping

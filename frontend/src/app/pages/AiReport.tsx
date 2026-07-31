@@ -1,30 +1,20 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
 import { Sparkles } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
 import { getStoredAuthSession } from '../lib/auth';
+import { useAuthGuard } from '../lib/useAuthGuard';
 
 export default function AiReport() {
-  const navigate = useNavigate();
-  const [isAuthorized, setIsAuthorized] = useState(false);
-
-  useEffect(() => {
+  const isAuthorized = useAuthGuard(() => {
     try {
       const session = getStoredAuthSession();
-      if (!session?.token || !session.user) {
-        navigate('/', { replace: true });
-        return;
-      }
-      if (session.user.role !== 'admin') {
-        navigate('/equipment', { replace: true });
-        return;
-      }
-      setIsAuthorized(true);
+      if (!session?.token || !session.user) return '/';
+      if (session.user.role !== 'admin') return '/equipment';
+      return null;
     } catch {
-      navigate('/', { replace: true });
+      return '/';
     }
-  }, [navigate]);
+  });
 
   if (!isAuthorized) return null;
 

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useCallback, useMemo, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
-import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession } from '../lib/auth';
+import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
 import { API_BASE_URL, PUBLIC_APP_URL } from '../lib/runtime';
 import { RefreshCw, Save, Search, Trash2 } from 'lucide-react';
 
@@ -48,8 +48,12 @@ function formatAgo(updatedAt: number | null) {
 }
 
 export default function NfcMapping() {
-  const navigate = useNavigate();
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const isAuthorized = useAuthGuard(() => {
+    const session = getStoredAuthSession();
+    if (!session?.token || !session.user) return '/';
+    if (session.user.role !== 'admin') return '/equipment';
+    return null;
+  });
   const [items, setItems] = useState<MappingItem[]>([]);
   const [draftTokens, setDraftTokens] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,26 +64,9 @@ export default function NfcMapping() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const logout = () => {
-    clearStoredAuthSession();
-    navigate('/', { replace: true });
-  };
+  const logout = useLogout();
 
-  useEffect(() => {
-    const session = getStoredAuthSession();
-    if (!session?.token || !session.user) {
-      navigate('/', { replace: true });
-      return;
-    }
-    const user = session.user;
-    if (user.role !== 'admin') {
-      navigate('/equipment', { replace: true });
-      return;
-    }
-    setIsAuthorized(true);
-  }, [navigate]);
-
-  const fetchMappings = async () => {
+  const fetchMappings = useCallback(async () => {
     setIsRefreshing(true);
     setError('');
     try {
@@ -117,12 +104,9 @@ export default function NfcMapping() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [logout]);
 
-  useEffect(() => {
-    if (!isAuthorized) return;
-    fetchMappings();
-  }, [isAuthorized]);
+  useRunWhenReady(isAuthorized, fetchMappings);
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();

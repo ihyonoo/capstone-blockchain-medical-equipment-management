@@ -9,8 +9,11 @@ type Status = 'loading' | 'success' | 'error';
 export default function VerifyEmail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState<Status>('loading');
-  const [message, setMessage] = useState('이메일 인증을 확인하는 중입니다...');
+  const hasToken = Boolean(searchParams.get('token'));
+  const [status, setStatus] = useState<Status>(() => (hasToken ? 'loading' : 'error'));
+  const [message, setMessage] = useState(() =>
+    hasToken ? '이메일 인증을 확인하는 중입니다...' : '유효하지 않은 인증 링크입니다.',
+  );
   const ran = useRef(false);
 
   useEffect(() => {
@@ -18,11 +21,7 @@ export default function VerifyEmail() {
     ran.current = true;
 
     const token = searchParams.get('token') ?? '';
-    if (!token) {
-      setStatus('error');
-      setMessage('유효하지 않은 인증 링크입니다.');
-      return;
-    }
+    if (!token) return;
 
     (async () => {
       try {

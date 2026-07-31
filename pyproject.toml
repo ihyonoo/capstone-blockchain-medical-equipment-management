@@ -1,0 +1,19 @@
+[tool.ruff]
+target-version = "py312"  # 배포용 Docker 이미지 python:3.12-slim 기준
+line-length = 120  # 한글 주석·문자열이 길어서 기본값 88 대신 여유 있게 설정
+
+[tool.ruff.lint]
+# E/W: pycodestyle (공백·줄 길이 등 기본 스타일)
+# F: pyflakes (미사용 import, undefined name 등)
+# I: import 정렬 (isort)
+# UP: pyupgrade (구식 문법을 최신 파이썬 문법으로)
+# C4: 불필요한 컴프리헨션 정리
+# SIM: 더 간결한 코드 패턴 제안
+# B: flake8-bugbear (흔한 버그 패턴 탐지)
+select = ["E", "W", "F", "I", "UP", "C4", "SIM", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# B904: except 안에서 새 예외를 raise할 때 from 체이닝을 강제하는 규칙
+# backend/의 raise HTTPException(...) 관용구와만 충돌해서 노이즈가 많아 backend/에서만 제외
+# rtls/의 재시도·네트워크 예외 처리 코드에는 B904를 그대로 적용
+"backend/**" = ["B904"]
