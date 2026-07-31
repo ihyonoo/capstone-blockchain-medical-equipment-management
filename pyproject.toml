@@ -17,3 +17,12 @@ select = ["E", "W", "F", "I", "UP", "C4", "SIM", "B"]
 # backend/의 raise HTTPException(...) 관용구와만 충돌해서 노이즈가 많아 backend/에서만 제외
 # rtls/의 재시도·네트워크 예외 처리 코드에는 B904를 그대로 적용
 "backend/**" = ["B904"]
+
+[tool.pyrefly]
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
+# backend/를 실행 시 cwd로 쓰는 이중 import fallback(`from settings import ...`)도
+# 정적으로 해석되도록 추가 검색 경로로 등록한다.
+search-path = ["backend"]
