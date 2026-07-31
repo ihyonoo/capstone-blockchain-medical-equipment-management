@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Input } from '../components/ui/input';
-import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
@@ -102,19 +101,24 @@ export default function EquipmentSearch() {
   const [selectedType, setSelectedType] = useState('전체');
   const [selectedLocation, setSelectedLocation] = useState('전체');
   const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isAuthorized] = useState(() => {
+    try {
+      const session = getStoredAuthSession();
+      return Boolean(session?.token && session.user?.role === 'staff');
+    } catch {
+      return false;
+    }
+  });
 
   const [liveItems, setLiveItems] = useState<LiveLocationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState('');
-  const [lastSyncTs, setLastSyncTs] = useState<number | null>(null);
   const [readers, setReaders] = useState<LiveReaderItem[]>([]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     clearStoredAuthSession();
     navigate('/', { replace: true });
-  };
+  }, [navigate]);
 
   const equipment = useMemo<EquipmentViewItem[]>(() => {
     return liveItems.map((item) => ({
@@ -183,33 +187,28 @@ export default function EquipmentSearch() {
   }, [searchAndTypeFilteredEquipment, selectedLocation]);
 
   useEffect(() => {
+    if (isAuthorized) return;
     try {
       const session = getStoredAuthSession();
       if (!session?.token || !session.user) {
         navigate('/', { replace: true });
         return;
       }
-      const user = session.user;
-      if (user.role === 'admin') {
+      if (session.user.role === 'admin') {
         navigate('/verification', { replace: true });
-        return;
-      }
-      if (user.role !== 'staff') {
+      } else if (session.user.role !== 'staff') {
         navigate('/', { replace: true });
-        return;
       }
-      setIsAuthorized(true);
     } catch {
       navigate('/', { replace: true });
     }
-  }, [navigate]);
+  }, [isAuthorized, navigate]);
 
   useEffect(() => {
     if (!isAuthorized) return;
     let cancelled = false;
 
     const fetchLiveLocations = async () => {
-      setIsRefreshing(true);
       try {
         const session = getStoredAuthSession();
         if (!session?.token) {
@@ -233,22 +232,18 @@ export default function EquipmentSearch() {
         if (cancelled) return;
         const serverItems = Array.isArray(payload.items) ? (payload.items as LiveLocationItem[]) : [];
         const serverReaders = Array.isArray(payload.readers) ? (payload.readers as LiveReaderItem[]) : [];
-        const responseTs = payload.ts ?? Math.floor(Date.now() / 1000);
         setLiveItems(serverItems);
         setReaders(serverReaders);
-        setLastSyncTs(responseTs * 1000);
         setFetchError('');
       } catch (err) {
         if (cancelled) return;
         setLiveItems([]);
         setReaders([]);
-        setLastSyncTs(null);
         if (err instanceof Error) setFetchError(err.message);
         else setFetchError('실시간 위치 조회 중 오류가 발생했습니다.');
       } finally {
         if (!cancelled) {
           setIsLoading(false);
-          setIsRefreshing(false);
         }
       }
     };
@@ -260,11 +255,13 @@ export default function EquipmentSearch() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isAuthorized]);
+  }, [isAuthorized, logout]);
 
   useEffect(() => {
     if (!selectedEquipment) return;
     if (!equipment.some((item) => item.id === selectedEquipment)) {
+      // 실시간 폴링으로 태그가 목록에서 완전히 사라졌을 때 선택을 해제한다 (외부 데이터 변화에 대한 정당한 반응).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedEquipment(null);
     }
   }, [equipment, selectedEquipment]);

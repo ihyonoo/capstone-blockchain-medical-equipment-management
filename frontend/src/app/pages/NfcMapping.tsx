@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
@@ -49,7 +49,10 @@ function formatAgo(updatedAt: number | null) {
 
 export default function NfcMapping() {
   const navigate = useNavigate();
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isAuthorized] = useState(() => {
+    const session = getStoredAuthSession();
+    return Boolean(session?.token && session.user && session.user.role === 'admin');
+  });
   const [items, setItems] = useState<MappingItem[]>([]);
   const [draftTokens, setDraftTokens] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,26 +63,24 @@ export default function NfcMapping() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const logout = () => {
+  const logout = useCallback(() => {
     clearStoredAuthSession();
     navigate('/', { replace: true });
-  };
+  }, [navigate]);
 
   useEffect(() => {
+    if (isAuthorized) return;
     const session = getStoredAuthSession();
     if (!session?.token || !session.user) {
       navigate('/', { replace: true });
       return;
     }
-    const user = session.user;
-    if (user.role !== 'admin') {
+    if (session.user.role !== 'admin') {
       navigate('/equipment', { replace: true });
-      return;
     }
-    setIsAuthorized(true);
-  }, [navigate]);
+  }, [isAuthorized, navigate]);
 
-  const fetchMappings = async () => {
+  const fetchMappings = useCallback(async () => {
     setIsRefreshing(true);
     setError('');
     try {
@@ -117,12 +118,14 @@ export default function NfcMapping() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [logout]);
 
   useEffect(() => {
     if (!isAuthorized) return;
+    // 마운트 시 매핑 목록을 조회하는 표준 data-fetching 패턴 (fetchMappings 내부에서 isRefreshing을 동기 설정).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchMappings();
-  }, [isAuthorized]);
+  }, [isAuthorized, fetchMappings]);
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();

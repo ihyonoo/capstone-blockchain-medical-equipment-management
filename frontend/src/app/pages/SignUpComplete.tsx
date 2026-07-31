@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -43,10 +43,6 @@ export default function SignUpComplete() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const isAdminRole = role === 'admin';
-
-  useEffect(() => {
-    setDisplayName((prev) => prev || googleName);
-  }, [googleName]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

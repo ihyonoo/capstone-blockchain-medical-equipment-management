@@ -9,7 +9,10 @@ import { API_BASE_URL } from '../lib/runtime';
 // 이 코드를 실제 세션 토큰으로 교환한다(토큰이 URL 기록에 남지 않도록 fragment 사용).
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    return params.get('code') ? '' : '로그인 정보를 확인하지 못했습니다. 다시 시도해 주세요.';
+  });
   const ran = useRef(false);
 
   useEffect(() => {
@@ -18,10 +21,7 @@ export default function AuthCallback() {
 
     const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const code = params.get('code');
-    if (!code) {
-      setError('로그인 정보를 확인하지 못했습니다. 다시 시도해 주세요.');
-      return;
-    }
+    if (!code) return;
 
     (async () => {
       try {

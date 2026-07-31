@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import AppShell from '../components/layout/AppShell';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
 import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession, getStoredAuthUser, withRedirectQuery } from '../lib/auth';
 import { API_BASE_URL } from '../lib/runtime';
 import { LogOut } from 'lucide-react';
@@ -41,7 +40,6 @@ export default function NfcEquipment() {
   const location = useLocation();
   const params = useParams();
   const token = params.token ?? '';
-  const [isAuthorized, setIsAuthorized] = useState(false);
   const [item, setItem] = useState<NfcEquipmentItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,61 +48,62 @@ export default function NfcEquipment() {
 
   const currentUser = useMemo(() => getStoredAuthUser(), []);
   const currentAuthToken = useMemo(() => getStoredAuthSession()?.token ?? null, []);
+  const [isAuthorized] = useState(
+    () => Boolean(currentUser && currentAuthToken) && (currentUser?.role === 'admin' || currentUser?.role === 'staff'),
+  );
 
-  const logout = () => {
+  const logout = useCallback(() => {
     clearStoredAuthSession();
     navigate('/', { replace: true });
-  };
+  }, [navigate]);
 
-  const fetchItem = async (nfcToken: string) => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const authToken = getStoredAuthSession()?.token;
-      if (!authToken) {
-        logout();
-        return;
+  const fetchItem = useCallback(
+    async (nfcToken: string) => {
+      setIsLoading(true);
+      setError('');
+      try {
+        const authToken = getStoredAuthSession()?.token;
+        if (!authToken) {
+          logout();
+          return;
+        }
+        const response = await fetch(`${API_BASE_URL}/nfc/${encodeURIComponent(nfcToken)}`, {
+          method: 'GET',
+          cache: 'no-store',
+          headers: buildAuthHeaders(authToken),
+        });
+        const payload = await response.json().catch(() => null);
+        if (response.status === 401 || response.status === 403) {
+          logout();
+          return;
+        }
+        if (!response.ok || !payload?.ok) {
+          throw new Error(payload?.detail ?? 'NFC 장비 정보를 불러오지 못했습니다.');
+        }
+        setItem((payload.item as NfcEquipmentItem) ?? null);
+      } catch (err) {
+        setItem(null);
+        if (err instanceof Error) setError(err.message);
+        else setError('NFC 장비 조회 중 오류가 발생했습니다.');
+      } finally {
+        setIsLoading(false);
       }
-      const response = await fetch(`${API_BASE_URL}/nfc/${encodeURIComponent(nfcToken)}`, {
-        method: 'GET',
-        cache: 'no-store',
-        headers: buildAuthHeaders(authToken),
-      });
-      const payload = await response.json().catch(() => null);
-      if (response.status === 401 || response.status === 403) {
-        logout();
-        return;
-      }
-      if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.detail ?? 'NFC 장비 정보를 불러오지 못했습니다.');
-      }
-      setItem((payload.item as NfcEquipmentItem) ?? null);
-    } catch (err) {
-      setItem(null);
-      if (err instanceof Error) setError(err.message);
-      else setError('NFC 장비 조회 중 오류가 발생했습니다.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    [logout],
+  );
 
   useEffect(() => {
     // NFC URL 직진입 시 로그인 페이지로 보내더라도, 현재 진입 경로는 redirect로 보존한다.
-    if (!currentUser || !currentAuthToken) {
-      navigate(withRedirectQuery('/', `${location.pathname}${location.search}`), { replace: true });
-      return;
-    }
-    if (currentUser.role !== 'admin' && currentUser.role !== 'staff') {
-      navigate(withRedirectQuery('/', `${location.pathname}${location.search}`), { replace: true });
-      return;
-    }
-    setIsAuthorized(true);
-  }, [currentAuthToken, currentUser, location.pathname, location.search, navigate]);
+    if (isAuthorized) return;
+    navigate(withRedirectQuery('/', `${location.pathname}${location.search}`), { replace: true });
+  }, [isAuthorized, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (!isAuthorized || !token) return;
+    // 마운트 시 NFC 매핑 장비 정보를 조회하는 표준 data-fetching 패턴 (fetchItem 내부에서 isLoading을 동기 설정).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchItem(token);
-  }, [isAuthorized, token]);
+  }, [isAuthorized, token, fetchItem]);
 
   const handleUsageAction = async (action: 'checkout' | 'return') => {
     if (!currentUser || !token) return;

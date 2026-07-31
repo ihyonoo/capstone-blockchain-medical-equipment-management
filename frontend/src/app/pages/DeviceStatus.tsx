@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Badge } from '../components/ui/badge';
 import AppShell from '../components/layout/AppShell';
@@ -38,19 +38,27 @@ function shortTag(tagId: string) {
 
 export default function DeviceStatus() {
   const navigate = useNavigate();
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isAuthorized] = useState(() => {
+    try {
+      const session = getStoredAuthSession();
+      return Boolean(session?.token && session.user && session.user.role === 'admin');
+    } catch {
+      return false;
+    }
+  });
   const [readers, setReaders] = useState<LiveReaderItem[]>([]);
   const [tags, setTags] = useState<LiveTagItem[]>([]);
   const [readersOnline, setReadersOnline] = useState(0);
   const [tagsOnline, setTagsOnline] = useState(0);
   const [error, setError] = useState('');
 
-  const logout = () => {
+  const logout = useCallback(() => {
     clearStoredAuthSession();
     navigate('/', { replace: true });
-  };
+  }, [navigate]);
 
   useEffect(() => {
+    if (isAuthorized) return;
     try {
       const session = getStoredAuthSession();
       if (!session?.token || !session.user) {
@@ -59,13 +67,11 @@ export default function DeviceStatus() {
       }
       if (session.user.role !== 'admin') {
         navigate('/equipment', { replace: true });
-        return;
       }
-      setIsAuthorized(true);
     } catch {
       navigate('/', { replace: true });
     }
-  }, [navigate]);
+  }, [isAuthorized, navigate]);
 
   useEffect(() => {
     if (!isAuthorized) return;
@@ -110,7 +116,7 @@ export default function DeviceStatus() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isAuthorized]);
+  }, [isAuthorized, logout]);
 
   const readersTotal = readers.length;
   const tagsTotal = tags.length;

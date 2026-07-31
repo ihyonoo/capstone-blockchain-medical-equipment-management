@@ -276,7 +276,14 @@ function RecordSnapshot({
 
 export default function IntegrityVerification() {
   const navigate = useNavigate();
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isAuthorized] = useState(() => {
+    try {
+      const session = getStoredAuthSession();
+      return Boolean(session?.token && session.user && session.user.role === 'admin');
+    } catch {
+      return false;
+    }
+  });
   const [filters, setFilters] = useState<HistoryFilters>(DEFAULT_FILTERS);
   const [allItems, setAllItems] = useState<UsageHistoryItem[]>([]);
   const [items, setItems] = useState<UsageHistoryItem[]>([]);
@@ -285,10 +292,10 @@ export default function IntegrityVerification() {
   const [expandedUsageId, setExpandedUsageId] = useState<number | null>(null);
   const [locationOptions, setLocationOptions] = useState<Array<{ value: string; label: string }>>([]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     clearStoredAuthSession();
     navigate('/', { replace: true });
-  };
+  }, [navigate]);
 
   const applyClientFilters = useCallback((sourceItems: UsageHistoryItem[], targetFilters: HistoryFilters) => {
     // 텍스트/기간 조건은 서버 조회 시 반영하고, 블록/검증 상태만 화면에서 즉시 재필터링한다.
@@ -322,6 +329,7 @@ export default function IntegrityVerification() {
   };
 
   useEffect(() => {
+    if (isAuthorized) return;
     try {
       const session = getStoredAuthSession();
       if (!session?.token || !session.user) {
@@ -330,13 +338,11 @@ export default function IntegrityVerification() {
       }
       if (session.user.role !== 'admin') {
         navigate('/equipment', { replace: true });
-        return;
       }
-      setIsAuthorized(true);
     } catch {
       navigate('/', { replace: true });
     }
-  }, [navigate]);
+  }, [isAuthorized, navigate]);
 
   const fetchHistory = useCallback(
     async (targetFilters: HistoryFilters) => {
@@ -387,11 +393,13 @@ export default function IntegrityVerification() {
         setIsLoading(false);
       }
     },
-    [applyClientFilters, navigate],
+    [applyClientFilters, logout],
   );
 
   useEffect(() => {
     if (!isAuthorized) return;
+    // 마운트 시 이력 조회를 시작하는 표준 data-fetching 패턴 (fetchHistory 내부에서 isLoading을 동기 설정).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchHistory(DEFAULT_FILTERS);
   }, [isAuthorized, fetchHistory]);
 

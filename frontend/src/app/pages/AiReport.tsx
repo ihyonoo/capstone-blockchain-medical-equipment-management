@@ -7,9 +7,17 @@ import { getStoredAuthSession } from '../lib/auth';
 
 export default function AiReport() {
   const navigate = useNavigate();
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isAuthorized] = useState(() => {
+    try {
+      const session = getStoredAuthSession();
+      return Boolean(session?.token && session.user && session.user.role === 'admin');
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
+    if (isAuthorized) return;
     try {
       const session = getStoredAuthSession();
       if (!session?.token || !session.user) {
@@ -18,13 +26,11 @@ export default function AiReport() {
       }
       if (session.user.role !== 'admin') {
         navigate('/equipment', { replace: true });
-        return;
       }
-      setIsAuthorized(true);
     } catch {
       navigate('/', { replace: true });
     }
-  }, [navigate]);
+  }, [isAuthorized, navigate]);
 
   if (!isAuthorized) return null;
 
