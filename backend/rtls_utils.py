@@ -77,13 +77,11 @@ def mark_tags_seen(tag_ids: set[str], seen_epoch: int) -> None:
     client = get_redis_client()
     if client is None:
         return
-    try:
+    with contextlib.suppress(Exception):
         pipe = client.pipeline()
         for tag_id in tag_ids:
             pipe.set(get_tag_seen_cache_key(tag_id), seen_epoch)
         pipe.execute()
-    except Exception:
-        pass
 
 
 def load_tags_last_seen(tag_ids: set[str]) -> dict[str, int]:
@@ -303,12 +301,10 @@ def upsert_readers_from_ingest(reader_ids: set[str]) -> None:
       is_active = TRUE,
       last_seen_at = now()
     """
-    try:
+    with contextlib.suppress(Exception):
         rows = [(reader_id, READER_LOCATION.get(reader_id, reader_id)) for reader_id in reader_ids]
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
             cur.executemany(sql, rows)
-    except Exception:
-        pass
 
 
 def insert_location_history(updates: dict[str, tuple[str, int | None, int]]) -> None:
@@ -330,18 +326,15 @@ def insert_location_history(updates: dict[str, tuple[str, int | None, int]]) -> 
     INSERT INTO tag_state_history (tag_id, reader_id, rssi, decided_at)
     VALUES (%s, %s, %s, to_timestamp(%s))
     """
-    try:
-        rows = [
-            (tag_id, reader_id, last_rssi, changed_at_epoch)
-            for tag_id, (reader_id, last_rssi, changed_at_epoch) in updates.items()
-            if tag_id in known_tag_ids
-        ]
-        if not rows:
-            return
-        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
-            cur.executemany(sql, rows)
-    except Exception:
-        pass
+    rows = [
+        (tag_id, reader_id, last_rssi, changed_at_epoch)
+        for tag_id, (reader_id, last_rssi, changed_at_epoch) in updates.items()
+        if tag_id in known_tag_ids
+    ]
+    if not rows:
+        return
+    with contextlib.suppress(Exception), psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+        cur.executemany(sql, rows)
 
 
 def load_reader_location_map() -> dict[str, str]:

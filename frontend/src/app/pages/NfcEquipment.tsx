@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import AppShell from '../components/layout/AppShell';
 import { Button } from '../components/ui/button';
-import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession, getStoredAuthUser, withRedirectQuery } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession, getStoredAuthUser, withRedirectQuery } from '../lib/auth';
+import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
 import { API_BASE_URL } from '../lib/runtime';
 import { LogOut } from 'lucide-react';
 
@@ -48,14 +49,15 @@ export default function NfcEquipment() {
 
   const currentUser = useMemo(() => getStoredAuthUser(), []);
   const currentAuthToken = useMemo(() => getStoredAuthSession()?.token ?? null, []);
-  const [isAuthorized] = useState(
-    () => Boolean(currentUser && currentAuthToken) && (currentUser?.role === 'admin' || currentUser?.role === 'staff'),
-  );
+  const isAuthorized = useAuthGuard(() => {
+    // NFC URL 직진입 시 로그인 페이지로 보내더라도, 현재 진입 경로는 redirect로 보존한다.
+    const loginRedirect = withRedirectQuery('/', `${location.pathname}${location.search}`);
+    if (!currentUser || !currentAuthToken) return loginRedirect;
+    if (currentUser.role !== 'admin' && currentUser.role !== 'staff') return loginRedirect;
+    return null;
+  });
 
-  const logout = useCallback(() => {
-    clearStoredAuthSession();
-    navigate('/', { replace: true });
-  }, [navigate]);
+  const logout = useLogout();
 
   const fetchItem = useCallback(
     async (nfcToken: string) => {
@@ -92,18 +94,10 @@ export default function NfcEquipment() {
     [logout],
   );
 
-  useEffect(() => {
-    // NFC URL 직진입 시 로그인 페이지로 보내더라도, 현재 진입 경로는 redirect로 보존한다.
-    if (isAuthorized) return;
-    navigate(withRedirectQuery('/', `${location.pathname}${location.search}`), { replace: true });
-  }, [isAuthorized, location.pathname, location.search, navigate]);
-
-  useEffect(() => {
-    if (!isAuthorized || !token) return;
-    // 마운트 시 NFC 매핑 장비 정보를 조회하는 표준 data-fetching 패턴 (fetchItem 내부에서 isLoading을 동기 설정).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  const runFetchItem = useCallback(() => {
     void fetchItem(token);
-  }, [isAuthorized, token, fetchItem]);
+  }, [fetchItem, token]);
+  useRunWhenReady(isAuthorized && Boolean(token), runFetchItem);
 
   const handleUsageAction = async (action: 'checkout' | 'return') => {
     if (!currentUser || !token) return;

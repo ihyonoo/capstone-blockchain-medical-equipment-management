@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
 import StaffNav from '../components/layout/StaffNav';
 import { API_BASE_URL } from '../lib/runtime';
-import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession } from '../lib/auth';
+import { useAuthGuard, useLogout } from '../lib/useAuthGuard';
 
 type LiveLocationItem = {
   tag_id: string;
@@ -96,17 +96,19 @@ function getShortTagId(tagId: string) {
 const UNLOCATED_LABEL = '감지 안 됨';
 
 export default function EquipmentSearch() {
-  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('전체');
   const [selectedLocation, setSelectedLocation] = useState('전체');
   const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
-  const [isAuthorized] = useState(() => {
+  const isAuthorized = useAuthGuard(() => {
     try {
       const session = getStoredAuthSession();
-      return Boolean(session?.token && session.user?.role === 'staff');
+      if (!session?.token || !session.user) return '/';
+      if (session.user.role === 'admin') return '/verification';
+      if (session.user.role !== 'staff') return '/';
+      return null;
     } catch {
-      return false;
+      return '/';
     }
   });
 
@@ -115,10 +117,7 @@ export default function EquipmentSearch() {
   const [fetchError, setFetchError] = useState('');
   const [readers, setReaders] = useState<LiveReaderItem[]>([]);
 
-  const logout = useCallback(() => {
-    clearStoredAuthSession();
-    navigate('/', { replace: true });
-  }, [navigate]);
+  const logout = useLogout();
 
   const equipment = useMemo<EquipmentViewItem[]>(() => {
     return liveItems.map((item) => ({
@@ -185,24 +184,6 @@ export default function EquipmentSearch() {
       (item) => selectedLocation === '전체' || item.location === selectedLocation,
     );
   }, [searchAndTypeFilteredEquipment, selectedLocation]);
-
-  useEffect(() => {
-    if (isAuthorized) return;
-    try {
-      const session = getStoredAuthSession();
-      if (!session?.token || !session.user) {
-        navigate('/', { replace: true });
-        return;
-      }
-      if (session.user.role === 'admin') {
-        navigate('/verification', { replace: true });
-      } else if (session.user.role !== 'staff') {
-        navigate('/', { replace: true });
-      }
-    } catch {
-      navigate('/', { replace: true });
-    }
-  }, [isAuthorized, navigate]);
 
   useEffect(() => {
     if (!isAuthorized) return;

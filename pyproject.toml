@@ -11,6 +11,9 @@ line-length = 120  # 한글 주석·문자열이 길어서 기본값 88 대신 �
 # SIM: 더 간결한 코드 패턴 제안
 # B: flake8-bugbear (흔한 버그 패턴 탐지)
 select = ["E", "W", "F", "I", "UP", "C4", "SIM", "B"]
+
+[tool.ruff.lint.per-file-ignores]
 # B904: except 안에서 새 예외를 raise할 때 from 체이닝을 강제하는 규칙
-# FastAPI의 raise HTTPException(...) 관용구와 충돌해서 노이즈가 많아 제외
-ignore = ["B904"]
+# backend/의 raise HTTPException(...) 관용구와만 충돌해서 노이즈가 많아 backend/에서만 제외
+# rtls/의 재시도·네트워크 예외 처리 코드에는 B904를 그대로 적용
+"backend/**" = ["B904"]

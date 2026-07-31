@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useCallback, useMemo, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
-import { buildAuthHeaders, clearStoredAuthSession, getStoredAuthSession } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession } from '../lib/auth';
+import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
 import { API_BASE_URL, PUBLIC_APP_URL } from '../lib/runtime';
 import { RefreshCw, Save, Search, Trash2 } from 'lucide-react';
 
@@ -48,10 +48,11 @@ function formatAgo(updatedAt: number | null) {
 }
 
 export default function NfcMapping() {
-  const navigate = useNavigate();
-  const [isAuthorized] = useState(() => {
+  const isAuthorized = useAuthGuard(() => {
     const session = getStoredAuthSession();
-    return Boolean(session?.token && session.user && session.user.role === 'admin');
+    if (!session?.token || !session.user) return '/';
+    if (session.user.role !== 'admin') return '/equipment';
+    return null;
   });
   const [items, setItems] = useState<MappingItem[]>([]);
   const [draftTokens, setDraftTokens] = useState<Record<string, string>>({});
@@ -63,22 +64,7 @@ export default function NfcMapping() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const logout = useCallback(() => {
-    clearStoredAuthSession();
-    navigate('/', { replace: true });
-  }, [navigate]);
-
-  useEffect(() => {
-    if (isAuthorized) return;
-    const session = getStoredAuthSession();
-    if (!session?.token || !session.user) {
-      navigate('/', { replace: true });
-      return;
-    }
-    if (session.user.role !== 'admin') {
-      navigate('/equipment', { replace: true });
-    }
-  }, [isAuthorized, navigate]);
+  const logout = useLogout();
 
   const fetchMappings = useCallback(async () => {
     setIsRefreshing(true);
@@ -120,12 +106,7 @@ export default function NfcMapping() {
     }
   }, [logout]);
 
-  useEffect(() => {
-    if (!isAuthorized) return;
-    // 마운트 시 매핑 목록을 조회하는 표준 data-fetching 패턴 (fetchMappings 내부에서 isRefreshing을 동기 설정).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchMappings();
-  }, [isAuthorized, fetchMappings]);
+  useRunWhenReady(isAuthorized, fetchMappings);
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
