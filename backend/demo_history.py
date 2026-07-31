@@ -151,7 +151,7 @@ def build_demo_recalculated_merkle_root(recorded_merkle_root: str | None, should
     if not should_fail:
         return recorded_merkle_root
     digest = hashlib.sha256(
-        f"{recorded_merkle_root}:tampered-merkle-root".encode("utf-8")
+        f"{recorded_merkle_root}:tampered-merkle-root".encode()
     ).hexdigest()
     return f"0x{digest}"
 
@@ -225,6 +225,11 @@ def build_blockchain_demo_history() -> dict:
                 and recalculated_merkle_root is not None
                 and transactions_root == recalculated_merkle_root
             )
+            verification_method = (
+                "블록 헤더의 머클 루트(transactionsRoot)와 트랜잭션 인덱스 포함 정보 일치"
+                if is_verified_demo_record
+                else "블록 헤더의 머클 루트(transactionsRoot)와 트랜잭션 인덱스 포함 정보 불일치"
+            )
 
             items.append(
                 {
@@ -246,9 +251,7 @@ def build_blockchain_demo_history() -> dict:
                     "blockchain": {
                         "verification_status": "verified" if is_verified_demo_record else "failed",
                         "verification_label": "무결성 검증 성공" if is_verified_demo_record else "무결성 검증 실패",
-                        "verification_method": "블록 헤더의 머클 루트(transactionsRoot)와 트랜잭션 인덱스 포함 정보 불일치"
-                        if not is_verified_demo_record
-                        else "블록 헤더의 머클 루트(transactionsRoot)와 트랜잭션 인덱스 포함 정보 일치",
+                        "verification_method": verification_method,
                         "block_batch_index": block_batch_index,
                         "block_number": block_number,
                         "block_hash": block_hash,
