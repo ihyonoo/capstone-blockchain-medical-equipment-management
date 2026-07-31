@@ -24,7 +24,8 @@ jobs:
           DEFAULT_BRANCH: main
           VALIDATE_ALL_CODEBASE: false
 
-          # 코드와 직결된 파일 검사
+          # 코드와 직결된 파일만 검사 (하나라도 true로 지정하면 나머지는 전부 자동 비활성화됨).
+          # Super-Linter는 포함 목록(true)과 제외 목록(false)을 함께 쓰는 걸 허용하지 않는다.
           VALIDATE_JAVASCRIPT_ES: true
           VALIDATE_TYPESCRIPT_ES: true
           VALIDATE_PYTHON_RUFF: true
@@ -35,11 +36,3 @@ jobs:
           # 로컬 설정 재사용
           JAVASCRIPT_ES_CONFIG_FILE: eslint.config.mjs
           TYPESCRIPT_ES_CONFIG_FILE: eslint.config.mjs
-
-          # 문서·기타는 이번 범위에서 제외
-          VALIDATE_MARKDOWN: false
-          VALIDATE_BASH: false
-          VALIDATE_JAVASCRIPT_STANDARD: false
-          VALIDATE_TYPESCRIPT_STANDARD: false
-          VALIDATE_JAVASCRIPT_PRETTIER: false
-          VALIDATE_TYPESCRIPT_PRETTIER: false
