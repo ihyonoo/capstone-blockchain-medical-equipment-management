@@ -33,6 +33,8 @@ jobs:
           VALIDATE_JSON: true
           VALIDATE_DOCKERFILE_HADOLINT: true
 
-          # 로컬 설정 재사용
+          # 로컬 설정 재사용. Super-Linter는 *_CONFIG_FILE을 기본적으로 .github/linters/
+          # 기준 상대경로로 찾으므로, 저장소 루트에 있는 설정 파일을 쓰도록 경로를 맞춘다.
+          LINTER_RULES_PATH: .
           JAVASCRIPT_ES_CONFIG_FILE: eslint.config.mjs
           TYPESCRIPT_ES_CONFIG_FILE: eslint.config.mjs
