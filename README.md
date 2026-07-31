@@ -24,6 +24,7 @@
 - [디렉토리 구조](#디렉토리-구조)
 - [Docker 구성](#docker-구성)
 - [빠른 시작](#빠른-시작)
+- [코드 품질](#코드-품질)
 - [핵심 동작 원리](#핵심-동작-원리)
 - [NFC 태깅과 사용 이력](#nfc-태깅과-사용-이력)
 - [블록체인 무결성 검증](#블록체인-무결성-검증)
@@ -199,6 +200,15 @@ pip install -r requirements.txt
 python rtls_tag/ibeacon_broadcast.py   # Tag: iBeacon UUID Broadcast
 python rtls_reader/send_to_server.py   # Reader: RSSI 스캔 후 /ingest 로 POST
 ```
+
+---
+
+## 코드 품질
+
+- **프론트엔드(JS/TS)**: ESLint(`eslint.config.mjs`) + Prettier(`.prettierrc`). `npm run lint`으로 직접 실행 가능하다.
+- **백엔드/RTLS(Python)**: Ruff(`pyproject.toml`)로 린트·포맷을 겸한다. `pip install -r requirements-dev.txt`로 버전을 맞춘다.
+- **커밋 시 자동 검사**: Husky + lint-staged가 `git commit`마다 스테이징된 파일만 자동으로 검사·수정한다(`.husky/pre-commit`).
+- **PR 검사**: `main`으로의 PR에서 GitHub Super-Linter가 변경된 파일을 한 번 더 검증한다(`.github/workflows/super-linter.yml`).
 
 ---
 
