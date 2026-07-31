@@ -1,0 +1,40 @@
+name: Super-Linter
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Super-Linter
+        uses: super-linter/super-linter@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: main
+          VALIDATE_ALL_CODEBASE: false
+
+          # 코드와 직결된 파일만 검사 (하나라도 true로 지정하면 나머지는 전부 자동 비활성화됨).
+          # Super-Linter는 포함 목록(true)과 제외 목록(false)을 함께 쓰는 걸 허용하지 않는다.
+          VALIDATE_JAVASCRIPT_ES: true
+          VALIDATE_TYPESCRIPT_ES: true
+          VALIDATE_PYTHON_RUFF: true
+          VALIDATE_YAML: true
+          VALIDATE_JSON: true
+          VALIDATE_DOCKERFILE_HADOLINT: true
+
+          # 로컬 설정 재사용. Super-Linter는 *_CONFIG_FILE을 기본적으로 .github/linters/
+          # 기준 상대경로로 찾으므로, 저장소 루트에 있는 설정 파일을 쓰도록 경로를 맞춘다.
+          LINTER_RULES_PATH: .
+          JAVASCRIPT_ES_CONFIG_FILE: eslint.config.mjs
+          TYPESCRIPT_ES_CONFIG_FILE: eslint.config.mjs
