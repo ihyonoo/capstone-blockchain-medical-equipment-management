@@ -154,6 +154,28 @@ class TestPersistUsageChainAnchorMetadata:
             },
         )
 
+    def test_logs_when_db_write_fails(self, monkeypatch, caplog):
+        # DB 오류는 여전히 우아하게 삼켜야 하지만(예외 미전파), 아무 흔적도 안 남기면
+        # 앵커링은 성공했는데 tx_hash 저장만 실패한 상황을 디버깅할 수 없다.
+        def fake_connect(*args, **kwargs):
+            raise RuntimeError("DB 연결 실패")
+
+        monkeypatch.setattr(svc.psycopg, "connect", fake_connect)
+
+        with caplog.at_level("ERROR", logger="mediledger.usage_history"):
+            svc.persist_usage_chain_anchor_metadata(
+                1,
+                {
+                    "transaction_hash": "0xabc",
+                    "block_number": 1,
+                    "block_hash": "0xb",
+                    "transaction_index": 0,
+                    "recorded_at": None,
+                },
+            )
+
+        assert any("1" in record.getMessage() for record in caplog.records)
+
 
 class TestAnchorUsageRecordToChainEndToEnd:
     """실 DB 조회(fetch_usage_record_for_chain) + mocked subprocess로 전체 앵커링 흐름을 검증."""

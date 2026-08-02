@@ -8,8 +8,6 @@ integration/test_usage_history_service.py 에서 다룬다. 여기서는 그 둘
 import json
 import subprocess
 
-import pytest
-
 from backend import usage_history_service as svc
 
 
@@ -87,17 +85,28 @@ class TestRunBesuScript:
         assert ok is False
         assert stderr == "boom"
 
-    def test_timeout_propagates_uncaught(self, monkeypatch):
-        # run_besu_script는 TimeoutExpired를 잡지 않는다 - 상위 호출자도 마찬가지라
-        # 실제 서브프로세스가 30초 타임아웃에 걸리면 "우아한 저하"가 깨지고 예외가 그대로
-        # server.py까지 전파된다. 의심스러운 동작이라 회귀 감지용으로 남겨둔다.
+    def test_timeout_returns_ok_false_instead_of_raising(self, monkeypatch):
         def fake_run(cmd, **kwargs):
             raise subprocess.TimeoutExpired(cmd, 30)
 
         monkeypatch.setattr(svc.subprocess, "run", fake_run)
 
-        with pytest.raises(subprocess.TimeoutExpired):
-            svc.run_besu_script("read-usage-record.mjs", "123")
+        ok, stdout, stderr = svc.run_besu_script("read-usage-record.mjs", "123")
+
+        assert ok is False
+        assert stdout == ""
+        assert "타임아웃" in stderr
+
+    def test_missing_node_binary_returns_ok_false_instead_of_raising(self, monkeypatch):
+        def fake_run(cmd, **kwargs):
+            raise FileNotFoundError("node")
+
+        monkeypatch.setattr(svc.subprocess, "run", fake_run)
+
+        ok, stdout, stderr = svc.run_besu_script("read-usage-record.mjs", "123")
+
+        assert ok is False
+        assert stdout == ""
 
 
 class TestReadUsageRecordFromChain:
