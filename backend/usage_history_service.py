@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import logging
 import os
 import subprocess
 
@@ -13,6 +14,8 @@ except ModuleNotFoundError as exc:
         raise
     from settings import BESU_DEPLOYMENT_PATH, BESU_DIR, DATABASE_URL
 
+logger = logging.getLogger("mediledger.usage_history")
+
 
 def is_besu_ready() -> tuple[bool, str | None]:
     if not BESU_DEPLOYMENT_PATH.exists():
@@ -23,14 +26,19 @@ def is_besu_ready() -> tuple[bool, str | None]:
 
 
 def run_besu_script(script_name: str, *args: str) -> tuple[bool, str, str]:
-    process = subprocess.run(
-        ["node", f"scripts/{script_name}", *args],
-        cwd=BESU_DIR,
-        env=os.environ.copy(),
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    try:
+        process = subprocess.run(
+            ["node", f"scripts/{script_name}", *args],
+            cwd=BESU_DIR,
+            env=os.environ.copy(),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "", "온체인 스크립트 실행이 타임아웃(30초)을 초과했습니다."
+    except OSError as exc:
+        return False, "", f"온체인 스크립트 실행에 실패했습니다: {exc}"
     return process.returncode == 0, process.stdout.strip(), process.stderr.strip()
 
 
@@ -193,11 +201,7 @@ def persist_usage_chain_anchor_metadata(usage_id: int, anchor_result: dict) -> N
     block_hash = anchor_result.get("block_hash")
     transaction_index = anchor_result.get("transaction_index")
     recorded_at_epoch = anchor_result.get("recorded_at")
-    recorded_at = (
-        dt.datetime.fromtimestamp(recorded_at_epoch, dt.UTC)
-        if isinstance(recorded_at_epoch, int)
-        else None
-    )
+    recorded_at = dt.datetime.fromtimestamp(recorded_at_epoch, dt.UTC) if isinstance(recorded_at_epoch, int) else None
 
     sql = """
     UPDATE usage_history
@@ -225,6 +229,7 @@ def persist_usage_chain_anchor_metadata(usage_id: int, anchor_result: dict) -> N
             )
             conn.commit()
     except Exception:
+        logger.exception("체인 앵커링 메타데이터 저장 실패 (usage_id=%s)", usage_id)
         return
 
 
@@ -393,10 +398,7 @@ def verify_usage_history_integrity(rows) -> tuple[dict[int, dict], dict]:
     )
     if not ok:
         detail = stderr or stdout or "온체인 검증 스크립트 실행에 실패했습니다."
-        fallback_results = {
-            row[0]: build_default_integrity_result(usage_status=row[1], detail=detail)
-            for row in rows
-        }
+        fallback_results = {row[0]: build_default_integrity_result(usage_status=row[1], detail=detail) for row in rows}
         summary = {
             "total_count": len(rows),
             "eligible_count": sum(1 for row in rows if row[1] == "returned"),
@@ -414,10 +416,7 @@ def verify_usage_history_integrity(rows) -> tuple[dict[int, dict], dict]:
         payload = json.loads(stdout)
     except json.JSONDecodeError:
         detail = "온체인 검증 응답을 해석하지 못했습니다."
-        fallback_results = {
-            row[0]: build_default_integrity_result(usage_status=row[1], detail=detail)
-            for row in rows
-        }
+        fallback_results = {row[0]: build_default_integrity_result(usage_status=row[1], detail=detail) for row in rows}
         summary = {
             "total_count": len(rows),
             "eligible_count": sum(1 for row in rows if row[1] == "returned"),
@@ -478,11 +477,7 @@ def query_usage_history_rows(
 
     order_direction = "ASC" if normalized_sort_order == "asc" else "DESC"
     primary_sort_column = sort_columns[normalized_sort_by]
-    order_sql = (
-        f"{primary_sort_column} {order_direction}, "
-        f"h.checkout_at DESC, "
-        f"h.usage_id DESC"
-    )
+    order_sql = f"{primary_sort_column} {order_direction}, h.checkout_at DESC, h.usage_id DESC"
 
     if user and user.strip():
         q = f"%{user.strip()}%"

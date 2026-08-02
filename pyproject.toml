@@ -18,6 +18,10 @@ select = ["E", "W", "F", "I", "UP", "C4", "SIM", "B"]
 # rtls/의 재시도·네트워크 예외 처리 코드에는 B904를 그대로 적용
 "backend/**" = ["B904"]
 
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["."]
+
 [tool.pyrefly]
 project-includes = [
     "**/*.py*",
