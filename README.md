@@ -14,6 +14,8 @@
 
 의료 장비 사용 이력의 구성: {장비 사용자, 사용 장비, 사용 시간, 반납 시간, 사용 위치}
 
+[![Live](https://img.shields.io/badge/Live-mediledger.xyz-38C172?style=for-the-badge&logo=cloudflare&logoColor=white)](https://mediledger.xyz)
+
 ---
 
 ## 목차
@@ -73,14 +75,36 @@
 
 ## 기술 스택
 
-| 영역 | 스택 |
-|------|------|
-| 백엔드 | Python, FastAPI, psycopg 3 (ORM 미사용) |
-| DB | PostgreSQL |
-| 캐시 | Redis (위치 캐시, best-effort) |
-| 프론트엔드 | React 18, Vite, TailwindCSS v4, react-router v7 |
-| 블록체인 | Hyperledger Besu (QBFT), Solidity, Node.js (ethers) |
-| 엣지 | Python, bleak (BLE) |
+**백엔드**
+
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)
+
+psycopg 3로 직접 쿼리(ORM 미사용), Redis는 위치 캐시 용도(best-effort)
+
+**프론트엔드**
+
+![React](https://img.shields.io/badge/React_18-61DAFB?style=flat&logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS_v4-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
+![React Router](https://img.shields.io/badge/React_Router_v7-CA4245?style=flat&logo=reactrouter&logoColor=white)
+
+**블록체인**
+
+![Hyperledger Besu](https://img.shields.io/badge/Hyperledger_Besu-2F3134?style=flat&logo=hyperledger&logoColor=white)
+![Solidity](https://img.shields.io/badge/Solidity-363636?style=flat&logo=solidity&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=nodedotjs&logoColor=white)
+
+QBFT 합의, `UsageRecordRegistry.sol`, 백엔드가 호출하는 Node.js(ethers) 스크립트
+
+**엣지 (RTLS)**
+
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
+![Bluetooth](https://img.shields.io/badge/BLE-0082FC?style=flat&logo=bluetooth&logoColor=white)
+
+bleak 라이브러리로 BLE 스캔/브로드캐스트
 
 ---
 
