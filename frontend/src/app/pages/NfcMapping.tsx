@@ -4,7 +4,7 @@ import AdminNav from '../components/layout/AdminNav';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
-import { buildAuthHeaders, getStoredAuthSession } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
 import { API_BASE_URL, PUBLIC_APP_URL } from '../lib/runtime';
 import { RefreshCw, Save, Search, Trash2 } from 'lucide-react';
@@ -50,7 +50,7 @@ function formatAgo(updatedAt: number | null) {
 export default function NfcMapping() {
   const isAuthorized = useAuthGuard(() => {
     const session = getStoredAuthSession();
-    if (!session?.token || !session.user) return '/';
+    if (!session?.token || !session.user) return LOGIN_PATH;
     if (session.user.role !== 'admin') return '/equipment';
     return null;
   });
@@ -176,13 +176,10 @@ export default function NfcMapping() {
         logout();
         return;
       }
-      const response = await fetch(
-        `${API_BASE_URL}/admin/nfc-mappings/${encodeURIComponent(tagId)}`,
-        {
-          method: 'DELETE',
-          headers: buildAuthHeaders(session.token),
-        },
-      );
+      const response = await fetch(`${API_BASE_URL}/admin/nfc-mappings/${encodeURIComponent(tagId)}`, {
+        method: 'DELETE',
+        headers: buildAuthHeaders(session.token),
+      });
       const payload = await response.json().catch(() => null);
       if (response.status === 401 || response.status === 403) {
         logout();
@@ -207,11 +204,7 @@ export default function NfcMapping() {
   }
 
   return (
-    <AppShell
-      wide
-      actions={<AdminNav active="nfc-mapping" />}
-      contentClassName="pt-4 sm:pt-5"
-    >
+    <AppShell wide actions={<AdminNav active="nfc-mapping" />} contentClassName="pt-4 sm:pt-5">
       <div className="space-y-4">
         <section className="surface-panel p-5 fade-rise">
           <div className="panel-header">
@@ -223,7 +216,8 @@ export default function NfcMapping() {
             </div>
           </div>
           <div className="rounded-lg border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">
-            같은 토큰은 한 장비에만 매핑할 수 있습니다. 저장 후 휴대폰으로 태그를 읽으면 해당 장비 상세 페이지로 진입합니다.
+            같은 토큰은 한 장비에만 매핑할 수 있습니다. 저장 후 휴대폰으로 태그를 읽으면 해당 장비 상세 페이지로
+            진입합니다.
           </div>
         </section>
 
@@ -253,9 +247,7 @@ export default function NfcMapping() {
           </div>
 
           {error ? <div className="alert alert-error">{error}</div> : null}
-          {notice ? (
-            <div className="alert alert-success">{notice}</div>
-          ) : null}
+          {notice ? <div className="alert alert-success">{notice}</div> : null}
 
           {isLoading ? (
             <div className="rounded-lg border border-dashed border-border/70 px-6 py-12 text-center text-muted-foreground">
@@ -276,7 +268,9 @@ export default function NfcMapping() {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-[1.1rem] font-semibold tracking-[-0.03em] text-foreground">{item.equipment_name}</h3>
+                          <h3 className="text-[1.1rem] font-semibold tracking-[-0.03em] text-foreground">
+                            {item.equipment_name}
+                          </h3>
                           <Badge variant="outline">{getAssetStatusLabel(item.asset_status)}</Badge>
                           <Badge variant="outline">{item.equipment_type?.trim() || '미분류'}</Badge>
                         </div>

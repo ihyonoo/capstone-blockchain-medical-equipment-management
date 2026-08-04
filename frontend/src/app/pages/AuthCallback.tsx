@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import AppShell from '../components/layout/AppShell';
-import { storeAuthSession } from '../lib/auth';
+import { storeAuthSession, LOGIN_PATH } from '../lib/auth';
 import { API_BASE_URL } from '../lib/runtime';
 
 // Google 로그인 성공 후 백엔드가 #code=<handoff> 프래그먼트로 리다이렉트한다.
@@ -58,7 +58,7 @@ export default function AuthCallback() {
             <>
               <div className="alert alert-error">{error}</div>
               <div className="pt-4">
-                <Button className="w-full" size="lg" onClick={() => navigate('/', { replace: true })}>
+                <Button className="w-full" size="lg" onClick={() => navigate(LOGIN_PATH, { replace: true })}>
                   로그인으로 돌아가기
                 </Button>
               </div>

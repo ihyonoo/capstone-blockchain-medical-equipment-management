@@ -11,7 +11,7 @@ import GoogleButton from '../components/GoogleButton';
 import PasswordChecklist from '../components/PasswordChecklist';
 import PasswordMatchHint from '../components/PasswordMatchHint';
 import { getPasswordError } from '../lib/passwordPolicy';
-import { getRedirectTarget, withRedirectQuery } from '../lib/auth';
+import { getRedirectTarget, withRedirectQuery, LOGIN_PATH } from '../lib/auth';
 import { API_BASE_URL } from '../lib/runtime';
 
 const POSITION_OPTIONS = ['간호사', '의사', '간호조무사', '방사선사', '임상병리사', '물리치료사', '기타'];
@@ -83,8 +83,10 @@ export default function SignUp() {
         throw new Error(typeof detail === 'string' ? detail : '회원가입에 실패했습니다.');
       }
 
-      setSuccess('가입이 접수되었습니다. 입력하신 이메일로 보낸 인증 링크를 확인해 주세요. 인증 후 로그인할 수 있습니다.');
-      setTimeout(() => navigate(withRedirectQuery('/', redirectTarget), { replace: true }), 2500);
+      setSuccess(
+        '가입이 접수되었습니다. 입력하신 이메일로 보낸 인증 링크를 확인해 주세요. 인증 후 로그인할 수 있습니다.',
+      );
+      setTimeout(() => navigate(withRedirectQuery(LOGIN_PATH, redirectTarget), { replace: true }), 2500);
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -222,16 +224,8 @@ export default function SignUp() {
               <PasswordMatchHint password={password} confirm={passwordConfirm} />
             </div>
 
-            {error ? (
-              <div className="md:col-span-2 alert alert-error">
-                {error}
-              </div>
-            ) : null}
-            {success ? (
-              <div className="md:col-span-2 alert alert-success">
-                {success}
-              </div>
-            ) : null}
+            {error ? <div className="md:col-span-2 alert alert-error">{error}</div> : null}
+            {success ? <div className="md:col-span-2 alert alert-success">{success}</div> : null}
 
             <div className="md:col-span-2 flex flex-col gap-3 pt-2 sm:flex-row">
               <Button type="submit" className="flex-1" size="lg" disabled={isLoading}>
@@ -242,7 +236,7 @@ export default function SignUp() {
                 variant="outline"
                 size="lg"
                 className="flex-1"
-                onClick={() => navigate(withRedirectQuery('/', redirectTarget))}
+                onClick={() => navigate(withRedirectQuery(LOGIN_PATH, redirectTarget))}
               >
                 <ChevronLeft className="h-4 w-4" />
                 로그인으로 돌아가기

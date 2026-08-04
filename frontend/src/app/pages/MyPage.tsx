@@ -14,6 +14,7 @@ import {
   clearStoredAuthSession,
   getStoredAuthSession,
   getStoredAuthToken,
+  LOGIN_PATH,
   storeAuthSession,
   type AuthUser,
 } from '../lib/auth';
@@ -54,7 +55,7 @@ export default function MyPage() {
 
   const logout = () => {
     clearStoredAuthSession();
-    navigate('/', { replace: true });
+    navigate(LOGIN_PATH, { replace: true });
   };
 
   // 인증 헤더를 붙여 요청하고, 401이면 세션을 정리한다.
@@ -87,7 +88,7 @@ export default function MyPage() {
   useEffect(() => {
     const session = getStoredAuthSession();
     if (!session) {
-      navigate('/', { replace: true });
+      navigate(LOGIN_PATH, { replace: true });
       return;
     }
     (async () => {
@@ -189,7 +190,9 @@ export default function MyPage() {
       if (!res.ok || !payload?.ok) {
         throw new Error(payload?.detail ?? '이메일 변경에 실패했습니다.');
       }
-      setUser((prev) => (prev ? { ...prev, email: payload.user?.email ?? newEmail.trim(), email_verified: false } : prev));
+      setUser((prev) =>
+        prev ? { ...prev, email: payload.user?.email ?? newEmail.trim(), email_verified: false } : prev,
+      );
       setNewEmail('');
       setEmailPw('');
       setEmailMsg({ tone: 'ok', text: payload.message ?? '이메일이 변경되었습니다. 인증 메일을 확인해 주세요.' });
@@ -262,7 +265,7 @@ export default function MyPage() {
         throw new Error(payload?.detail ?? '회원 탈퇴에 실패했습니다.');
       }
       clearStoredAuthSession();
-      navigate('/', { replace: true });
+      navigate(LOGIN_PATH, { replace: true });
     } catch (err) {
       setWithdrawMsg(err instanceof Error ? err.message : '회원 탈퇴에 실패했습니다.');
     } finally {
@@ -277,9 +280,7 @@ export default function MyPage() {
     <AppShell
       title="마이페이지"
       wide={sessionRole === 'admin'}
-      actions={
-        sessionRole === 'admin' ? <AdminNav active="mypage" /> : <StaffNav active="mypage" />
-      }
+      actions={sessionRole === 'admin' ? <AdminNav active="mypage" /> : <StaffNav active="mypage" />}
     >
       <div className="mx-auto w-full max-w-3xl space-y-4">
         {loading ? (
@@ -377,7 +378,9 @@ export default function MyPage() {
                     <PasswordMatchHint password={newPw} confirm={newPwConfirm} />
                   </div>
                   {pwMsg ? (
-                    <div className={pwMsg.tone === 'ok' ? 'alert alert-success' : 'alert alert-error'}>{pwMsg.text}</div>
+                    <div className={pwMsg.tone === 'ok' ? 'alert alert-success' : 'alert alert-error'}>
+                      {pwMsg.text}
+                    </div>
                   ) : null}
                   <Button type="submit" disabled={pwBusy}>
                     {pwBusy ? '변경 중...' : '비밀번호 변경'}

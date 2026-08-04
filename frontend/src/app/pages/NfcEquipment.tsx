@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import AppShell from '../components/layout/AppShell';
 import { Button } from '../components/ui/button';
-import { buildAuthHeaders, getStoredAuthSession, getStoredAuthUser, withRedirectQuery } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession, getStoredAuthUser, withRedirectQuery, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
 import { API_BASE_URL } from '../lib/runtime';
 import { LogOut } from 'lucide-react';
@@ -51,7 +51,7 @@ export default function NfcEquipment() {
   const currentAuthToken = useMemo(() => getStoredAuthSession()?.token ?? null, []);
   const isAuthorized = useAuthGuard(() => {
     // NFC URL 직진입 시 로그인 페이지로 보내더라도, 현재 진입 경로는 redirect로 보존한다.
-    const loginRedirect = withRedirectQuery('/', `${location.pathname}${location.search}`);
+    const loginRedirect = withRedirectQuery(LOGIN_PATH, `${location.pathname}${location.search}`);
     if (!currentUser || !currentAuthToken) return loginRedirect;
     if (currentUser.role !== 'admin' && currentUser.role !== 'staff') return loginRedirect;
     return null;
@@ -125,7 +125,9 @@ export default function NfcEquipment() {
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.detail ?? `장비 ${action === 'checkout' ? '사용 시작' : '사용 종료'}에 실패했습니다.`);
       }
-      setNotice(action === 'checkout' ? '장비 상태가 대여 중으로 변경되었습니다.' : '장비 상태가 사용 가능으로 변경되었습니다.');
+      setNotice(
+        action === 'checkout' ? '장비 상태가 대여 중으로 변경되었습니다.' : '장비 상태가 사용 가능으로 변경되었습니다.',
+      );
       await fetchItem(token);
     } catch (err) {
       if (err instanceof Error) setError(err.message);
@@ -147,12 +149,7 @@ export default function NfcEquipment() {
     <AppShell
       actions={
         <>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2.5 text-[11px]"
-            onClick={() => navigate('/me')}
-          >
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => navigate('/me')}>
             마이페이지
           </Button>
           <Button variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={logout}>
@@ -205,9 +202,7 @@ export default function NfcEquipment() {
             </div>
           ) : (
             <div className="space-y-4">
-              {notice ? (
-                <div className="alert alert-success px-5 py-4">{notice}</div>
-              ) : null}
+              {notice ? <div className="alert alert-success px-5 py-4">{notice}</div> : null}
 
               <section className="rounded-[28px] border border-border/70 bg-background/80 p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -222,7 +217,11 @@ export default function NfcEquipment() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                    <Button className="w-full sm:w-auto" onClick={() => handleUsageAction('checkout')} disabled={!canCheckout || isSubmitting}>
+                    <Button
+                      className="w-full sm:w-auto"
+                      onClick={() => handleUsageAction('checkout')}
+                      disabled={!canCheckout || isSubmitting}
+                    >
                       {isSubmitting && canCheckout ? '처리 중...' : '사용 시작'}
                     </Button>
                     <Button

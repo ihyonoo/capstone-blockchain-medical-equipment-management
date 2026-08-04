@@ -3,7 +3,7 @@ import { Badge } from '../components/ui/badge';
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
 import { API_BASE_URL } from '../lib/runtime';
-import { buildAuthHeaders, getStoredAuthSession } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout } from '../lib/useAuthGuard';
 
 type LiveReaderItem = {
@@ -40,11 +40,11 @@ export default function DeviceStatus() {
   const isAuthorized = useAuthGuard(() => {
     try {
       const session = getStoredAuthSession();
-      if (!session?.token || !session.user) return '/';
+      if (!session?.token || !session.user) return LOGIN_PATH;
       if (session.user.role !== 'admin') return '/equipment';
       return null;
     } catch {
-      return '/';
+      return LOGIN_PATH;
     }
   });
   const [readers, setReaders] = useState<LiveReaderItem[]>([]);
@@ -102,19 +102,12 @@ export default function DeviceStatus() {
 
   const readersTotal = readers.length;
   const tagsTotal = tags.length;
-  const sortedTags = useMemo(
-    () => [...tags].sort((a, b) => Number(b.is_online) - Number(a.is_online)),
-    [tags],
-  );
+  const sortedTags = useMemo(() => [...tags].sort((a, b) => Number(b.is_online) - Number(a.is_online)), [tags]);
 
   if (!isAuthorized) return null;
 
   return (
-    <AppShell
-      wide
-      actions={<AdminNav active="devices" />}
-      contentClassName="pt-4 sm:pt-5"
-    >
+    <AppShell wide actions={<AdminNav active="devices" />} contentClassName="pt-4 sm:pt-5">
       <div className="space-y-4">
         <section className="surface-panel p-5 fade-rise">
           <div className="panel-header">
@@ -189,9 +182,7 @@ export default function DeviceStatus() {
                   className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3"
                 >
                   <div className="min-w-0">
-                    <div className="truncate font-medium text-foreground">
-                      {t.equipment_name?.trim() || t.tag_id}
-                    </div>
+                    <div className="truncate font-medium text-foreground">{t.equipment_name?.trim() || t.tag_id}</div>
                     <div className="mt-1 text-xs text-muted-foreground" title={t.tag_id}>
                       {shortTag(t.tag_id)} · {t.location ?? '감지 안 됨'}
                     </div>

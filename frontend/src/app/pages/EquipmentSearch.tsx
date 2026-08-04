@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import AppShell from '../components/layout/AppShell';
 import StaffNav from '../components/layout/StaffNav';
 import { API_BASE_URL } from '../lib/runtime';
-import { buildAuthHeaders, getStoredAuthSession } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout } from '../lib/useAuthGuard';
 
 type LiveLocationItem = {
@@ -103,12 +103,12 @@ export default function EquipmentSearch() {
   const isAuthorized = useAuthGuard(() => {
     try {
       const session = getStoredAuthSession();
-      if (!session?.token || !session.user) return '/';
+      if (!session?.token || !session.user) return LOGIN_PATH;
       if (session.user.role === 'admin') return '/verification';
-      if (session.user.role !== 'staff') return '/';
+      if (session.user.role !== 'staff') return LOGIN_PATH;
       return null;
     } catch {
-      return '/';
+      return LOGIN_PATH;
     }
   });
 
@@ -254,10 +254,7 @@ export default function EquipmentSearch() {
   }
 
   return (
-    <AppShell
-      actions={<StaffNav active="equipment" />}
-      contentClassName="pt-4 sm:pt-5"
-    >
+    <AppShell actions={<StaffNav active="equipment" />} contentClassName="pt-4 sm:pt-5">
       <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <section className="space-y-3 fade-rise">
           <div className="surface-panel p-5">
@@ -305,11 +302,7 @@ export default function EquipmentSearch() {
                 </Select>
               </div>
 
-              {fetchError ? (
-                <div className="alert alert-error">
-                  {fetchError}
-                </div>
-              ) : null}
+              {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
             </div>
           </div>
 
@@ -487,7 +480,9 @@ export default function EquipmentSearch() {
                 </div>
                 <div className="rounded-lg border border-border bg-card p-5">
                   <div className="metric-label">현재 사용자</div>
-                  <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">{selectedItem.currentHolderName ?? '-'}</div>
+                  <div className="mt-3 text-xl font-semibold tracking-[-0.04em]">
+                    {selectedItem.currentHolderName ?? '-'}
+                  </div>
                 </div>
               </div>
             )}

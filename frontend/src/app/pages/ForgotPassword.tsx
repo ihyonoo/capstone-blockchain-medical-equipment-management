@@ -6,6 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import AppShell from '../components/layout/AppShell';
 import { API_BASE_URL } from '../lib/runtime';
+import { LOGIN_PATH } from '../lib/auth';
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -66,7 +67,7 @@ export default function ForgotPassword() {
               <Button type="submit" className="flex-1" size="lg" disabled={isLoading}>
                 {isLoading ? '전송 중...' : '재설정 메일 보내기'}
               </Button>
-              <Button type="button" variant="outline" size="lg" className="flex-1" onClick={() => navigate('/')}>
+              <Button type="button" variant="outline" size="lg" className="flex-1" onClick={() => navigate(LOGIN_PATH)}>
                 <ChevronLeft className="h-4 w-4" />
                 로그인으로 돌아가기
               </Button>

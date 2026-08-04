@@ -7,6 +7,7 @@ import AppShell from '../components/layout/AppShell';
 import PasswordChecklist from '../components/PasswordChecklist';
 import { getPasswordError } from '../lib/passwordPolicy';
 import { API_BASE_URL } from '../lib/runtime';
+import { LOGIN_PATH } from '../lib/auth';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ export default function ResetPassword() {
         throw new Error(payload?.detail ?? '비밀번호 재설정에 실패했습니다.');
       }
       setSuccess(payload.message ?? '비밀번호가 변경되었습니다. 로그인 페이지로 이동합니다.');
-      setTimeout(() => navigate('/', { replace: true }), 900);
+      setTimeout(() => navigate(LOGIN_PATH, { replace: true }), 900);
     } catch (err) {
       setError(err instanceof Error ? err.message : '요청 처리 중 오류가 발생했습니다.');
     } finally {

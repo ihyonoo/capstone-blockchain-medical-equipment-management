@@ -1,18 +1,18 @@
 import { Sparkles } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
-import { getStoredAuthSession } from '../lib/auth';
+import { getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard } from '../lib/useAuthGuard';
 
 export default function AiReport() {
   const isAuthorized = useAuthGuard(() => {
     try {
       const session = getStoredAuthSession();
-      if (!session?.token || !session.user) return '/';
+      if (!session?.token || !session.user) return LOGIN_PATH;
       if (session.user.role !== 'admin') return '/equipment';
       return null;
     } catch {
-      return '/';
+      return LOGIN_PATH;
     }
   });
 
