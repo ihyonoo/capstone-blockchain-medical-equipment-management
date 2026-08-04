@@ -19,6 +19,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      # eslint.config.mjs가 import하는 typescript-eslint 등 devDependencies를
+      # 설치해둬야 Super-Linter 컨테이너(워크스페이스를 그대로 마운트)에서 resolve된다.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root devDependencies
+        run: npm ci
+
       - name: Super-Linter
         uses: super-linter/super-linter@v7
         env:
