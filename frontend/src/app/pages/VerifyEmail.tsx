@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../components/ui/button';
 import AppShell from '../components/layout/AppShell';
 import { API_BASE_URL } from '../lib/runtime';
+import { LOGIN_PATH } from '../lib/auth';
 
 type Status = 'loading' | 'success' | 'error';
 
@@ -57,7 +58,7 @@ export default function VerifyEmail() {
 
           {status !== 'loading' ? (
             <div className="pt-4">
-              <Button className="w-full" size="lg" onClick={() => navigate('/', { replace: true })}>
+              <Button className="w-full" size="lg" onClick={() => navigate(LOGIN_PATH, { replace: true })}>
                 로그인하러 가기
               </Button>
             </div>

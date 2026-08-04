@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { clearStoredAuthSession } from './auth';
+import { clearStoredAuthSession, LOGIN_PATH } from './auth';
 
 // resolveRedirect는 마운트 시 단 한 번만 호출된다: null이면 인가됨, 문자열이면 그 경로로 리다이렉트.
 export function useAuthGuard(resolveRedirect: () => string | null): boolean {
@@ -18,7 +18,7 @@ export function useLogout() {
   const navigate = useNavigate();
   return useCallback(() => {
     clearStoredAuthSession();
-    navigate('/', { replace: true });
+    navigate(LOGIN_PATH, { replace: true });
   }, [navigate]);
 }
 

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
 import { API_BASE_URL } from '../lib/runtime';
-import { buildAuthHeaders, getStoredAuthSession } from '../lib/auth';
+import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
 import { AlertTriangle, CheckCircle2, ChevronDown, CircleMinus, HelpCircle, User } from 'lucide-react';
 
@@ -226,7 +226,9 @@ function VerificationStatusPill({ status, label }: { status: string; label: stri
   const tone = getStatusTone(status);
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[0.82rem] font-semibold ${tone}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[0.82rem] font-semibold ${tone}`}
+    >
       <VerificationStatusIcon status={status} />
       <span>{label}</span>
     </span>
@@ -278,11 +280,11 @@ export default function IntegrityVerification() {
   const isAuthorized = useAuthGuard(() => {
     try {
       const session = getStoredAuthSession();
-      if (!session?.token || !session.user) return '/';
+      if (!session?.token || !session.user) return LOGIN_PATH;
       if (session.user.role !== 'admin') return '/equipment';
       return null;
     } catch {
-      return '/';
+      return LOGIN_PATH;
     }
   });
   const [filters, setFilters] = useState<HistoryFilters>(DEFAULT_FILTERS);
@@ -345,7 +347,8 @@ export default function IntegrityVerification() {
         });
         if (targetFilters.user.trim()) params.set('user', targetFilters.user.trim());
         if (targetFilters.equipment.trim()) params.set('equipment', targetFilters.equipment.trim());
-        if (targetFilters.checkoutLocation.trim()) params.set('checkout_location', targetFilters.checkoutLocation.trim());
+        if (targetFilters.checkoutLocation.trim())
+          params.set('checkout_location', targetFilters.checkoutLocation.trim());
         if (targetFilters.returnLocation.trim()) params.set('return_location', targetFilters.returnLocation.trim());
         if (targetFilters.startDate) params.set('start_date', targetFilters.startDate);
         if (targetFilters.endDate) params.set('end_date', targetFilters.endDate);
@@ -469,7 +472,10 @@ export default function IntegrityVerification() {
       item.blockchain?.verification_label ?? '검증 중 오류',
     ]);
 
-    const csv = ['\ufeff' + header.map(escapeCsvCell).join(','), ...rows.map((row) => row.map(escapeCsvCell).join(','))].join('\r\n');
+    const csv = [
+      '\ufeff' + header.map(escapeCsvCell).join(','),
+      ...rows.map((row) => row.map(escapeCsvCell).join(',')),
+    ].join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -519,11 +525,7 @@ export default function IntegrityVerification() {
   }
 
   return (
-    <AppShell
-      wide
-      actions={<AdminNav active="verification" />}
-      contentClassName="pt-4 sm:pt-5"
-    >
+    <AppShell wide actions={<AdminNav active="verification" />} contentClassName="pt-4 sm:pt-5">
       <div className="space-y-4">
         <section className="surface-panel p-5 fade-rise">
           <div className="panel-header">
@@ -643,7 +645,10 @@ export default function IntegrityVerification() {
             </div>
             <div className="space-y-2">
               <label className="block text-sm font-medium">정렬 기준</label>
-              <Select value={filters.sortField} onValueChange={(value) => updateFilter('sortField', value as SortField)}>
+              <Select
+                value={filters.sortField}
+                onValueChange={(value) => updateFilter('sortField', value as SortField)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="정렬 기준 선택" />
                 </SelectTrigger>
@@ -658,7 +663,10 @@ export default function IntegrityVerification() {
             </div>
             <div className="space-y-2">
               <label className="block text-sm font-medium">정렬 방향</label>
-              <Select value={filters.sortOrder} onValueChange={(value) => updateFilter('sortOrder', value as SortOrder)}>
+              <Select
+                value={filters.sortOrder}
+                onValueChange={(value) => updateFilter('sortOrder', value as SortOrder)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="정렬 방향 선택" />
                 </SelectTrigger>
@@ -695,11 +703,7 @@ export default function IntegrityVerification() {
             </div>
           </form>
 
-          {error ? (
-            <div className="alert alert-error mt-4">
-              {error}
-            </div>
-          ) : null}
+          {error ? <div className="alert alert-error mt-4">{error}</div> : null}
         </section>
 
         <section className="surface-panel p-5 fade-rise-delay">
@@ -739,7 +743,9 @@ export default function IntegrityVerification() {
                     key={item.usage_id}
                     className="relative overflow-hidden rounded-[1.25rem] border border-border bg-card p-4 pl-5 transition-all"
                   >
-                    <div className={`absolute left-0 top-0 h-full w-1.5 ${getVerificationCardTone(verificationStatus)}`} />
+                    <div
+                      className={`absolute left-0 top-0 h-full w-1.5 ${getVerificationCardTone(verificationStatus)}`}
+                    />
                     <button
                       type="button"
                       onClick={() => setExpandedUsageId(isExpanded ? null : item.usage_id)}
@@ -755,11 +761,10 @@ export default function IntegrityVerification() {
                       </div>
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         {typeof blockNumber === 'number' ? <Badge variant="outline">Block {blockNumber}</Badge> : null}
-                        {typeof transactionIndex === 'number' ? <Badge variant="outline">Tx #{transactionIndex}</Badge> : null}
-                        <VerificationStatusPill
-                          status={verificationStatus}
-                          label={verificationLabel}
-                        />
+                        {typeof transactionIndex === 'number' ? (
+                          <Badge variant="outline">Tx #{transactionIndex}</Badge>
+                        ) : null}
+                        <VerificationStatusPill status={verificationStatus} label={verificationLabel} />
                         <ChevronDown
                           className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                         />
@@ -818,8 +823,12 @@ export default function IntegrityVerification() {
                         <SnapshotCard title="머클 검증 결과">
                           <div>블록 번호: {blockchain?.anchor?.block_number ?? '-'}</div>
                           <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
-                          <div className="break-all">원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}</div>
-                          <div className="break-all">재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}</div>
+                          <div className="break-all">
+                            원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}
+                          </div>
+                          <div className="break-all">
+                            재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}
+                          </div>
                           <VerificationNotice value={blockchain?.transactions_root_matches}>
                             {getMerkleVerificationNotice(blockchain?.transactions_root_matches)}
                           </VerificationNotice>

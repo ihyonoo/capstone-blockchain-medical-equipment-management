@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import SignUpComplete from './pages/SignUpComplete';
@@ -18,6 +19,10 @@ import AiReport from './pages/AiReport';
 export const router = createBrowserRouter([
   {
     path: '/',
+    Component: Landing,
+  },
+  {
+    path: '/login',
     Component: Login,
   },
   {

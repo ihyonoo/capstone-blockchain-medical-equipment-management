@@ -15,6 +15,8 @@ export type AuthSession = {
   user: AuthUser;
 };
 
+export const LOGIN_PATH = '/login';
+
 const AUTH_SESSION_KEY = 'auth_session';
 const LEGACY_AUTH_USER_KEY = 'auth_user';
 
@@ -54,10 +56,7 @@ export function getStoredAuthToken(): string | null {
   return getStoredAuthSession()?.token ?? null;
 }
 
-export function buildAuthHeaders(
-  token: string | null,
-  init?: Record<string, string>,
-): Record<string, string> {
+export function buildAuthHeaders(token: string | null, init?: Record<string, string>): Record<string, string> {
   const headers = { ...(init ?? {}) };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
