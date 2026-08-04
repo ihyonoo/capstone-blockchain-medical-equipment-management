@@ -19,8 +19,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      # eslint.config.mjs가 import하는 typescript-eslint 등 devDependencies를
-      # 설치해둬야 Super-Linter 컨테이너(워크스페이스를 그대로 마운트)에서 resolve된다.
+      # eslint.config.mjs가 import하는 typescript-eslint 등 devDependencies 설치.
+      # JSON 린트가 같은 config 파일을 거치므로 Super-Linter에도 필요하고,
+      # 아래 자체 ESLint 실행 단계에도 필요하다.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -29,6 +30,14 @@ jobs:
 
       - name: Install root devDependencies
         run: npm ci
+
+      # Super-Linter v7은 JAVASCRIPT_ES/TYPESCRIPT_ES를 자체 내장 ESLint 8.57.1로
+      # 실행하는데, 우리 eslint.config.mjs는 ESLint 9용 플러그인(typescript-eslint v8
+      # 등)을 쓰므로 규칙 스키마를 읽다가 깨진다("Cannot read properties of undefined
+      # (reading 'allowShortCircuit')"). JS/TS는 Super-Linter 대신 우리 ESLint 9로
+      # 직접 검사하고(husky/lint-staged와 동일 버전), Super-Linter는 나머지 언어만 맡는다.
+      - name: ESLint (JS/TS)
+        run: npm run lint
 
       - name: Super-Linter
         uses: super-linter/super-linter@v7
@@ -39,8 +48,7 @@ jobs:
 
           # 코드와 직결된 파일만 검사 (하나라도 true로 지정하면 나머지는 전부 자동 비활성화됨).
           # Super-Linter는 포함 목록(true)과 제외 목록(false)을 함께 쓰는 걸 허용하지 않는다.
-          VALIDATE_JAVASCRIPT_ES: true
-          VALIDATE_TYPESCRIPT_ES: true
+          # JAVASCRIPT_ES/TYPESCRIPT_ES는 위 자체 ESLint 단계가 대신하므로 여기서는 뺀다.
           VALIDATE_PYTHON_RUFF: true
           VALIDATE_YAML: true
           VALIDATE_JSON: true
