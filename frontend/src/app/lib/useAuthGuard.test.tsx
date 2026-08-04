@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router';
 import { useAuthGuard, useLogout } from './useAuthGuard';
 import { LOGIN_PATH } from './auth';
@@ -24,10 +24,6 @@ function LogoutScreen() {
 }
 
 describe('useAuthGuard', () => {
-  afterEach(() => {
-    cleanup();
-  });
-
   it('navigates to the resolver-returned path when unauthorized', () => {
     render(
       <MemoryRouter initialEntries={['/protected']}>
@@ -55,10 +51,6 @@ describe('useAuthGuard', () => {
 });
 
 describe('useLogout', () => {
-  afterEach(() => {
-    cleanup();
-  });
-
   beforeEach(() => {
     sessionStorage.clear();
   });
