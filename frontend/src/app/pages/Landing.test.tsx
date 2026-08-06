@@ -30,6 +30,6 @@ describe('Landing', () => {
     );
 
     expect(screen.getByText('블록체인 무결성 검증')).toBeInTheDocument();
-    expect(screen.getByText('실시간 위치 추적 (BLE·RTLS)')).toBeInTheDocument();
+    expect(screen.getByText('실시간 위치 추적 (BLE 기반 RTLS)')).toBeInTheDocument();
   });
 });
