@@ -194,10 +194,7 @@ export default function Landing() {
               <br />
               이제 투명하게 증명하세요
             </h2>
-            <a
-              className="landing__btn landing__btn--accent landing__btn--lg landing__contact-btn"
-              href={CONTACT_MAILTO}
-            >
+            <a className="landing__contact-cta" href={CONTACT_MAILTO}>
               문의하기
             </a>
             <a className="landing__contact-email" href={`mailto:${CONTACT_EMAIL}`}>
