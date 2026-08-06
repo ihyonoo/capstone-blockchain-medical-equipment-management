@@ -33,7 +33,11 @@ export default function StaffNav({ active }: StaffNavProps) {
           {tab.label}
         </button>
       ))}
-      <Button variant="outline" onClick={logout}>
+      <Button
+        variant="outline"
+        onClick={logout}
+        className="hover:border-[var(--err-border)] hover:text-[var(--err-fg)]"
+      >
         <LogOut className="h-4 w-4" />
         로그아웃
       </Button>

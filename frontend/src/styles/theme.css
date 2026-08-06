@@ -450,7 +450,7 @@
   .dot-warn { background: var(--warn-solid); }
   .dot-err { background: var(--err-solid); }
 
-  .text-ok { color: var(--ok-solid); }
+  .text-ok { color: var(--ok-fg); }
   .text-warn { color: var(--warn-solid); }
   .text-err { color: var(--err-solid); }
 
@@ -561,11 +561,11 @@
 }
 
 .app-nav-tab:hover {
-  color: var(--primary);
+  color: var(--ok-fg);
 }
 
 .app-nav-tab--active {
-  color: var(--primary);
+  color: var(--ok-fg);
 }
 
 .app-nav-tab--active::after {
