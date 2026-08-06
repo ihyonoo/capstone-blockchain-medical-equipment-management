@@ -34,9 +34,7 @@ export default function AppShell({
                 <strong>MediLedger &amp; EquipTrace</strong>
               </div>
             </div>
-            <div className="app-shell__actions flex flex-wrap items-center justify-end gap-2">
-              {actions}
-            </div>
+            <div className="app-shell__actions flex flex-wrap items-center justify-end gap-3 sm:gap-5">{actions}</div>
           </nav>
         </div>
       </header>

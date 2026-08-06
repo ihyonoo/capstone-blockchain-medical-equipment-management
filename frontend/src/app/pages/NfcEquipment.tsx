@@ -152,7 +152,12 @@ export default function NfcEquipment() {
           <Button variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => navigate('/me')}>
             마이페이지
           </Button>
-          <Button variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={logout}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2.5 text-[11px] hover:border-[var(--err-border)] hover:text-[var(--err-fg)]"
+            onClick={logout}
+          >
             <LogOut className="h-2.5 w-2.5" />
             로그아웃
           </Button>

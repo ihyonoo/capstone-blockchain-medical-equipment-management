@@ -1,67 +1,67 @@
 :root {
   --font-size: 16px;
   --background: #ffffff;
-  --foreground: #111111;
+  --foreground: #0f2e4f;
   --card: #ffffff;
-  --card-foreground: #111111;
+  --card-foreground: #0f2e4f;
   --popover: #ffffff;
-  --popover-foreground: #111111;
-  --primary: #111111;
+  --popover-foreground: #0f2e4f;
+  --primary: #0d9488;
   --primary-foreground: #ffffff;
-  --secondary: #f4f4f4;
-  --secondary-foreground: #111111;
-  --muted: #f4f4f4;
-  --muted-foreground: #6b6b6b;
-  --accent: #f4f4f4;
-  --accent-foreground: #111111;
-  --destructive: #b42318;
+  --secondary: #f6f9fb;
+  --secondary-foreground: #0f2e4f;
+  --muted: #f6f9fb;
+  --muted-foreground: #274a6b;
+  --accent: #ccfbf1;
+  --accent-foreground: #0f2e4f;
+  --destructive: #c2542f;
   --destructive-foreground: #ffffff;
-  --border: #141414;
-  --input: #3a3a3a;
+  --border: #e2e8f0;
+  --input: #cbd5e1;
   --input-background: #ffffff;
-  --switch-background: #2b2b2b;
+  --switch-background: #cbd5e1;
   --font-weight-medium: 600;
   --font-weight-normal: 450;
-  --ring: rgba(17, 17, 17, 0.32);
-  --chart-1: #111111;
-  --chart-2: #555555;
-  --chart-3: #808080;
-  --chart-4: #a3a3a3;
-  --chart-5: #cccccc;
-  --radius: 0.75rem;
+  --ring: rgba(13, 148, 136, 0.35);
+  --chart-1: #0f2e4f;
+  --chart-2: #0d9488;
+  --chart-3: #274a6b;
+  --chart-4: #5eead4;
+  --chart-5: #99f6e4;
+  --radius: 1rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #111111;
-  --sidebar-primary: #111111;
+  --sidebar-foreground: #0f2e4f;
+  --sidebar-primary: #0d9488;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f4f4f4;
-  --sidebar-accent-foreground: #111111;
-  --sidebar-border: #e6e6e6;
-  --sidebar-ring: rgba(17, 17, 17, 0.32);
-  --app-body-background: #f6f6f7;
+  --sidebar-accent: #f6f9fb;
+  --sidebar-accent-foreground: #0f2e4f;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: rgba(13, 148, 136, 0.35);
+  --app-body-background: #f6f9fb;
   --app-ambient-background: none;
-  --app-nav-background: #ededef;
-  --app-nav-border: #111111;
-  --app-nav-shadow: none;
+  --app-nav-background: #ffffff;
+  --app-nav-border: #e2e8f0;
+  --app-nav-shadow: 0 1px 0 var(--border);
   --app-panel-background: #ffffff;
-  --app-panel-border: #111111;
+  --app-panel-border: #e2e8f0;
   --app-panel-highlight: transparent;
   --app-panel-shadow: none;
-  --app-soft-panel-background: #fafafa;
-  --app-soft-panel-border: #333333;
+  --app-soft-panel-background: #f6f9fb;
+  --app-soft-panel-border: #e2e8f0;
   --app-soft-panel-highlight: none;
-  /* 상태 색: 무채색에 자연스럽게 녹아들되 식별 가능한 톤다운 팔레트 */
-  --ok-fg: #35543c;
-  --ok-bg: #eef4ea;
-  --ok-border: #b3c6a6;
-  --ok-solid: #3f7d54;
-  --warn-fg: #6a4a15;
-  --warn-bg: #faf3df;
-  --warn-border: #e0c489;
-  --warn-solid: #ab8130;
-  --err-fg: #6f3527;
-  --err-bg: #f7ece7;
-  --err-border: #d6ad9e;
-  --err-solid: #b26550;
+  /* 상태 색: 네이비/틸 팔레트에 맞춘 톤다운 시맨틱 컬러 */
+  --ok-fg: #0f766e;
+  --ok-bg: #ecfdf9;
+  --ok-border: #99f0e4;
+  --ok-solid: #0d9488;
+  --warn-fg: #92400e;
+  --warn-bg: #fef7e8;
+  --warn-border: #f2d29b;
+  --warn-solid: #b8860b;
+  --err-fg: #9a3b2e;
+  --err-bg: #fdf1ee;
+  --err-border: #edc4b8;
+  --err-solid: #c2542f;
   --status-live: var(--ok-solid);
   --status-warn: var(--warn-solid);
   --status-fail: var(--err-solid);
@@ -248,6 +248,12 @@
 
   .app-shell__container--wide {
     max-width: 1440px;
+  }
+
+  /* topbar만 예외: 로고/메뉴가 컨테이너 폭 제한 없이 화면 가장자리에 붙는다(랜딩 nav와 동일 패턴) */
+  .app-shell__topbar .app-shell__container {
+    max-width: none;
+    padding-inline: clamp(1rem, 2.5vw, 2rem);
   }
 
   .app-shell__nav {
@@ -450,7 +456,7 @@
   .dot-warn { background: var(--warn-solid); }
   .dot-err { background: var(--err-solid); }
 
-  .text-ok { color: var(--ok-solid); }
+  .text-ok { color: var(--ok-fg); }
   .text-warn { color: var(--warn-solid); }
   .text-err { color: var(--err-solid); }
 
@@ -542,4 +548,46 @@
 .app-shell__actions button svg {
   width: 0.9rem;
   height: 0.9rem;
+}
+
+.app-nav-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: auto;
+  padding: 0.4rem 0.05rem;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.app-nav-tab:hover {
+  color: var(--ok-fg);
+}
+
+.app-nav-tab--active {
+  color: var(--ok-fg);
+}
+
+.app-nav-tab--active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.3rem;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.app-shell__actions .app-nav-tab {
+  height: auto;
+  padding-inline: 0.05rem;
+  font-size: 0.92rem;
+  gap: 0;
 }
