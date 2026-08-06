@@ -250,6 +250,12 @@
     max-width: 1440px;
   }
 
+  /* topbar만 예외: 로고/메뉴가 컨테이너 폭 제한 없이 화면 가장자리에 붙는다(랜딩 nav와 동일 패턴) */
+  .app-shell__topbar .app-shell__container {
+    max-width: none;
+    padding-inline: clamp(1rem, 2.5vw, 2rem);
+  }
+
   .app-shell__nav {
     display: flex;
     align-items: center;
