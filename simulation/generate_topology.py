@@ -6,15 +6,11 @@
 실행: python -m simulation.generate_topology (저장소 루트에서)
 """
 
-import json
 from pathlib import Path
 
-from simulation.demo_data import HOSPITAL_BEACON_UUID, ROOMS, STAFF_ACCOUNTS
+from simulation.demo_data import HOSPITAL_BEACON_UUID, REAL_READERS, ROOMS, STAFF_ACCOUNTS
 
 OUTPUT_PATH = Path(__file__).resolve().parents[1] / "database" / "seed_demo_topology.sql"
-# DB에는 안 들어가는 참고용 산출물: 관리자 핀 편집기(/admin/floor-map)에서 각 리더를
-# 어느 층 탭에 배치해야 하는지 사람이 참고하는 목록.
-PLACEMENT_HINTS_PATH = Path(__file__).resolve().parent / "floor_placement_hints.json"
 
 
 def sql_escape(value: str) -> str:
@@ -22,20 +18,52 @@ def sql_escape(value: str) -> str:
 
 
 def build_reader_rows() -> list[str]:
-    # floor/map_x/map_y는 일부러 비워둔다: readers_map_position_consistent CHECK 제약이
-    # 세 컬럼을 전부 채우거나 전부 비우도록 강제하므로, 실제 좌표는 관리자 핀 편집기
-    # (/admin/floor-map)로 배치해야 한다. demo_data.py의 floor 값은 어느 층 탭에서
-    # 배치해야 하는지 알려주는 참고용일 뿐 DB에는 쓰지 않는다 — build_placement_hints() 참고.
     rows = []
-    for reader_id, _floor, location_name, _equipment in ROOMS:
-        rows.append(f"    ('{reader_id}', '{sql_escape(location_name)}', FALSE)")
+    for reader_id, floor, location_name, map_x, map_y, _equipment in ROOMS:
+        rows.append(f"    ('{reader_id}', '{sql_escape(location_name)}', {floor}, {map_x}, {map_y}, FALSE)")
     return rows
+
+
+def build_reader_position_updates() -> list[str]:
+    # 이미 시딩된 DB(좌표가 비어 있는 기존 행)에도 좌표를 채우기 위한 보정 UPDATE.
+    # map_x IS NULL 조건 덕분에 관리자가 핀 편집기로 옮겨둔 좌표는 덮어쓰지 않는다.
+    rows = []
+    for reader_id, floor, _location_name, map_x, map_y, _equipment in ROOMS:
+        rows.append(
+            f"UPDATE readers SET floor = {floor}, map_x = {map_x}, map_y = {map_y}, updated_at = now()\n"
+            f"    WHERE reader_id = '{reader_id}' AND map_x IS NULL;"
+        )
+    return rows
+
+
+def build_real_reader_statements() -> list[str]:
+    # 실물 리더는 /ingest가 자동 upsert하지만, 하드웨어가 꺼져 있어도 지도에 보이도록
+    # 미리 만들어 둔다. is_real_hardware는 명시하지 않아 DB 기본값 TRUE가 적용된다.
+    statements = []
+    for reader_id, floor, location_name, map_x, map_y in REAL_READERS:
+        escaped = sql_escape(location_name)
+        statements.append(
+            f"INSERT INTO readers (reader_id, location_name, floor, map_x, map_y) VALUES\n"
+            f"    ('{reader_id}', '{escaped}', {floor}, {map_x}, {map_y})\n"
+            f"ON CONFLICT (reader_id) DO NOTHING;"
+        )
+        statements.append(
+            f"UPDATE readers SET floor = {floor}, map_x = {map_x}, map_y = {map_y}, updated_at = now()\n"
+            f"    WHERE reader_id = '{reader_id}' AND map_x IS NULL;"
+        )
+        # location_name이 플레이스홀더(reader_id 그대로)로 남아 있는 경우에만 실제 이름으로 교체한다.
+        # upsert_readers_from_ingest는 COALESCE라 기존 값을 못 고치기 때문.
+        statements.append(
+            f"UPDATE readers SET location_name = '{escaped}', updated_at = now()\n"
+            f"    WHERE reader_id = '{reader_id}' AND location_name = '{reader_id}';"
+        )
+    return statements
 
 
 def build_tag_rows() -> list[str]:
     rows = []
     seq = 0
-    for _reader_id, floor, _location_name, equipment in ROOMS:
+    for _reader_id, floor, _location_name, _map_x, _map_y, equipment in ROOMS:
         for equipment_name, equipment_type, count in equipment:
             for _ in range(count):
                 seq += 1
@@ -52,8 +80,7 @@ def build_tag_rows() -> list[str]:
 
 def build_user_rows() -> list[str]:
     # 비밀번호 해시는 시딩 시점에 알 수 없는 SIM_STAFF_PASSWORD에 의존하므로 여기서
-    # 만들지 않는다 — seed_demo_topology.sql 적용 후 simulator.py 최초 기동 시
-    # UPDATE로 채운다(자세한 내용은 simulation/CLAUDE.md 참고).
+    # 만들지 않는다 — simulator.py 기동 시 db.ensure_staff_passwords()가 채운다.
     rows = []
     for username, display_name, department, position in STAFF_ACCOUNTS:
         email = f"{username}@sch-cheonan.local"
@@ -67,30 +94,31 @@ def build_user_rows() -> list[str]:
     return rows
 
 
-def build_placement_hints() -> list[dict]:
-    return [
-        {"reader_id": reader_id, "floor": floor, "location_name": location_name}
-        for reader_id, floor, location_name, _equipment in ROOMS
-    ]
-
-
 def main() -> None:
     reader_rows = build_reader_rows()
     tag_rows = build_tag_rows()
     user_rows = build_user_rows()
+    position_updates = build_reader_position_updates()
+    real_reader_statements = build_real_reader_statements()
 
     sql = f"""-- database/seed_demo_topology.sql
 -- simulation/generate_topology.py가 simulation/demo_data.py로부터 생성했다(정적 산출물,
 -- 수동 수정하지 말 것 — 데이터를 바꾸려면 demo_data.py를 고치고 다시 생성한다).
 -- 순천향대학교 천안병원 본관 1~5층 실제 부서 구성을 본뜬 모의(시뮬레이션) 리더/장비/staff.
 -- 전부 is_real_hardware = FALSE로 표시되어 실물(M501/M502, 실물 태그)과 구분된다.
--- 멱등적(ON CONFLICT DO NOTHING) — 재실행해도 안전하다.
+-- 멱등적 — 재실행해도 안전하고, 관리자가 핀 편집기로 옮긴 좌표를 덮어쓰지 않는다.
 
 BEGIN;
 
-INSERT INTO readers (reader_id, location_name, is_real_hardware) VALUES
+INSERT INTO readers (reader_id, location_name, floor, map_x, map_y, is_real_hardware) VALUES
 {",\n".join(reader_rows)}
 ON CONFLICT (reader_id) DO NOTHING;
+
+-- 좌표 없이 먼저 시딩된 DB를 위한 보정(map_x IS NULL인 행만).
+{"\n".join(position_updates)}
+
+-- 실물 하드웨어 리더의 위치/좌표(생성이 아니라 표시 정보 보정).
+{"\n\n".join(real_reader_statements)}
 
 INSERT INTO tags (
     tag_id, equipment_name, equipment_type, serial_number, nfc_tag_uid, asset_status, is_real_hardware
@@ -109,9 +137,10 @@ COMMIT;
 """
 
     OUTPUT_PATH.write_text(sql, encoding="utf-8")
-    PLACEMENT_HINTS_PATH.write_text(json.dumps(build_placement_hints(), ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"wrote {OUTPUT_PATH} ({len(reader_rows)} readers, {len(tag_rows)} tags, {len(user_rows)} users)")
-    print(f"wrote {PLACEMENT_HINTS_PATH}")
+    print(
+        f"wrote {OUTPUT_PATH} ({len(reader_rows)} readers, {len(REAL_READERS)} real readers, "
+        f"{len(tag_rows)} tags, {len(user_rows)} users)"
+    )
 
 
 if __name__ == "__main__":
