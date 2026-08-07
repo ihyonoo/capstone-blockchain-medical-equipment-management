@@ -1,0 +1,252 @@
+[
+  {
+    "reader_id": "M101",
+    "floor": 1,
+    "location_name": "소아전용응급의료센터 진료구역"
+  },
+  {
+    "reader_id": "M102",
+    "floor": 1,
+    "location_name": "소아전용응급의료센터 처치실"
+  },
+  {
+    "reader_id": "M103",
+    "floor": 1,
+    "location_name": "충남권역응급의료센터 진료구역"
+  },
+  {
+    "reader_id": "M104",
+    "floor": 1,
+    "location_name": "응급 소생실"
+  },
+  {
+    "reader_id": "M105",
+    "floor": 1,
+    "location_name": "의료영상센터 CT실"
+  },
+  {
+    "reader_id": "M106",
+    "floor": 1,
+    "location_name": "의료영상센터 X-ray실"
+  },
+  {
+    "reader_id": "M107",
+    "floor": 1,
+    "location_name": "의료영상센터 초음파실"
+  },
+  {
+    "reader_id": "M108",
+    "floor": 1,
+    "location_name": "외래약국"
+  },
+  {
+    "reader_id": "M109",
+    "floor": 1,
+    "location_name": "원무/행정팀"
+  },
+  {
+    "reader_id": "M110",
+    "floor": 1,
+    "location_name": "의무기록/협력센터"
+  },
+  {
+    "reader_id": "M201",
+    "floor": 2,
+    "location_name": "채혈/호흡기검사실"
+  },
+  {
+    "reader_id": "M202",
+    "floor": 2,
+    "location_name": "심장내과검사실"
+  },
+  {
+    "reader_id": "M203",
+    "floor": 2,
+    "location_name": "암센터/종양혈액내과 외래"
+  },
+  {
+    "reader_id": "M204",
+    "floor": 2,
+    "location_name": "주사센터"
+  },
+  {
+    "reader_id": "M205",
+    "floor": 2,
+    "location_name": "호흡기센터"
+  },
+  {
+    "reader_id": "M206",
+    "floor": 2,
+    "location_name": "심장혈관센터"
+  },
+  {
+    "reader_id": "M207",
+    "floor": 2,
+    "location_name": "응급중환자실"
+  },
+  {
+    "reader_id": "M208",
+    "floor": 2,
+    "location_name": "신경과센터"
+  },
+  {
+    "reader_id": "M209",
+    "floor": 2,
+    "location_name": "소화기/내시경센터"
+  },
+  {
+    "reader_id": "M210",
+    "floor": 2,
+    "location_name": "정신건강의학센터"
+  },
+  {
+    "reader_id": "M301",
+    "floor": 3,
+    "location_name": "가정의학과"
+  },
+  {
+    "reader_id": "M302",
+    "floor": 3,
+    "location_name": "당뇨/내분비내과"
+  },
+  {
+    "reader_id": "M303",
+    "floor": 3,
+    "location_name": "유방/갑상선센터"
+  },
+  {
+    "reader_id": "M304",
+    "floor": 3,
+    "location_name": "감염내과센터"
+  },
+  {
+    "reader_id": "M305",
+    "floor": 3,
+    "location_name": "이비인후과"
+  },
+  {
+    "reader_id": "M306",
+    "floor": 3,
+    "location_name": "치과"
+  },
+  {
+    "reader_id": "M307",
+    "floor": 3,
+    "location_name": "안과"
+  },
+  {
+    "reader_id": "M308",
+    "floor": 3,
+    "location_name": "정형외과/척추센터"
+  },
+  {
+    "reader_id": "M309",
+    "floor": 3,
+    "location_name": "통증/재활/류마티스센터"
+  },
+  {
+    "reader_id": "M310",
+    "floor": 3,
+    "location_name": "비뇨의학과"
+  },
+  {
+    "reader_id": "M311",
+    "floor": 3,
+    "location_name": "피부/성형외과 클리닉"
+  },
+  {
+    "reader_id": "M401",
+    "floor": 4,
+    "location_name": "진단검사의학과 검체접수실"
+  },
+  {
+    "reader_id": "M402",
+    "floor": 4,
+    "location_name": "진단검사의학과 자동화검사실"
+  },
+  {
+    "reader_id": "M403",
+    "floor": 4,
+    "location_name": "소아재활/특수센터"
+  },
+  {
+    "reader_id": "M404",
+    "floor": 4,
+    "location_name": "모체태아의학/고위험산과"
+  },
+  {
+    "reader_id": "M405",
+    "floor": 4,
+    "location_name": "여성건강센터"
+  },
+  {
+    "reader_id": "M406",
+    "floor": 4,
+    "location_name": "병리과"
+  },
+  {
+    "reader_id": "M407",
+    "floor": 4,
+    "location_name": "장기이식센터"
+  },
+  {
+    "reader_id": "M408",
+    "floor": 4,
+    "location_name": "신장/투석센터 투석실A"
+  },
+  {
+    "reader_id": "M409",
+    "floor": 4,
+    "location_name": "신장/투석센터 투석실B"
+  },
+  {
+    "reader_id": "M503",
+    "floor": 5,
+    "location_name": "외과계중환자실"
+  },
+  {
+    "reader_id": "M504",
+    "floor": 5,
+    "location_name": "심장내과중환자실"
+  },
+  {
+    "reader_id": "M505",
+    "floor": 5,
+    "location_name": "마취통증의학과 준비구역"
+  },
+  {
+    "reader_id": "M506",
+    "floor": 5,
+    "location_name": "외래수술센터 회복실"
+  },
+  {
+    "reader_id": "M507",
+    "floor": 5,
+    "location_name": "본관수술센터 회복실"
+  },
+  {
+    "reader_id": "M508",
+    "floor": 5,
+    "location_name": "충남권역심뇌혈관센터 진료구역"
+  },
+  {
+    "reader_id": "M509",
+    "floor": 5,
+    "location_name": "충남권역심뇌혈관센터 시술실"
+  },
+  {
+    "reader_id": "M510",
+    "floor": 5,
+    "location_name": "내과계중환자실"
+  },
+  {
+    "reader_id": "M511",
+    "floor": 5,
+    "location_name": "본관수술센터 준비구역"
+  },
+  {
+    "reader_id": "M512",
+    "floor": 5,
+    "location_name": "외래수술센터 준비구역"
+  }
+]
