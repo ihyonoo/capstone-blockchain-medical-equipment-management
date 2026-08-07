@@ -21,11 +21,11 @@ AUTH_TOKEN_TTL_SEC = max(300, int(os.getenv("AUTH_TOKEN_TTL_SEC", "43200")))
 APP_PUBLIC_URL = os.getenv("APP_PUBLIC_URL", "http://localhost:5173").rstrip("/")
 
 # 이메일 기반 액션 토큰(인증/재설정/OAuth handoff) 유효 시간.
-EMAIL_VERIFY_TTL_SEC = max(300, int(os.getenv("EMAIL_VERIFY_TTL_SEC", "86400")))     # 기본 24h
+EMAIL_VERIFY_TTL_SEC = max(300, int(os.getenv("EMAIL_VERIFY_TTL_SEC", "86400")))  # 기본 24h
 PASSWORD_RESET_TTL_SEC = max(300, int(os.getenv("PASSWORD_RESET_TTL_SEC", "3600")))  # 기본 1h
-OAUTH_STATE_TTL_SEC = max(60, int(os.getenv("OAUTH_STATE_TTL_SEC", "600")))          # 기본 10m
-OAUTH_HANDOFF_TTL_SEC = max(30, int(os.getenv("OAUTH_HANDOFF_TTL_SEC", "120")))      # 기본 2m
-OAUTH_PENDING_TTL_SEC = max(300, int(os.getenv("OAUTH_PENDING_TTL_SEC", "1800")))    # 기본 30m
+OAUTH_STATE_TTL_SEC = max(60, int(os.getenv("OAUTH_STATE_TTL_SEC", "600")))  # 기본 10m
+OAUTH_HANDOFF_TTL_SEC = max(30, int(os.getenv("OAUTH_HANDOFF_TTL_SEC", "120")))  # 기본 2m
+OAUTH_PENDING_TTL_SEC = max(300, int(os.getenv("OAUTH_PENDING_TTL_SEC", "1800")))  # 기본 30m
 
 # Gmail SMTP (앱 비밀번호). 값이 비어 있으면 email_utils가 dev 폴백(로그 출력)으로 동작한다.
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -45,8 +45,8 @@ REDIS_RETRY_COOLDOWN_SEC = 5
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,49}$")
 
 READER_LOCATION = {
-    "M503": "수술실",
-    "M504": "영상의학과",
+    "M501": "수술실",
+    "M502": "영상의학과",
 }
 
 HYST_DB = 8

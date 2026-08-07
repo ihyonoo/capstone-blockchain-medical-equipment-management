@@ -4,6 +4,8 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
 import StaffNav from '../components/layout/StaffNav';
+import FloorMapView, { type FloorMapPin, type FloorMapEquipmentDot } from '../components/FloorMapView';
+import { FLOOR_MAPS, type FloorNumber } from '../lib/floorMaps';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout } from '../lib/useAuthGuard';
@@ -30,6 +32,9 @@ type LiveReaderItem = {
   location: string;
   is_online: boolean;
   last_seen: number | null;
+  floor: number | null;
+  map_x: number | null;
+  map_y: number | null;
 };
 
 type EquipmentViewItem = {
@@ -100,6 +105,8 @@ export default function EquipmentSearch() {
   const [selectedType, setSelectedType] = useState('전체');
   const [selectedLocation, setSelectedLocation] = useState('전체');
   const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [selectedFloor, setSelectedFloor] = useState<FloorNumber>(1);
   const isAuthorized = useAuthGuard(() => {
     try {
       const session = getStoredAuthSession();
@@ -184,6 +191,27 @@ export default function EquipmentSearch() {
       (item) => selectedLocation === '전체' || item.location === selectedLocation,
     );
   }, [searchAndTypeFilteredEquipment, selectedLocation]);
+
+  // 지도 탭: 선택된 층에 좌표가 배치된 리더만 핀으로 그리고, 그 리더에 속한 장비를 점으로 흩뿌린다.
+  const floorPins = useMemo<FloorMapPin[]>(
+    () =>
+      readers
+        .filter((r) => r.floor === selectedFloor && r.map_x !== null && r.map_y !== null)
+        .map((r) => ({
+          reader_id: r.reader_id,
+          label: r.location,
+          map_x: r.map_x as number,
+          map_y: r.map_y as number,
+        })),
+    [readers, selectedFloor],
+  );
+
+  const floorEquipmentDots = useMemo<FloorMapEquipmentDot[]>(() => {
+    const pinReaderIds = new Set(floorPins.map((p) => p.reader_id));
+    return searchAndTypeFilteredEquipment
+      .filter((eq) => pinReaderIds.has(eq.readerId))
+      .map((eq) => ({ tag_id: eq.id, reader_id: eq.readerId, label: eq.name }));
+  }, [floorPins, searchAndTypeFilteredEquipment]);
 
   useEffect(() => {
     if (!isAuthorized) return;
@@ -371,10 +399,51 @@ export default function EquipmentSearch() {
               <div>
                 <div className="panel-title">리더 위치 패널</div>
               </div>
-              <Badge variant="outline">활성 수신 구역 {locationPanels.length}개</Badge>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={viewMode === 'list' ? 'app-nav-tab app-nav-tab--active' : 'app-nav-tab'}
+                  onClick={() => setViewMode('list')}
+                >
+                  목록
+                </button>
+                <button
+                  type="button"
+                  className={viewMode === 'map' ? 'app-nav-tab app-nav-tab--active' : 'app-nav-tab'}
+                  onClick={() => setViewMode('map')}
+                >
+                  지도
+                </button>
+                <Badge variant="outline">활성 수신 구역 {locationPanels.length}개</Badge>
+              </div>
             </div>
 
-            {locationPanels.length === 0 ? (
+            {viewMode === 'map' ? (
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  {FLOOR_MAPS.map((f) => (
+                    <button
+                      key={f.floor}
+                      type="button"
+                      className={f.floor === selectedFloor ? 'app-nav-tab app-nav-tab--active' : 'app-nav-tab'}
+                      onClick={() => setSelectedFloor(f.floor)}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                {floorPins.length === 0 ? (
+                  <div className="empty-state">이 층에는 아직 배치된 구역이 없습니다.</div>
+                ) : (
+                  <FloorMapView
+                    floor={selectedFloor}
+                    pins={floorPins}
+                    equipment={floorEquipmentDots}
+                    onEquipmentClick={(tagId) => setSelectedEquipment(tagId)}
+                  />
+                )}
+              </div>
+            ) : locationPanels.length === 0 ? (
               <div className="empty-state">아직 수신된 RTLS 위치 데이터가 없습니다.</div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
