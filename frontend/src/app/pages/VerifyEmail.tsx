@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../components/ui/button';
-import AppShell from '../components/layout/AppShell';
+import AuthSplitLayout from '../components/layout/AuthSplitLayout';
 import { API_BASE_URL } from '../lib/runtime';
 import { LOGIN_PATH } from '../lib/auth';
 
@@ -45,26 +45,18 @@ export default function VerifyEmail() {
   }, [searchParams]);
 
   return (
-    <AppShell>
-      <div className="mx-auto mt-6 w-full max-w-xl sm:mt-8">
-        <section className="surface-panel p-6 fade-rise sm:p-8">
-          <div className="mb-6">
-            <div className="panel-title">이메일 인증</div>
-          </div>
+    <AuthSplitLayout title="이메일 인증">
+      <div className="space-y-5">
+        {status === 'loading' ? <div className="alert">{message}</div> : null}
+        {status === 'success' ? <div className="alert alert-success">{message}</div> : null}
+        {status === 'error' ? <div className="alert alert-error">{message}</div> : null}
 
-          {status === 'loading' ? <div className="alert">{message}</div> : null}
-          {status === 'success' ? <div className="alert alert-success">{message}</div> : null}
-          {status === 'error' ? <div className="alert alert-error">{message}</div> : null}
-
-          {status !== 'loading' ? (
-            <div className="pt-4">
-              <Button className="w-full" size="lg" onClick={() => navigate(LOGIN_PATH, { replace: true })}>
-                로그인하러 가기
-              </Button>
-            </div>
-          ) : null}
-        </section>
+        {status !== 'loading' ? (
+          <Button className="w-full" size="lg" onClick={() => navigate(LOGIN_PATH, { replace: true })}>
+            로그인하러 가기
+          </Button>
+        ) : null}
       </div>
-    </AppShell>
+    </AuthSplitLayout>
   );
 }

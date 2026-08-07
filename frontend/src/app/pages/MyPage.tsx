@@ -301,7 +301,7 @@ export default function MyPage() {
                     <span>{user.email ?? '-'}</span>
                     {user.email ? (
                       <span
-                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
+                        className={`inline-flex items-center border px-2 py-0.5 text-xs ${
                           user.email_verified ? 'tone-ok' : 'tone-warn'
                         }`}
                       >
@@ -513,7 +513,7 @@ export default function MyPage() {
                             </td>
                             <td className="py-2">
                               <span
-                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
+                                className={`inline-flex items-center border px-2 py-0.5 text-xs ${
                                   item.usage_status === 'returned' ? 'tone-neutral' : 'tone-ok'
                                 }`}
                               >

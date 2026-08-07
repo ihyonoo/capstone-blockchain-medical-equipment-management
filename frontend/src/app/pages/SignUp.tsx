@@ -4,8 +4,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import AppShell from '../components/layout/AppShell';
-import { ChevronLeft } from 'lucide-react';
+import AuthSplitLayout from '../components/layout/AuthSplitLayout';
 import { cn } from '../components/ui/utils';
 import GoogleButton from '../components/GoogleButton';
 import PasswordChecklist from '../components/PasswordChecklist';
@@ -99,163 +98,148 @@ export default function SignUp() {
   };
 
   return (
-    <AppShell>
-      <div className="mx-auto mt-6 w-full max-w-3xl sm:mt-8">
-        <section className="surface-panel p-6 fade-rise sm:p-8">
-          <div className="mb-6">
-            <div className="panel-title">회원가입</div>
+    <AuthSplitLayout title="회원가입" subtitle="병원 계정을 만들고 장비 이력 관리를 시작하세요.">
+      <form onSubmit={handleSignUp} className="space-y-5">
+        <div className="space-y-2">
+          <Label htmlFor="username">아이디</Label>
+          <Input
+            id="username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="test"
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="displayName">이름</Label>
+          <Input
+            id="displayName"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="홍길동"
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email">이메일</Label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>가입 권한</Label>
+          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="가입 권한 선택">
+            {ROLE_OPTIONS.map((item) => {
+              const selected = role === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setRole(item.value)}
+                  className={cn(
+                    'border px-4 py-4 text-left transition-all duration-200',
+                    selected
+                      ? 'border-foreground bg-secondary'
+                      : 'border-border bg-card hover:-translate-y-0.5 hover:bg-card',
+                  )}
+                >
+                  <div className="text-base font-semibold text-foreground">{item.label}</div>
+                </button>
+              );
+            })}
           </div>
+        </div>
 
-          <form onSubmit={handleSignUp} className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-1">
-              <Label htmlFor="username">아이디</Label>
-              <Input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="test"
-                required
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-1">
-              <Label htmlFor="displayName">이름</Label>
-              <Input
-                id="displayName"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="홍길동"
-                required
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="email">이메일</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
-                required
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label>가입 권한</Label>
-              <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="가입 권한 선택">
-                {ROLE_OPTIONS.map((item) => {
-                  const selected = role === item.value;
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => setRole(item.value)}
-                      className={cn(
-                        'rounded-lg border px-4 py-4 text-left transition-all duration-200',
-                        selected
-                          ? 'border-foreground bg-secondary'
-                          : 'border-border bg-card hover:-translate-y-0.5 hover:bg-card',
-                      )}
-                    >
-                      <div className="text-base font-semibold text-foreground">{item.label}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {!isAdminRole ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="department">부서</Label>
-                  <Input
-                    id="department"
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    placeholder="내과"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>직책</Label>
-                  <Select value={position} onValueChange={setPosition}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="직책 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {POSITION_OPTIONS.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {item}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            ) : null}
-
+        {!isAdminRole ? (
+          <>
             <div className="space-y-2">
-              <Label htmlFor="password">비밀번호</Label>
+              <Label htmlFor="department">부서</Label>
               <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="영문·숫자·특수문자 포함 8자 이상"
-                required
+                id="department"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                placeholder="내과"
               />
-              <PasswordChecklist value={password} />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="passwordConfirm">비밀번호 확인</Label>
-              <Input
-                id="passwordConfirm"
-                type="password"
-                value={passwordConfirm}
-                onChange={(e) => setPasswordConfirm(e.target.value)}
-                placeholder="비밀번호 다시 입력"
-                required
-              />
-              <PasswordMatchHint password={password} confirm={passwordConfirm} />
+              <Label>직책</Label>
+              <Select value={position} onValueChange={setPosition}>
+                <SelectTrigger>
+                  <SelectValue placeholder="직책 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {POSITION_OPTIONS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+          </>
+        ) : null}
 
-            {error ? <div className="md:col-span-2 alert alert-error">{error}</div> : null}
-            {success ? <div className="md:col-span-2 alert alert-success">{success}</div> : null}
+        <div className="space-y-2">
+          <Label htmlFor="password">비밀번호</Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="영문·숫자·특수문자 포함 8자 이상"
+            required
+          />
+          <PasswordChecklist value={password} />
+        </div>
 
-            <div className="md:col-span-2 flex flex-col gap-3 pt-2 sm:flex-row">
-              <Button type="submit" className="flex-1" size="lg" disabled={isLoading}>
-                {isLoading ? '가입 중...' : '회원가입'}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="flex-1"
-                onClick={() => navigate(withRedirectQuery(LOGIN_PATH, redirectTarget))}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                로그인으로 돌아가기
-              </Button>
-            </div>
+        <div className="space-y-2">
+          <Label htmlFor="passwordConfirm">비밀번호 확인</Label>
+          <Input
+            id="passwordConfirm"
+            type="password"
+            value={passwordConfirm}
+            onChange={(e) => setPasswordConfirm(e.target.value)}
+            placeholder="비밀번호 다시 입력"
+            required
+          />
+          <PasswordMatchHint password={password} confirm={passwordConfirm} />
+        </div>
 
-            <div className="md:col-span-2 relative py-1">
-              <div className="border-t border-border" />
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground">
-                또는
-              </span>
-            </div>
+        {error ? <div className="alert alert-error">{error}</div> : null}
+        {success ? <div className="alert alert-success">{success}</div> : null}
 
-            <div className="md:col-span-2">
-              <GoogleButton mode="signup" label="Google로 가입하기" />
-            </div>
-          </form>
-        </section>
-      </div>
-    </AppShell>
+        <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+          {isLoading ? '가입 중...' : '회원가입'}
+        </Button>
+
+        <div className="auth-split__links">
+          <button
+            type="button"
+            className="auth-split__link"
+            onClick={() => navigate(withRedirectQuery(LOGIN_PATH, redirectTarget))}
+          >
+            로그인으로 돌아가기
+          </button>
+        </div>
+
+        <div className="auth-split__divider">
+          <span>또는</span>
+        </div>
+
+        <GoogleButton mode="signup" label="Google로 가입하기" />
+      </form>
+    </AuthSplitLayout>
   );
 }

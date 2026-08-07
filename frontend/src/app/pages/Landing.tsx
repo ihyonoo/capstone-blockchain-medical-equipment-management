@@ -78,7 +78,7 @@ export default function Landing() {
     <div className="landing">
       <header className={`landing__nav ${scrolled ? 'landing__nav--scrolled' : ''}`}>
         <div className="landing__container landing__nav-inner">
-          <span className="landing__brand">MediLedger EquipTrace</span>
+          <span className="landing__brand">MediLedger &amp; EquipTrace</span>
           <nav className="landing__nav-links">
             <a className="landing__nav-link" href="#features">
               기능
@@ -207,8 +207,8 @@ export default function Landing() {
       <footer className="landing__footer">
         <div className="landing__container landing__footer-inner">
           <div>
-            <div className="landing__footer-brand">MediLedger EquipTrace</div>
-            <div className="landing__footer-copyright">© 2026 MediLedger EquipTrace</div>
+            <div className="landing__footer-brand">MediLedger &amp; EquipTrace</div>
+            <div className="landing__footer-copyright">© 2026 MediLedger &amp; EquipTrace</div>
           </div>
           <div className="landing__footer-links">
             <Link to="/login">로그인</Link>

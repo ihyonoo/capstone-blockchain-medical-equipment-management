@@ -28,7 +28,8 @@
   --chart-3: #274a6b;
   --chart-4: #5eead4;
   --chart-5: #99f6e4;
-  --radius: 1rem;
+  /* 랜딩 외 앱 화면은 각진 모서리로 통일 — 반경 토큰은 전부 0 */
+  --radius: 0px;
   --sidebar: #ffffff;
   --sidebar-foreground: #0f2e4f;
   --sidebar-primary: #0d9488;
@@ -94,10 +95,11 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* Tailwind rounded-sm/md/lg/xl도 모두 0 — rounded-* 클래스가 남아 있어도 각진 모서리로 렌더된다 */
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: var(--radius);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -262,8 +264,9 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 0.6rem 1rem;
-    min-height: 4rem;
-    padding-block: 0.6rem;
+    /* 랜딩 nav(.landing__nav-inner)와 동일한 높이·패딩 */
+    min-height: 4.8rem;
+    padding-block: 0.9rem;
   }
 
   .app-shell__hero {
@@ -295,10 +298,11 @@
     min-width: 0;
   }
 
+  /* 랜딩 로고(.landing__brand)와 동일한 타이포 */
   .brand-copy strong {
     display: block;
     color: var(--foreground);
-    font-size: 1.3rem;
+    font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.2;
@@ -537,19 +541,8 @@
   }
 }
 
-/* 상단바 우측 메뉴: 박스·폰트 축소 (레이어 밖 규칙으로 Tailwind 유틸리티 우선순위 상회) */
-.app-shell__actions button {
-  height: 2.15rem;
-  padding-inline: 0.85rem;
-  font-size: 0.8rem;
-  gap: 0.4rem;
-}
-
-.app-shell__actions button svg {
-  width: 0.9rem;
-  height: 0.9rem;
-}
-
+/* 상단바 메뉴는 랜딩 nav 링크(.landing__nav-link)와 동일한 텍스트 링크 스타일 */
+/* 레이어 밖 규칙이라 Tailwind 유틸리티 우선순위를 상회한다 */
 .app-nav-tab {
   position: relative;
   display: inline-flex;
@@ -559,7 +552,7 @@
   border: none;
   background: transparent;
   color: var(--muted-foreground);
-  font-size: 0.92rem;
+  font-size: 1.38rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   cursor: pointer;
@@ -568,6 +561,10 @@
 
 .app-nav-tab:hover {
   color: var(--ok-fg);
+}
+
+.app-nav-tab--logout:hover {
+  color: var(--err-fg);
 }
 
 .app-nav-tab--active {
@@ -581,13 +578,216 @@
   right: 0;
   bottom: -0.3rem;
   height: 2px;
-  border-radius: 999px;
   background: var(--primary);
 }
 
 .app-shell__actions .app-nav-tab {
   height: auto;
   padding-inline: 0.05rem;
-  font-size: 0.92rem;
+  font-size: 1.38rem;
   gap: 0;
+}
+
+/* ── 인증 화면 split 레이아웃 ─────────────────────────────── */
+/* 레이어 밖 규칙이라 .app-shell__content의 패딩을 덮어쓴다 */
+
+.auth-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* 상단바(min-height 4.8rem + border 1px) 아래를 화면 끝까지 채운다 */
+  height: calc(100vh - 4.8rem - 1px);
+  padding: 0;
+  background: var(--app-panel-background);
+}
+
+.auth-split__media {
+  position: relative;
+  overflow: hidden;
+  background: var(--muted);
+}
+
+.auth-split__form {
+  display: flex;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  padding: clamp(2rem, 4vw, 3.5rem) clamp(1.5rem, 4vw, 3.5rem);
+}
+
+/* align-items:center 대신 margin:auto — 내용이 넘칠 때 위쪽이 잘리지 않는다 */
+.auth-split__form-inner {
+  width: 100%;
+  max-width: 28rem;
+  margin: auto;
+}
+
+.auth-split__title {
+  font-size: clamp(2rem, 3.2vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--foreground);
+}
+
+.auth-split__subtitle {
+  margin-top: 0.7rem;
+  color: var(--muted-foreground);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.auth-split__body {
+  margin-top: 2rem;
+}
+
+/* 인증 폼 하단 보조 링크(회원가입·아이디 찾기 등) */
+.auth-split__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.auth-split__link:hover {
+  color: var(--primary);
+}
+
+/* 폼 안의 좌우 구분선 + '또는' */
+.auth-split__divider {
+  position: relative;
+  text-align: center;
+}
+
+.auth-split__divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-split__divider span {
+  position: relative;
+  padding-inline: 0.75rem;
+  background: var(--app-panel-background);
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+
+/* ── 인증 화면 이미지 캐러셀 ──────────────────────────────── */
+
+.auth-carousel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.auth-carousel__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.7s ease;
+}
+
+.auth-carousel__image--active {
+  opacity: 1;
+}
+
+.auth-carousel__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(10, 26, 41, 0.3);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.auth-carousel__arrow:hover {
+  background: rgba(10, 26, 41, 0.55);
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+.auth-carousel__arrow--prev {
+  left: 1.25rem;
+}
+
+.auth-carousel__arrow--next {
+  right: 1.25rem;
+}
+
+/* 아이콘 라이브러리 대신 보더로 그린 꺾쇠 */
+.auth-carousel__chevron {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-top: 2px solid #ffffff;
+  border-right: 2px solid #ffffff;
+}
+
+.auth-carousel__chevron--right {
+  transform: translateX(-2px) rotate(45deg);
+}
+
+.auth-carousel__chevron--left {
+  transform: translateX(2px) rotate(-135deg);
+}
+
+.auth-carousel__dots {
+  position: absolute;
+  left: 50%;
+  bottom: 1.6rem;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+}
+
+.auth-carousel__dot {
+  width: 2.25rem;
+  height: 3px;
+  border: none;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.auth-carousel__dot:hover {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.auth-carousel__dot--active {
+  background: #ffffff;
+}
+
+@media (max-width: 900px) {
+  .auth-split {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  /* 좁은 화면에서는 이미지 패널을 숨기고 폼만 세로로 흐르게 둔다 */
+  .auth-split__media {
+    display: none;
+  }
+
+  .auth-split__form {
+    border-left: none;
+    overflow: visible;
+  }
 }

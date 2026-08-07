@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import AppShell from '../components/layout/AppShell';
+import AuthSplitLayout from '../components/layout/AuthSplitLayout';
 import PasswordChecklist from '../components/PasswordChecklist';
 import { getPasswordError } from '../lib/passwordPolicy';
 import { API_BASE_URL } from '../lib/runtime';
@@ -59,55 +59,44 @@ export default function ResetPassword() {
   };
 
   return (
-    <AppShell>
-      <div className="mx-auto mt-6 w-full max-w-xl sm:mt-8">
-        <section className="surface-panel p-6 fade-rise sm:p-8">
-          <div className="mb-6">
-            <div className="panel-title">비밀번호 재설정</div>
-            <p className="panel-copy mt-2">새 비밀번호를 입력해 주세요.</p>
+    <AuthSplitLayout title="비밀번호 재설정" subtitle="새 비밀번호를 입력해 주세요.">
+      {!token ? (
+        <div className="alert alert-error">유효하지 않은 재설정 링크입니다. 메일의 링크를 다시 확인해 주세요.</div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="password">새 비밀번호</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="영문·숫자·특수문자 포함 8자 이상"
+              required
+            />
+            <PasswordChecklist value={password} />
           </div>
 
-          {!token ? (
-            <div className="alert alert-error">유효하지 않은 재설정 링크입니다. 메일의 링크를 다시 확인해 주세요.</div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="password">새 비밀번호</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="영문·숫자·특수문자 포함 8자 이상"
-                  required
-                />
-                <PasswordChecklist value={password} />
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="passwordConfirm">새 비밀번호 확인</Label>
+            <Input
+              id="passwordConfirm"
+              type="password"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              placeholder="비밀번호 다시 입력"
+              required
+            />
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="passwordConfirm">새 비밀번호 확인</Label>
-                <Input
-                  id="passwordConfirm"
-                  type="password"
-                  value={passwordConfirm}
-                  onChange={(e) => setPasswordConfirm(e.target.value)}
-                  placeholder="비밀번호 다시 입력"
-                  required
-                />
-              </div>
+          {error ? <div className="alert alert-error">{error}</div> : null}
+          {success ? <div className="alert alert-success">{success}</div> : null}
 
-              {error ? <div className="alert alert-error">{error}</div> : null}
-              {success ? <div className="alert alert-success">{success}</div> : null}
-
-              <div className="pt-2">
-                <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                  {isLoading ? '변경 중...' : '비밀번호 변경'}
-                </Button>
-              </div>
-            </form>
-          )}
-        </section>
-      </div>
-    </AppShell>
+          <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+            {isLoading ? '변경 중...' : '비밀번호 변경'}
+          </Button>
+        </form>
+      )}
+    </AuthSplitLayout>
   );
 }

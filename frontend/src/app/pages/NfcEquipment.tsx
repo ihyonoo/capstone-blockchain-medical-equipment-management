@@ -5,7 +5,6 @@ import { Button } from '../components/ui/button';
 import { buildAuthHeaders, getStoredAuthSession, getStoredAuthUser, withRedirectQuery, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
 import { API_BASE_URL } from '../lib/runtime';
-import { LogOut } from 'lucide-react';
 
 type NfcEquipmentItem = {
   tag_id: string;
@@ -149,35 +148,29 @@ export default function NfcEquipment() {
     <AppShell
       actions={
         <>
-          <Button variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => navigate('/me')}>
+          <button type="button" className="app-nav-tab" onClick={() => navigate('/me')}>
             마이페이지
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2.5 text-[11px] hover:border-[var(--err-border)] hover:text-[var(--err-fg)]"
-            onClick={logout}
-          >
-            <LogOut className="h-2.5 w-2.5" />
+          </button>
+          <button type="button" className="app-nav-tab app-nav-tab--logout" onClick={logout}>
             로그아웃
-          </Button>
+          </button>
         </>
       }
       headerAside={
         <div className="grid w-full grid-cols-3 gap-2 sm:gap-3">
-          <div className="rounded-[1.35rem] border border-border bg-card p-3 sm:p-4">
+          <div className="border border-border bg-card p-3 sm:p-4">
             <div className="metric-label truncate">스캔 토큰</div>
             <div className="mt-1 truncate text-xs font-semibold leading-5 text-foreground sm:mt-2 sm:text-sm sm:leading-6">
               {token || '-'}
             </div>
           </div>
-          <div className="rounded-[1.35rem] border border-border bg-card p-3 sm:p-4">
+          <div className="border border-border bg-card p-3 sm:p-4">
             <div className="metric-label truncate">장비 상태</div>
             <div className="mt-1 truncate text-xs font-semibold tracking-[-0.03em] text-foreground sm:mt-2 sm:text-sm sm:text-lg">
               {item ? getAssetStatusLabel(item.asset_status) : '-'}
             </div>
           </div>
-          <div className="rounded-[1.35rem] border border-border bg-card p-3 sm:p-4">
+          <div className="border border-border bg-card p-3 sm:p-4">
             <div className="metric-label truncate">현재 위치</div>
             <div className="mt-1 truncate text-xs font-semibold tracking-[-0.03em] text-foreground sm:mt-2 sm:text-sm sm:text-lg">
               {item?.location ?? '미수신'}
@@ -209,7 +202,7 @@ export default function NfcEquipment() {
             <div className="space-y-4">
               {notice ? <div className="alert alert-success px-5 py-4">{notice}</div> : null}
 
-              <section className="rounded-[28px] border border-border/70 bg-background/80 p-5">
+              <section className="border border-border/70 bg-background/80 p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div>
                     <div className="text-sm font-medium text-foreground">장비 사용 상태 전환</div>

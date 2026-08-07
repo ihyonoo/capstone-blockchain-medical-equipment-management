@@ -741,7 +741,7 @@ export default function IntegrityVerification() {
                 return (
                   <div
                     key={item.usage_id}
-                    className="relative overflow-hidden rounded-[1.25rem] border border-border bg-card p-4 pl-5 transition-all"
+                    className="relative overflow-hidden border border-border bg-card p-4 pl-5 transition-all"
                   >
                     <div
                       className={`absolute left-0 top-0 h-full w-1.5 ${getVerificationCardTone(verificationStatus)}`}

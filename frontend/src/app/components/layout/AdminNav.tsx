@@ -1,7 +1,5 @@
 import { useNavigate } from 'react-router';
-import { Button } from '../ui/button';
 import { cn } from '../ui/utils';
-import { LogOut } from 'lucide-react';
 import { clearStoredAuthSession, LOGIN_PATH } from '../../lib/auth';
 
 type AdminNavProps = {
@@ -36,14 +34,9 @@ export default function AdminNav({ active }: AdminNavProps) {
           {tab.label}
         </button>
       ))}
-      <Button
-        variant="outline"
-        onClick={logout}
-        className="hover:border-[var(--err-border)] hover:text-[var(--err-fg)]"
-      >
-        <LogOut className="h-4 w-4" />
+      <button type="button" className="app-nav-tab app-nav-tab--logout" onClick={logout}>
         로그아웃
-      </Button>
+      </button>
     </>
   );
 }
