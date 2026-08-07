@@ -264,7 +264,7 @@ export default function NfcMapping() {
                 const trimmedToken = tokenDraft.trim();
                 const nfcUrl = trimmedToken ? `${PUBLIC_APP_URL}/nfc/${trimmedToken}` : null;
                 return (
-                  <section key={item.tag_id} className="rounded-[28px] border border-border/70 bg-background/80 p-4">
+                  <section key={item.tag_id} className="border border-border/70 bg-background/80 p-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">

@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import AppShell from '../components/layout/AppShell';
+import AuthSplitLayout from '../components/layout/AuthSplitLayout';
 import GoogleButton from '../components/GoogleButton';
 import { getRedirectTarget, storeAuthSession, withRedirectQuery } from '../lib/auth';
 import { API_BASE_URL } from '../lib/runtime';
@@ -109,100 +109,89 @@ export default function Login() {
   };
 
   return (
-    <AppShell>
-      <div className="mx-auto mt-6 w-full max-w-xl sm:mt-8">
-        <section className="surface-panel p-6 fade-rise sm:p-8">
-          <div className="mb-6">
-            <div className="panel-title">로그인</div>
-          </div>
+    <AuthSplitLayout title="로그인" subtitle="장비의 위치와 사용 이력을 확인하려면 로그인해 주세요.">
+      <form onSubmit={handleLogin} className="space-y-5">
+        <div className="space-y-2">
+          <Label htmlFor="email">아이디</Label>
+          <Input
+            id="email"
+            type="text"
+            placeholder="test"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">아이디</Label>
-              <Input
-                id="email"
-                type="text"
-                placeholder="test"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">비밀번호</Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">비밀번호</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
+        <div className="space-y-2">
+          <Label>로그인 권한</Label>
+          <Select value={role} onValueChange={(value) => setRole(value as LoginRole)}>
+            <SelectTrigger>
+              <SelectValue placeholder="권한 선택" />
+            </SelectTrigger>
+            <SelectContent>
+              {ROLE_OPTIONS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-            <div className="space-y-2">
-              <Label>로그인 권한</Label>
-              <Select value={role} onValueChange={(value) => setRole(value as LoginRole)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="권한 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLE_OPTIONS.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {error ? (
-              <div className="alert alert-error">
-                {error}
-                {unverifiedEmail ? (
-                  <button
-                    type="button"
-                    onClick={handleResendVerification}
-                    className="mt-2 block font-medium underline underline-offset-2"
-                  >
-                    인증 메일 다시 보내기
-                  </button>
-                ) : null}
-              </div>
+        {error ? (
+          <div className="alert alert-error">
+            {error}
+            {unverifiedEmail ? (
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                className="mt-2 block font-medium underline underline-offset-2"
+              >
+                인증 메일 다시 보내기
+              </button>
             ) : null}
-            {resendMsg ? <div className="alert alert-success">{resendMsg}</div> : null}
+          </div>
+        ) : null}
+        {resendMsg ? <div className="alert alert-success">{resendMsg}</div> : null}
 
-            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-              <Button type="submit" className="flex-1" size="lg" disabled={isLoading}>
-                {isLoading ? '로그인 중...' : '로그인'}
-              </Button>
-              <Button type="button" variant="outline" size="lg" className="flex-1" onClick={handleSignUp}>
-                회원가입
-              </Button>
-            </div>
+        <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+          {isLoading ? '로그인 중...' : '로그인'}
+        </Button>
 
-            <div className="flex items-center justify-center gap-3 pt-1 text-sm text-muted-foreground">
-              <button type="button" className="hover:text-foreground" onClick={() => navigate('/find-id')}>
-                아이디 찾기
-              </button>
-              <span aria-hidden>·</span>
-              <button type="button" className="hover:text-foreground" onClick={() => navigate('/forgot-password')}>
-                비밀번호 찾기
-              </button>
-            </div>
+        <div className="auth-split__links">
+          <button type="button" className="auth-split__link" onClick={handleSignUp}>
+            회원가입
+          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" className="auth-split__link" onClick={() => navigate('/find-id')}>
+              아이디 찾기
+            </button>
+            <span aria-hidden>·</span>
+            <button type="button" className="auth-split__link" onClick={() => navigate('/forgot-password')}>
+              비밀번호 찾기
+            </button>
+          </div>
+        </div>
 
-            <div className="relative py-2">
-              <div className="border-t border-border" />
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground">
-                또는
-              </span>
-            </div>
+        <div className="auth-split__divider">
+          <span>또는</span>
+        </div>
 
-            <GoogleButton mode="login" />
-          </form>
-        </section>
-      </div>
-    </AppShell>
+        <GoogleButton mode="login" />
+      </form>
+    </AuthSplitLayout>
   );
 }
