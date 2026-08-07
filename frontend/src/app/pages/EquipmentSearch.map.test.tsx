@@ -30,7 +30,7 @@ function mockContainerRect() {
 
 const LIVE_PAYLOAD = {
   ok: true,
-  count: 1,
+  count: 2,
   ts: 0,
   items: [
     {
@@ -44,6 +44,22 @@ const LIVE_PAYLOAD = {
       reader_id: 'M101',
       location: '1층 병동 A',
       rssi: -55,
+      updated_at: 0,
+      is_stale: false,
+      is_online: true,
+      last_seen: 0,
+    },
+    {
+      tag_id: 'EQ-0002',
+      equipment_name: '수액펌프 2호',
+      equipment_type: '수액펌프',
+      serial_number: 'BME-2024-00002',
+      asset_status: 'checked_out',
+      current_holder_user_id: 7,
+      current_holder_name: '박수현',
+      reader_id: 'M101',
+      location: '1층 병동 A',
+      rssi: -58,
       updated_at: 0,
       is_stale: false,
       is_online: true,
@@ -79,7 +95,7 @@ describe('EquipmentSearch map view', () => {
     vi.restoreAllMocks();
   });
 
-  it('switches to the map tab and shows the equipment dot on the matching floor pin', async () => {
+  it('opens on the map view without needing to switch tabs', async () => {
     render(
       <MemoryRouter initialEntries={['/equipment']}>
         <Routes>
@@ -88,12 +104,80 @@ describe('EquipmentSearch map view', () => {
       </MemoryRouter>,
     );
 
-    await screen.findAllByText('수액펌프 1호');
+    expect(await screen.findByTestId('floor-map-container')).toBeInTheDocument();
+    expect(await screen.findByTestId('floor-map-equipment-EQ-0001')).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: '지도' }));
+  it('shows the equipment dot without drawing a zone marker', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
 
-    expect(await screen.findByTestId('floor-map-pin-M101')).toBeInTheDocument();
+    expect(await screen.findByTestId('floor-map-equipment-EQ-0001')).toBeInTheDocument();
+    // 직원 지도에는 구역 표식을 그리지 않는다 — 평면도에 이미 구역명이 인쇄돼 있다.
+    expect(screen.queryByTestId('floor-map-pin-M101')).not.toBeInTheDocument();
+  });
+
+  it('colors the equipment dot by its asset status on the map', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId('floor-map-equipment-EQ-0001')).toHaveClass('dot-ok');
+    expect(screen.getByTestId('floor-map-equipment-EQ-0002')).toHaveClass('dot-err');
+  });
+
+  it('hides checked-out equipment from the map when the available-only filter is on', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-equipment-EQ-0002');
+    fireEvent.click(screen.getByRole('checkbox', { name: '사용 가능 장비만 보기' }));
+
+    expect(screen.queryByTestId('floor-map-equipment-EQ-0002')).not.toBeInTheDocument();
     expect(screen.getByTestId('floor-map-equipment-EQ-0001')).toBeInTheDocument();
+  });
+
+  it('hides checked-out equipment from the list too when the available-only filter is on', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findAllByText('수액펌프 2호');
+    fireEvent.click(screen.getByRole('checkbox', { name: '사용 가능 장비만 보기' }));
+
+    expect(screen.queryByText('수액펌프 2호')).not.toBeInTheDocument();
+    expect(screen.getAllByText('수액펌프 1호').length).toBeGreaterThan(0);
+  });
+
+  it('no longer shows the reader panel heading', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    expect(screen.queryByText('리더 위치 패널')).not.toBeInTheDocument();
   });
 
   it('selects the equipment detail panel when its map dot is clicked', async () => {

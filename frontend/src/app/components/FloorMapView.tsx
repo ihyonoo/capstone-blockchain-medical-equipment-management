@@ -14,8 +14,22 @@ export type FloorMapEquipmentDot = {
   tag_id: string;
   reader_id: string;
   label: string;
+  assetStatus?: string;
   badge?: ReactNode;
 };
+
+// 목록·상세 화면과 같은 상태 색상 토큰을 쓴다(theme.css). 대여 중은 빨강 계열이라
+// 지도만 봐도 쓸 수 있는 장비와 나가 있는 장비가 바로 구분된다.
+const ASSET_STATUS_DOT: Record<string, { className: string; label: string }> = {
+  checked_out: { className: 'dot-err', label: '대여 중' },
+  maintenance: { className: 'dot-warn', label: '점검 중' },
+  inactive: { className: 'solid-neutral', label: '비활성' },
+  available: { className: 'dot-ok', label: '사용 가능' },
+};
+
+function assetStatusDot(status: string | undefined) {
+  return ASSET_STATUS_DOT[status ?? 'available'] ?? ASSET_STATUS_DOT.available;
+}
 
 type FloorMapViewProps = {
   floor: FloorNumber;
@@ -27,6 +41,9 @@ type FloorMapViewProps = {
   pendingReaderId?: string | null;
   onPendingPlace?: (mapX: number, mapY: number) => void;
   jitterMaxPct?: number;
+  // 구역 표식은 좌표를 배치·확인하는 관리자 핀 편집기에서만 필요하다. 직원용 지도에서는
+  // 평면도에 이미 구역명이 인쇄돼 있어 장비 점만 그린다.
+  showPins?: boolean;
 };
 
 function percentFromEvent(container: HTMLElement, clientX: number, clientY: number) {
@@ -48,6 +65,7 @@ export default function FloorMapView({
   pendingReaderId = null,
   onPendingPlace,
   jitterMaxPct = 1.75,
+  showPins = false,
 }: FloorMapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [draggingReaderId, setDraggingReaderId] = useState<string | null>(null);
@@ -108,7 +126,7 @@ export default function FloorMapView({
     >
       <img src={floorInfo.imagePath} alt={`${floorInfo.label} 평면도`} className="block w-full" draggable={false} />
 
-      {pins.map((pin) => {
+      {(showPins ? pins : []).map((pin) => {
         const isDragging = draggingReaderId === pin.reader_id;
         const x = isDragging && dragPct ? dragPct.x : pin.map_x;
         const y = isDragging && dragPct ? dragPct.y : pin.map_y;
@@ -118,7 +136,11 @@ export default function FloorMapView({
             type="button"
             data-floor-map-pin
             data-testid={`floor-map-pin-${pin.reader_id}`}
-            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-background px-2 py-1 text-[10px] font-medium shadow-sm"
+            // 구역명은 평면도 이미지에 이미 인쇄돼 있으므로 핀은 표식만 그리고
+            // 이름은 툴팁(title)으로만 노출한다.
+            title={pin.label}
+            aria-label={pin.label}
+            className="absolute -translate-x-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-primary bg-background shadow-sm"
             style={{ left: `${x}%`, top: `${y}%`, cursor: onPinMoved ? 'grab' : 'pointer' }}
             onMouseDown={handlePinMouseDown(pin.reader_id)}
             onClick={(event) => {
@@ -126,8 +148,7 @@ export default function FloorMapView({
               onPinClick?.(pin.reader_id);
             }}
           >
-            {pin.label}
-            {pin.badge}
+            {pin.badge ? <span className="absolute -right-1.5 -top-1.5">{pin.badge}</span> : null}
           </button>
         );
       })}
@@ -138,14 +159,16 @@ export default function FloorMapView({
           const { dx, dy } = jitterOffset(dot.tag_id, jitterMaxPct);
           const x = clampPct(pin.map_x + dx);
           const y = clampPct(pin.map_y + dy);
+          const status = assetStatusDot(dot.assetStatus);
           return (
             <button
               key={dot.tag_id}
               type="button"
               data-testid={`floor-map-equipment-${dot.tag_id}`}
-              title={dot.label}
-              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary"
-              style={{ left: `${x}%`, top: `${y}%`, width: 8, height: 8 }}
+              title={`${dot.label} · ${status.label}`}
+              aria-label={`${dot.label} · ${status.label}`}
+              className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-background ${status.className}`}
+              style={{ left: `${x}%`, top: `${y}%`, width: 9, height: 9 }}
               onClick={(event) => {
                 event.stopPropagation();
                 onEquipmentClick?.(dot.tag_id);

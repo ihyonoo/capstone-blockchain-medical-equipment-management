@@ -192,6 +192,8 @@ export default function AdminFloorMap() {
             <FloorMapView
               floor={selectedFloor}
               pins={pins}
+              // 좌표를 배치·이동하는 화면이므로 여기서는 구역 표식을 보여준다.
+              showPins
               pendingReaderId={pendingReaderId}
               onPendingPlace={handlePendingPlace}
               onPinMoved={handlePinMoved}

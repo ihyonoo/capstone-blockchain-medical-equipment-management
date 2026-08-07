@@ -27,11 +27,27 @@ describe('FloorMapView', () => {
     expect(img).toHaveAttribute('src', '/images/floor-maps/3f.png');
   });
 
-  it('positions each pin using its map_x/map_y as left/top percentages', () => {
-    render(<FloorMapView floor={1} pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]} />);
+  it('draws no reader marker at all by default — the floor plan already labels every zone', () => {
+    render(<FloorMapView floor={1} pins={[{ reader_id: 'M101', label: '주사센터', map_x: 25, map_y: 60 }]} />);
+
+    expect(screen.queryByTestId('floor-map-pin-M101')).not.toBeInTheDocument();
+    expect(screen.queryByText('주사센터')).not.toBeInTheDocument();
+  });
+
+  it('positions each pin using its map_x/map_y as left/top percentages when showPins is set', () => {
+    render(<FloorMapView floor={1} pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]} showPins />);
     const pin = screen.getByTestId('floor-map-pin-M101');
     expect(pin.style.left).toBe('25%');
     expect(pin.style.top).toBe('60%');
+  });
+
+  it('exposes the zone name as a tooltip rather than drawing it, even when pins are shown', () => {
+    render(<FloorMapView floor={1} pins={[{ reader_id: 'M101', label: '주사센터', map_x: 25, map_y: 60 }]} showPins />);
+
+    const pin = screen.getByTestId('floor-map-pin-M101');
+    expect(pin).toHaveAttribute('title', '주사센터');
+    expect(pin).toHaveTextContent('');
+    expect(screen.queryByText('주사센터')).not.toBeInTheDocument();
   });
 
   it('calls onPinClick with the reader id when a pin is clicked', () => {
@@ -41,6 +57,7 @@ describe('FloorMapView', () => {
         floor={1}
         pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
         onPinClick={onPinClick}
+        showPins
       />,
     );
     fireEvent.click(screen.getByTestId('floor-map-pin-M101'));
@@ -62,6 +79,7 @@ describe('FloorMapView', () => {
         pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
         pendingReaderId="M102"
         onPendingPlace={onPendingPlace}
+        showPins
       />,
     );
     fireEvent.click(screen.getByTestId('floor-map-pin-M101'));
@@ -75,6 +93,7 @@ describe('FloorMapView', () => {
         floor={1}
         pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
         onPinMoved={onPinMoved}
+        showPins
       />,
     );
     const pin = screen.getByTestId('floor-map-pin-M101');
@@ -99,5 +118,49 @@ describe('FloorMapView', () => {
     expect(dot).toBeInTheDocument();
     fireEvent.click(dot);
     expect(onEquipmentClick).toHaveBeenCalledWith('EQ-0001');
+  });
+
+  it('colors a checked-out equipment dot differently from an available one', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        equipment={[
+          { tag_id: 'EQ-FREE', reader_id: 'M101', label: '수액펌프 1호', assetStatus: 'available' },
+          { tag_id: 'EQ-BUSY', reader_id: 'M101', label: '수액펌프 2호', assetStatus: 'checked_out' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('floor-map-equipment-EQ-FREE')).toHaveClass('dot-ok');
+    expect(screen.getByTestId('floor-map-equipment-EQ-BUSY')).toHaveClass('dot-err');
+  });
+
+  it('marks equipment under maintenance and inactive equipment with their own colors', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        equipment={[
+          { tag_id: 'EQ-FIX', reader_id: 'M101', label: '점검 장비', assetStatus: 'maintenance' },
+          { tag_id: 'EQ-OFF', reader_id: 'M101', label: '비활성 장비', assetStatus: 'inactive' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('floor-map-equipment-EQ-FIX')).toHaveClass('dot-warn');
+    expect(screen.getByTestId('floor-map-equipment-EQ-OFF')).toHaveClass('solid-neutral');
+  });
+
+  it('includes the asset status in the equipment tooltip', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        equipment={[{ tag_id: 'EQ-BUSY', reader_id: 'M101', label: '수액펌프 2호', assetStatus: 'checked_out' }]}
+      />,
+    );
+
+    expect(screen.getByTestId('floor-map-equipment-EQ-BUSY')).toHaveAttribute('title', '수액펌프 2호 · 대여 중');
   });
 });
