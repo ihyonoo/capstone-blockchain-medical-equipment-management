@@ -22,11 +22,15 @@ export const AMENITY_ZONES: AmenityZone[] = [
   { id: '1f-gate1', floor: 1, name: 'GATE1', mapX: 28, mapY: 60 },
   { id: '1f-gate2', floor: 1, name: 'GATE2', mapX: 49, mapY: 88 },
   { id: '1f-gate3', floor: 1, name: 'GATE3', mapX: 51, mapY: 3 },
+  { id: '1f-pharmacy', floor: 1, name: '외래약국', mapX: 47.0, mapY: 22.0 },
+  { id: '1f-admin-desk', floor: 1, name: '원무팀', mapX: 39.0, mapY: 25.0 },
+  { id: '1f-referral-center', floor: 1, name: '진료협력센터', mapX: 21.0, mapY: 41.0 },
   { id: '2f-admin-desk', floor: 2, name: '원무팀', mapX: 35, mapY: 42 },
   { id: '3f-admin-desk', floor: 3, name: '원무팀', mapX: 35, mapY: 43 },
   { id: '5f-waiting-1', floor: 5, name: '보호자대기실', mapX: 42, mapY: 31 },
   { id: '5f-waiting-2', floor: 5, name: '보호자대기실', mapX: 38, mapY: 38 },
   { id: '5f-rapid-response', floor: 5, name: '신속대응팀', mapX: 30, mapY: 39 },
+  { id: '5f-recovery-room', floor: 5, name: '회복실', mapX: 43.5, mapY: 68.0 },
 ];
 
 export function getAmenityZonesForFloor(floor: FloorNumber): AmenityZone[] {
