@@ -37,7 +37,7 @@ class TestRtlsLiveProvenanceVisibility:
         assert sim_tag["is_real_hardware"] is False
         assert real_tag["is_real_hardware"] is True
 
-    def test_readers_include_floor_and_map_coordinates_for_staff(self, client, seed_reader, seed_user, db_conn):
+    def test_readers_include_floor_for_staff(self, client, seed_reader, seed_user, db_conn):
         seed_reader("M999")
         with db_conn.cursor() as cur:
             cur.execute("UPDATE readers SET floor=3, map_x=11.5, map_y=22.5 WHERE reader_id='M999'")
@@ -49,5 +49,5 @@ class TestRtlsLiveProvenanceVisibility:
         assert response.status_code == 200
         reader_item = next(r for r in response.json()["readers"] if r["reader_id"] == "M999")
         assert reader_item["floor"] == 3
-        assert float(reader_item["map_x"]) == 11.5
-        assert float(reader_item["map_y"]) == 22.5
+        assert "map_x" not in reader_item
+        assert "map_y" not in reader_item

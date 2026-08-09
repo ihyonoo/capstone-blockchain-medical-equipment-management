@@ -363,8 +363,6 @@ def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
       COALESCE(location_name, reader_id) AS location,
       EXTRACT(EPOCH FROM last_seen_at)::bigint AS last_seen,
       floor,
-      map_x,
-      map_y,
       is_real_hardware
     FROM readers
     ORDER BY reader_id
@@ -377,7 +375,7 @@ def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
         return []
 
     readers: list[dict] = []
-    for reader_id, location, last_seen, floor, map_x, map_y, is_real_hardware in rows:
+    for reader_id, location, last_seen, floor, is_real_hardware in rows:
         last_seen_int = int(last_seen) if last_seen is not None else None
         is_online = last_seen_int is not None and (now_epoch - last_seen_int) <= offline_sec
         readers.append(
@@ -387,8 +385,6 @@ def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
                 "last_seen": last_seen_int,
                 "is_online": is_online,
                 "floor": floor,
-                "map_x": float(map_x) if map_x is not None else None,
-                "map_y": float(map_y) if map_y is not None else None,
                 "is_real_hardware": is_real_hardware,
             }
         )
@@ -397,7 +393,7 @@ def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
 
 def load_readers_for_admin(floor: int | None = None) -> list[dict]:
     sql = """
-    SELECT reader_id, location_name, floor, map_x, map_y, is_active, is_real_hardware, last_seen_at
+    SELECT reader_id, location_name, floor, is_active, is_real_hardware, last_seen_at
     FROM readers
     """
     params: tuple = ()
@@ -415,13 +411,11 @@ def load_readers_for_admin(floor: int | None = None) -> list[dict]:
             "reader_id": reader_id,
             "location_name": location_name,
             "floor": floor_value,
-            "map_x": float(map_x) if map_x is not None else None,
-            "map_y": float(map_y) if map_y is not None else None,
             "is_active": is_active,
             "is_real_hardware": is_real_hardware,
             "last_seen_at": last_seen_at.isoformat() if last_seen_at else None,
         }
-        for reader_id, location_name, floor_value, map_x, map_y, is_active, is_real_hardware, last_seen_at in rows
+        for reader_id, location_name, floor_value, is_active, is_real_hardware, last_seen_at in rows
     ]
 
 

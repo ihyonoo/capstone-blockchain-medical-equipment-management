@@ -10,7 +10,7 @@ class TestListAdminReaders:
 
         assert response.status_code == 403
 
-    def test_returns_reader_with_map_fields(self, client, seed_reader, seed_user):
+    def test_returns_reader_with_floor_field(self, client, seed_reader, seed_user):
         seed_reader("M101", location_name="1층 병동 A", is_real_hardware=False)
         _, headers = seed_user(username="admin1", role="admin", position=None)
 
@@ -21,8 +21,8 @@ class TestListAdminReaders:
         items = {item["reader_id"]: item for item in body["items"]}
         assert items["M101"]["location_name"] == "1층 병동 A"
         assert items["M101"]["floor"] is None
-        assert items["M101"]["map_x"] is None
-        assert items["M101"]["map_y"] is None
+        assert "map_x" not in items["M101"]
+        assert "map_y" not in items["M101"]
         assert items["M101"]["is_real_hardware"] is False
 
     def test_filters_by_floor(self, client, seed_reader, seed_user, db_conn):
