@@ -425,38 +425,6 @@ def load_readers_for_admin(floor: int | None = None) -> list[dict]:
     ]
 
 
-def update_reader_map_position(
-    reader_id: str,
-    floor: int,
-    map_x: float,
-    map_y: float,
-    location_name: str | None = None,
-) -> dict | None:
-    sql = """
-    UPDATE readers
-    SET floor = %s, map_x = %s, map_y = %s,
-        location_name = COALESCE(%s, location_name),
-        updated_at = now()
-    WHERE reader_id = %s
-    RETURNING reader_id, location_name, floor, map_x, map_y, is_real_hardware
-    """
-    with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
-        cur.execute(sql, (floor, map_x, map_y, location_name, reader_id))
-        row = cur.fetchone()
-
-    if not row:
-        return None
-
-    return {
-        "reader_id": row[0],
-        "location_name": row[1],
-        "floor": row[2],
-        "map_x": float(row[3]) if row[3] is not None else None,
-        "map_y": float(row[4]) if row[4] is not None else None,
-        "is_real_hardware": row[5],
-    }
-
-
 def load_tag_metadata(tag_ids: set[str]) -> dict[str, dict]:
     if not tag_ids:
         return {}

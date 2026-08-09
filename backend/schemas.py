@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class Observation(BaseModel):
@@ -87,10 +87,3 @@ class NfcMappingUpsertRequest(BaseModel):
 
 class NfcUsageActionRequest(BaseModel):
     nfc_token: str
-
-
-class ReaderMapPositionRequest(BaseModel):
-    floor: int = Field(ge=1, le=5)
-    map_x: float = Field(ge=0, le=100)
-    map_y: float = Field(ge=0, le=100)
-    location_name: str | None = None
