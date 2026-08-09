@@ -132,24 +132,20 @@ describe('FloorMapView', () => {
       />,
     );
 
-    expect(screen.getByTestId('floor-map-equipment-EQ-FREE')).toHaveClass('dot-ok');
-    expect(screen.getByTestId('floor-map-equipment-EQ-BUSY')).toHaveClass('dot-err');
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-FREE')).toHaveClass('map-marker-ok');
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-BUSY')).toHaveClass('map-marker-err');
   });
 
-  it('marks equipment under maintenance and inactive equipment with their own colors', () => {
+  it('marks inactive equipment with its own color', () => {
     render(
       <FloorMapView
         floor={1}
         pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
-        equipment={[
-          { tag_id: 'EQ-FIX', reader_id: 'M101', label: '점검 장비', assetStatus: 'maintenance' },
-          { tag_id: 'EQ-OFF', reader_id: 'M101', label: '비활성 장비', assetStatus: 'inactive' },
-        ]}
+        equipment={[{ tag_id: 'EQ-OFF', reader_id: 'M101', label: '비활성 장비', assetStatus: 'inactive' }]}
       />,
     );
 
-    expect(screen.getByTestId('floor-map-equipment-EQ-FIX')).toHaveClass('dot-warn');
-    expect(screen.getByTestId('floor-map-equipment-EQ-OFF')).toHaveClass('solid-neutral');
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-OFF')).toHaveClass('map-marker-neutral');
   });
 
   it('includes the asset status in the equipment tooltip', () => {
@@ -162,5 +158,74 @@ describe('FloorMapView', () => {
     );
 
     expect(screen.getByTestId('floor-map-equipment-EQ-BUSY')).toHaveAttribute('title', '수액펌프 2호 · 대여 중');
+  });
+
+  it('does not draw a visible label next to the equipment marker — name is tooltip-only', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        equipment={[{ tag_id: 'EQ-0001', reader_id: 'M101', label: '이동형 초음파기기 1호' }]}
+      />,
+    );
+
+    expect(screen.queryByText('이동형 초음파기기')).not.toBeInTheDocument();
+    expect(screen.queryByText('이동형 초음파기기 1호')).not.toBeInTheDocument();
+    expect(screen.getByTestId('floor-map-equipment-EQ-0001')).toHaveAttribute(
+      'title',
+      '이동형 초음파기기 1호 · 사용 가능',
+    );
+  });
+
+  it('renders equipment dots larger than the old low-visibility size', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        equipment={[{ tag_id: 'EQ-0001', reader_id: 'M101', label: '수액펌프 1호' }]}
+      />,
+    );
+
+    const dot = screen.getByTestId('floor-map-equipment-dot-EQ-0001');
+    expect(dot.style.width).toBe('18px');
+    expect(dot.style.height).toBe('18px');
+  });
+
+  it('lines up multiple equipment at the same reader in a row instead of overlapping them', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 50, map_y: 60 }]}
+        equipment={[
+          { tag_id: 'EQ-0001', reader_id: 'M101', label: '제세동기' },
+          { tag_id: 'EQ-0002', reader_id: 'M101', label: '환자모니터 1호' },
+          { tag_id: 'EQ-0003', reader_id: 'M101', label: '인공호흡기 1호' },
+        ]}
+      />,
+    );
+
+    const first = screen.getByTestId('floor-map-equipment-EQ-0001');
+    const second = screen.getByTestId('floor-map-equipment-EQ-0002');
+    const third = screen.getByTestId('floor-map-equipment-EQ-0003');
+
+    // 셋 다 같은 y(구역 위치)에, x만 겹치지 않게 일정 간격으로 벌어져 나란히 놓인다.
+    expect(first.style.top).toBe(second.style.top);
+    expect(second.style.top).toBe(third.style.top);
+    const lefts = [first, second, third].map((el) => parseFloat(el.style.left));
+    expect(new Set(lefts).size).toBe(3);
+    expect(lefts[1] - lefts[0]).toBeCloseTo(lefts[2] - lefts[1]);
+  });
+
+  it('renders a highlight marker at the given zone position when highlightedZone is set', () => {
+    render(<FloorMapView floor={1} pins={[]} highlightedZone={{ id: '1f-cafe', label: '카페', mapX: 19, mapY: 57 }} />);
+
+    const highlight = screen.getByTestId('floor-map-highlight-1f-cafe');
+    expect(highlight.style.left).toBe('19%');
+    expect(highlight.style.top).toBe('57%');
+  });
+
+  it('renders no highlight marker when highlightedZone is not set', () => {
+    render(<FloorMapView floor={1} pins={[]} />);
+    expect(screen.queryByTestId(/floor-map-highlight-/)).not.toBeInTheDocument();
   });
 });

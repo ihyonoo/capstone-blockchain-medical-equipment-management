@@ -460,6 +460,11 @@
   .dot-warn { background: var(--warn-solid); }
   .dot-err { background: var(--err-solid); }
 
+  /* 지도 위 장비 점 전용 — 뱃지·범례가 쓰는 위 dot-* 톤보다 밝아야 도면 배경 위에서 잘 보인다. */
+  .map-marker-ok { background: #22c55e; }
+  .map-marker-err { background: #ef4444; }
+  .map-marker-neutral { background: #64748b; }
+
   .text-ok { color: var(--ok-fg); }
   .text-warn { color: var(--warn-solid); }
   .text-err { color: var(--err-solid); }

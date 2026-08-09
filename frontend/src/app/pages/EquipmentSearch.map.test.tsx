@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import EquipmentSearch from './EquipmentSearch';
 
@@ -131,8 +131,9 @@ describe('EquipmentSearch map view', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByTestId('floor-map-equipment-EQ-0001')).toHaveClass('dot-ok');
-    expect(screen.getByTestId('floor-map-equipment-EQ-0002')).toHaveClass('dot-err');
+    await screen.findByTestId('floor-map-equipment-EQ-0001');
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0001')).toHaveClass('map-marker-ok');
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0002')).toHaveClass('map-marker-err');
   });
 
   it('hides checked-out equipment from the map when the available-only filter is on', async () => {
@@ -180,7 +181,7 @@ describe('EquipmentSearch map view', () => {
     expect(screen.queryByText('리더 위치 패널')).not.toBeInTheDocument();
   });
 
-  it('selects the equipment detail panel when its map dot is clicked', async () => {
+  it('highlights the equipment in the list when its map dot is clicked', async () => {
     render(
       <MemoryRouter initialEntries={['/equipment']}>
         <Routes>
@@ -195,7 +196,137 @@ describe('EquipmentSearch map view', () => {
     fireEvent.click(dot);
 
     await waitFor(() => {
-      expect(screen.getByText('선택 장비 상세').closest('div.surface-panel')).toHaveTextContent('수액펌프 1호');
+      expect(screen.getByText('수액펌프 1호').closest('button')).toHaveClass('border-foreground');
     });
+  });
+
+  function getZoneGuidePanel() {
+    const heading = screen.getByText('층별 구역 안내');
+    const panel = heading.closest('div.surface-panel');
+    if (!panel) throw new Error('zone guide panel not found');
+    return within(panel as HTMLElement);
+  }
+
+  it('lists both reader-backed and amenity zones for the current floor in the zone guide panel', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    const zonePanel = getZoneGuidePanel();
+    // 리더가 있는 구역(LIVE_PAYLOAD의 M101)과, 리더가 없는 편의시설 구역(floorZones.ts)이 함께 보인다.
+    expect(zonePanel.getByRole('button', { name: /1층 병동 A/ })).toBeInTheDocument();
+    expect(zonePanel.getByRole('button', { name: /GATE1/ })).toBeInTheDocument();
+  });
+
+  it('filters the equipment list and highlights the map pin when a reader-backed zone is clicked', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    fireEvent.click(getZoneGuidePanel().getByRole('button', { name: /1층 병동 A/ }));
+
+    expect(await screen.findByTestId('floor-map-highlight-M101')).toBeInTheDocument();
+    expect(screen.queryByText('수액펌프 1호')).toBeInTheDocument();
+  });
+
+  it('highlights the map without filtering equipment when an amenity zone (no reader) is clicked', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    fireEvent.click(getZoneGuidePanel().getByRole('button', { name: /GATE1/ }));
+
+    expect(await screen.findByTestId('floor-map-highlight-1f-gate1')).toBeInTheDocument();
+    // 편의시설 구역은 필터링할 장비가 없으므로 장비 목록은 그대로 유지된다.
+    expect(screen.getAllByText('수액펌프 1호').length).toBeGreaterThan(0);
+  });
+
+  it('collapses the sidebar to a thin handle when the resize handle is double-clicked', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    expect(screen.getByPlaceholderText('태그 ID, 장비명, 위치 검색')).toBeInTheDocument();
+
+    fireEvent.doubleClick(screen.getByTestId('sidebar-resize-handle'));
+
+    expect(screen.queryByPlaceholderText('태그 ID, 장비명, 위치 검색')).not.toBeInTheDocument();
+    expect(screen.getByTestId('equipment-sidebar').style.width).toBe('10px');
+    expect(screen.getByRole('button', { name: '검색 패널 펼치기' })).toBeInTheDocument();
+  });
+
+  it('restores the sidebar when the collapsed handle is clicked', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    fireEvent.doubleClick(screen.getByTestId('sidebar-resize-handle'));
+    fireEvent.click(screen.getByTestId('sidebar-resize-handle'));
+
+    expect(screen.getByPlaceholderText('태그 ID, 장비명, 위치 검색')).toBeInTheDocument();
+  });
+
+  it('resizes the sidebar by dragging its resize handle', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    const sidebar = screen.getByTestId('equipment-sidebar');
+    expect(sidebar.style.width).toBe('420px');
+
+    fireEvent.mouseDown(screen.getByTestId('sidebar-resize-handle'), { clientX: 0 });
+    fireEvent.mouseMove(window, { clientX: 80 });
+    fireEvent.mouseUp(window);
+
+    expect(sidebar.style.width).toBe('500px');
+  });
+
+  it('does not resize the sidebar past the minimum width', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    const sidebar = screen.getByTestId('equipment-sidebar');
+
+    fireEvent.mouseDown(screen.getByTestId('sidebar-resize-handle'), { clientX: 0 });
+    fireEvent.mouseMove(window, { clientX: -1000 });
+    fireEvent.mouseUp(window);
+
+    expect(sidebar.style.width).toBe('320px');
   });
 });

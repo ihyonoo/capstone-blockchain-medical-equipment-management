@@ -27,8 +27,6 @@ function getAssetStatusLabel(status: string) {
   switch (status) {
     case 'checked_out':
       return '대여 중';
-    case 'maintenance':
-      return '점검 중';
     case 'inactive':
       return '비활성';
     default:

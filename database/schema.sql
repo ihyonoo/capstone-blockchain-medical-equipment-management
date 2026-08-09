@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS tags (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT tags_asset_status_valid
-        CHECK (asset_status IN ('available', 'checked_out', 'maintenance', 'inactive')),
+        CHECK (asset_status IN ('available', 'checked_out', 'inactive')),
     CONSTRAINT tags_checkout_state_consistent
         CHECK (
             (asset_status = 'checked_out'
@@ -306,16 +306,16 @@ BEGIN
     END IF;
 END $$;
 
+-- 'maintenance' 상태를 쓰는 코드 경로가 없어 값 자체를 없앴다(2026-08-09). 이름만
+-- 확인하는 IF NOT EXISTS로는 기존 DB의 예전 정의가 갱신되지 않으므로, 이 제약만
+-- 매번 지웠다가 다시 만든다.
+ALTER TABLE tags DROP CONSTRAINT IF EXISTS tags_asset_status_valid;
+ALTER TABLE tags
+    ADD CONSTRAINT tags_asset_status_valid
+    CHECK (asset_status IN ('available', 'checked_out', 'inactive'));
+
 DO $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'tags_asset_status_valid'
-    ) THEN
-        ALTER TABLE tags
-            ADD CONSTRAINT tags_asset_status_valid
-            CHECK (asset_status IN ('available', 'checked_out', 'maintenance', 'inactive'));
-    END IF;
-
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'tags_checkout_state_consistent'
     ) THEN
