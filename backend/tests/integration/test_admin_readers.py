@@ -29,8 +29,8 @@ class TestListAdminReaders:
         seed_reader("M101")
         seed_reader("M201")
         with db_conn.cursor() as cur:
-            cur.execute("UPDATE readers SET floor=1, map_x=10, map_y=20 WHERE reader_id='M101'")
-            cur.execute("UPDATE readers SET floor=2, map_x=30, map_y=40 WHERE reader_id='M201'")
+            cur.execute("UPDATE readers SET floor=1 WHERE reader_id='M101'")
+            cur.execute("UPDATE readers SET floor=2 WHERE reader_id='M201'")
         db_conn.commit()
         _, headers = seed_user(username="admin1", role="admin", position=None)
 

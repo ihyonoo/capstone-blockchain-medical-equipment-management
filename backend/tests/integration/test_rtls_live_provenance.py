@@ -40,7 +40,7 @@ class TestRtlsLiveProvenanceVisibility:
     def test_readers_include_floor_for_staff(self, client, seed_reader, seed_user, db_conn):
         seed_reader("M999")
         with db_conn.cursor() as cur:
-            cur.execute("UPDATE readers SET floor=3, map_x=11.5, map_y=22.5 WHERE reader_id='M999'")
+            cur.execute("UPDATE readers SET floor=3 WHERE reader_id='M999'")
         db_conn.commit()
         _, headers = seed_user(username="staffer", role="staff")
 
