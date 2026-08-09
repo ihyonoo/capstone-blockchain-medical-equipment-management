@@ -11,6 +11,7 @@ import FloorMapView, {
 } from '../components/FloorMapView';
 import { FLOOR_MAPS, type FloorNumber } from '../lib/floorMaps';
 import { getAmenityZonesForFloor } from '../lib/floorZones';
+import { ZONE_BOUNDS } from '../lib/floorZoneBounds';
 import { clampSidebarWidth } from '../lib/sidebarResize';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
@@ -526,6 +527,7 @@ export default function EquipmentSearch() {
                           pins={floorPins}
                           equipment={floorEquipmentDots}
                           onEquipmentClick={(tagId) => setSelectedEquipment(tagId)}
+                          zoneBounds={ZONE_BOUNDS}
                           highlightedZone={highlightedZone}
                         />
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">

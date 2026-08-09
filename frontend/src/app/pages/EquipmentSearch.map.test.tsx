@@ -196,7 +196,8 @@ describe('EquipmentSearch map view', () => {
     fireEvent.click(dot);
 
     await waitFor(() => {
-      expect(screen.getByText('수액펌프 1호').closest('button')).toHaveClass('border-foreground');
+      const sidebar = screen.getByTestId('equipment-sidebar');
+      expect(within(sidebar).getByText('수액펌프 1호').closest('button')).toHaveClass('border-foreground');
     });
   });
 

@@ -1,13 +1,16 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { getFloorMapInfo, type FloorNumber } from '../lib/floorMaps';
-import { clampPct, equipmentRowOffsets } from '../lib/floorMapLayout';
+import {
+  maxVisibleForPolygon,
+  placeInPolygon,
+  pointInPolygon,
+  polygonCentroid,
+  type ZonePoint,
+} from '../lib/floorMapLayout';
 
 export type FloorMapPin = {
   reader_id: string;
   label: string;
-  map_x: number;
-  map_y: number;
-  badge?: ReactNode;
 };
 
 export type FloorMapEquipmentDot = {
@@ -27,7 +30,7 @@ export type FloorMapHighlight = {
   mapY: number;
 };
 
-// 목록·뱃지 등 앱 전체가 공유하는 dot-* 톤은 차분하게 잡혀 있어 지도 위 9px 점으로는
+// 목록·뱃지 등 앱 전체가 공유하는 dot-* 톤은 차분하게 잡혀 있어 지도 위 작은 점으로는
 // 잘 안 보인다. 지도에서만 쓰는 더 밝은 색(theme.css의 map-marker-*)을 따로 둔다 —
 // 공유 톤을 바꾸면 뱃지·범례 등 다른 화면 색상까지 같이 바뀌기 때문.
 const ASSET_STATUS_DOT: Record<string, { className: string; label: string }> = {
@@ -45,25 +48,52 @@ type FloorMapViewProps = {
   pins: FloorMapPin[];
   equipment?: FloorMapEquipmentDot[];
   onEquipmentClick?: (tagId: string) => void;
-  onPinClick?: (readerId: string) => void;
-  onPinMoved?: (readerId: string, mapX: number, mapY: number) => void;
-  pendingReaderId?: string | null;
-  onPendingPlace?: (mapX: number, mapY: number) => void;
-  // 한 구역에 장비가 여러 개일 때 마커를 나란히 벌리는 간격(퍼센트).
-  rowSpacingPct?: number;
-  // 구역 표식은 좌표를 배치·확인하는 관리자 핀 편집기에서만 필요하다. 직원용 지도에서는
-  // 평면도에 이미 구역명이 인쇄돼 있어 장비 점만 그린다.
-  showPins?: boolean;
+  zoneBounds: Record<string, ZonePoint[]>;
   highlightedZone?: FloorMapHighlight | null;
 };
 
-function percentFromEvent(container: HTMLElement, clientX: number, clientY: number) {
-  const rect = container.getBoundingClientRect();
-  if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
-  return {
-    x: clampPct(((clientX - rect.left) / rect.width) * 100),
-    y: clampPct(((clientY - rect.top) / rect.height) * 100),
-  };
+function renderEquipmentMarker(
+  dot: FloorMapEquipmentDot,
+  position: ZonePoint,
+  activeMarkerId: string | null,
+  toggleMarker: (id: string) => void,
+  onEquipmentClick?: (tagId: string) => void,
+) {
+  const status = assetStatusDot(dot.assetStatus);
+  const isActive = activeMarkerId === dot.tag_id;
+  return (
+    <div key={dot.tag_id}>
+      <button
+        type="button"
+        data-testid={`floor-map-equipment-${dot.tag_id}`}
+        title={`${dot.label} · ${status.label}`}
+        aria-label={`${dot.label} · ${status.label}`}
+        className="absolute -translate-x-1/2 -translate-y-1/2"
+        style={{ left: `${position.x}%`, top: `${position.y}%` }}
+        onClick={() => {
+          toggleMarker(dot.tag_id);
+          onEquipmentClick?.(dot.tag_id);
+        }}
+      >
+        <span
+          data-testid={`floor-map-equipment-dot-${dot.tag_id}`}
+          className={`block rounded-full ${status.className}`}
+          style={{ width: 14, height: 14 }}
+        >
+          {dot.badge}
+        </span>
+      </button>
+      {isActive ? (
+        <span
+          data-testid={`floor-map-equipment-label-${dot.tag_id}`}
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-foreground px-2 py-0.5 text-xs text-background"
+          style={{ left: `${position.x}%`, top: `${position.y - 3}%` }}
+        >
+          {dot.label}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 export default function FloorMapView({
@@ -71,53 +101,15 @@ export default function FloorMapView({
   pins,
   equipment = [],
   onEquipmentClick,
-  onPinClick,
-  onPinMoved,
-  pendingReaderId = null,
-  onPendingPlace,
-  rowSpacingPct = 7,
-  showPins = false,
+  zoneBounds,
   highlightedZone = null,
 }: FloorMapViewProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [draggingReaderId, setDraggingReaderId] = useState<string | null>(null);
-  const [dragPct, setDragPct] = useState<{ x: number; y: number } | null>(null);
+  const [activeMarkerId, setActiveMarkerId] = useState<string | null>(null);
   const floorInfo = getFloorMapInfo(floor);
 
-  const handleContainerClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!pendingReaderId || !onPendingPlace || !containerRef.current) return;
-      if ((event.target as HTMLElement).closest('[data-floor-map-pin]')) return;
-      const pct = percentFromEvent(containerRef.current, event.clientX, event.clientY);
-      onPendingPlace(pct.x, pct.y);
-    },
-    [pendingReaderId, onPendingPlace],
-  );
-
-  const handlePinMouseDown = useCallback(
-    (readerId: string) => (event: React.MouseEvent) => {
-      if (!onPinMoved) return;
-      event.stopPropagation();
-      setDraggingReaderId(readerId);
-    },
-    [onPinMoved],
-  );
-
-  const handleContainerMouseMove = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!draggingReaderId || !containerRef.current) return;
-      setDragPct(percentFromEvent(containerRef.current, event.clientX, event.clientY));
-    },
-    [draggingReaderId],
-  );
-
-  const stopDragging = useCallback(() => {
-    if (draggingReaderId && dragPct && onPinMoved) {
-      onPinMoved(draggingReaderId, dragPct.x, dragPct.y);
-    }
-    setDraggingReaderId(null);
-    setDragPct(null);
-  }, [draggingReaderId, dragPct, onPinMoved]);
+  const toggleMarker = (id: string) => {
+    setActiveMarkerId((prev) => (prev === id ? null : id));
+  };
 
   const equipmentByReader = new Map<string, FloorMapEquipmentDot[]>();
   for (const dot of equipment) {
@@ -128,76 +120,87 @@ export default function FloorMapView({
 
   return (
     <div
-      ref={containerRef}
       data-testid="floor-map-container"
       className="relative w-full select-none overflow-hidden rounded-lg border border-border bg-card"
-      onClick={handleContainerClick}
-      onMouseMove={handleContainerMouseMove}
-      onMouseUp={stopDragging}
-      onMouseLeave={stopDragging}
     >
       <img src={floorInfo.imagePath} alt={`${floorInfo.label} 평면도`} className="block w-full" draggable={false} />
 
-      {(showPins ? pins : []).map((pin) => {
-        const isDragging = draggingReaderId === pin.reader_id;
-        const x = isDragging && dragPct ? dragPct.x : pin.map_x;
-        const y = isDragging && dragPct ? dragPct.y : pin.map_y;
-        return (
-          <button
-            key={pin.reader_id}
-            type="button"
-            data-floor-map-pin
-            data-testid={`floor-map-pin-${pin.reader_id}`}
-            // 구역명은 평면도 이미지에 이미 인쇄돼 있으므로 핀은 표식만 그리고
-            // 이름은 툴팁(title)으로만 노출한다.
-            title={pin.label}
-            aria-label={pin.label}
-            className="absolute -translate-x-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-primary bg-background shadow-sm"
-            style={{ left: `${x}%`, top: `${y}%`, cursor: onPinMoved ? 'grab' : 'pointer' }}
-            onMouseDown={handlePinMouseDown(pin.reader_id)}
-            onClick={(event) => {
-              event.stopPropagation();
-              onPinClick?.(pin.reader_id);
-            }}
-          >
-            {pin.badge ? <span className="absolute -right-1.5 -top-1.5">{pin.badge}</span> : null}
-          </button>
-        );
-      })}
-
       {pins.map((pin) => {
-        // tag_id로 정렬해 순서를 고정한다 — 폴링마다 API가 주는 배열 순서가 바뀌어도
-        // 같은 장비가 같은 자리에 그대로 있어야 자연스럽다.
         const dots = [...(equipmentByReader.get(pin.reader_id) ?? [])].sort((a, b) => a.tag_id.localeCompare(b.tag_id));
-        const offsets = equipmentRowOffsets(dots.length, rowSpacingPct);
-        return dots.map((dot, index) => {
-          const x = clampPct(pin.map_x + offsets[index]);
-          const y = pin.map_y;
-          const status = assetStatusDot(dot.assetStatus);
-          return (
-            <button
-              key={dot.tag_id}
-              type="button"
-              data-testid={`floor-map-equipment-${dot.tag_id}`}
-              title={`${dot.label} · ${status.label}`}
-              aria-label={`${dot.label} · ${status.label}`}
-              className="absolute -translate-x-1/2 -translate-y-1/2"
-              style={{ left: `${x}%`, top: `${y}%` }}
-              onClick={(event) => {
-                event.stopPropagation();
-                onEquipmentClick?.(dot.tag_id);
-              }}
-            >
-              <span
-                data-testid={`floor-map-equipment-dot-${dot.tag_id}`}
-                className={`block rounded-full ring-2 ring-background ${status.className}`}
-                style={{ width: 18, height: 18 }}
-              >
-                {dot.badge}
-              </span>
-            </button>
-          );
+        if (dots.length === 0) return null;
+        const polygon = zoneBounds[pin.reader_id];
+        if (!polygon || polygon.length < 3) return null;
+
+        if (dots.length === 1) {
+          const dot = dots[0];
+          const centroid = polygonCentroid(polygon);
+          const position = pointInPolygon(centroid, polygon) ? centroid : polygon[0];
+          return renderEquipmentMarker(dot, position, activeMarkerId, toggleMarker, onEquipmentClick);
+        }
+
+        const maxVisible = maxVisibleForPolygon(polygon);
+        const visibleDots = dots.length <= maxVisible ? dots : dots.slice(0, maxVisible - 1);
+        const hiddenDots = dots.length <= maxVisible ? [] : dots.slice(maxVisible - 1);
+
+        const taken: ZonePoint[] = [];
+        const placed = visibleDots.map((dot) => {
+          const position = placeInPolygon(polygon, dot.tag_id, taken);
+          taken.push(position);
+          return { dot, position };
         });
+
+        const clusterId = `cluster:${pin.reader_id}`;
+        const isClusterActive = activeMarkerId === clusterId;
+        const clusterPosition = hiddenDots.length > 0 ? polygonCentroid(polygon) : null;
+
+        return (
+          <div key={pin.reader_id}>
+            {placed.map(({ dot, position }) =>
+              renderEquipmentMarker(dot, position, activeMarkerId, toggleMarker, onEquipmentClick),
+            )}
+            {clusterPosition ? (
+              <div>
+                <button
+                  type="button"
+                  data-testid={`floor-map-cluster-${pin.reader_id}`}
+                  aria-label={`장비 ${hiddenDots.length}개 더보기`}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-foreground px-1.5 text-xs text-background"
+                  style={{
+                    left: `${clusterPosition.x}%`,
+                    top: `${clusterPosition.y}%`,
+                    minWidth: 14,
+                    height: 14,
+                    lineHeight: '14px',
+                  }}
+                  onClick={() => toggleMarker(clusterId)}
+                >
+                  +{hiddenDots.length}
+                </button>
+                {isClusterActive ? (
+                  <div
+                    data-testid={`floor-map-cluster-list-${pin.reader_id}`}
+                    className="absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-border bg-card p-2 text-xs shadow-md"
+                    style={{ left: `${clusterPosition.x}%`, top: `${clusterPosition.y - 3}%` }}
+                  >
+                    {hiddenDots.map((dot) => {
+                      const status = assetStatusDot(dot.assetStatus);
+                      return (
+                        <div
+                          key={dot.tag_id}
+                          data-testid={`floor-map-cluster-item-${dot.tag_id}`}
+                          className="flex items-center gap-1.5 whitespace-nowrap py-0.5"
+                        >
+                          <span className={`inline-block h-2 w-2 rounded-full ${status.className}`} />
+                          {dot.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        );
       })}
 
       {highlightedZone ? (
