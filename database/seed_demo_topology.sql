@@ -3,170 +3,72 @@
 -- 수동 수정하지 말 것 — 데이터를 바꾸려면 demo_data.py를 고치고 다시 생성한다).
 -- 순천향대학교 천안병원 본관 1~5층 실제 부서 구성을 본뜬 모의(시뮬레이션) 리더/장비/staff.
 -- 전부 is_real_hardware = FALSE로 표시되어 실물(M501/M502, 실물 태그)과 구분된다.
--- 멱등적 — 재실행해도 안전하고, 관리자가 핀 편집기로 옮긴 좌표를 덮어쓰지 않는다.
+-- 멱등적 — 재실행해도 안전하다.
 
 BEGIN;
 
-INSERT INTO readers (reader_id, location_name, floor, map_x, map_y, is_real_hardware) VALUES
-    ('M101', '소아전문응급의료센터', 1, 70.0, 8.7, FALSE),
-    ('M102', '충남권역응급의료센터', 1, 70.0, 32.0, FALSE),
-    ('M103', '외래약국', 1, 47.0, 22.0, FALSE),
-    ('M104', '원무팀', 1, 39.0, 25.0, FALSE),
-    ('M105', '진료협력센터', 1, 21.0, 41.0, FALSE),
-    ('M201', '채혈실', 2, 13.5, 39.0, FALSE),
-    ('M202', '호흡기검사실', 2, 27.0, 34.0, FALSE),
-    ('M203', '외래심장검사실', 2, 35.0, 28.0, FALSE),
-    ('M204', '암치료센터 종양혈액내과', 2, 44.5, 18.0, FALSE),
-    ('M205', '주사센터', 2, 68.0, 7.0, FALSE),
-    ('M206', '호흡기센터', 2, 66.0, 15.5, FALSE),
-    ('M207', '심장혈관센터', 2, 66.0, 23.0, FALSE),
-    ('M208', '권역응급중환자실', 2, 70.0, 33.0, FALSE),
-    ('M209', '뇌신경센터', 2, 66.0, 51.0, FALSE),
-    ('M210', '소화기센터', 2, 67.0, 62.5, FALSE),
-    ('M211', '소화기내시경센터', 2, 67.0, 77.0, FALSE),
-    ('M212', '정신건강의학센터', 2, 69.0, 90.0, FALSE),
-    ('M301', '가정의학센터', 3, 21.5, 40.0, FALSE),
-    ('M302', '당뇨내분비센터', 3, 28.5, 32.0, FALSE),
-    ('M303', '유방갑상선센터', 3, 39.0, 24.5, FALSE),
-    ('M304', '감염병센터', 3, 44.5, 15.0, FALSE),
-    ('M305', '이비인후·두경부센터', 3, 66.0, 9.0, FALSE),
-    ('M306', '치아건강센터', 3, 65.0, 17.0, FALSE),
-    ('M307', '눈건강센터', 3, 69.0, 30.0, FALSE),
-    ('M308', '관절척추센터', 3, 66.0, 45.0, FALSE),
-    ('M309', '통증재활·류마티스센터', 3, 66.0, 56.0, FALSE),
-    ('M310', '비뇨의학센터', 3, 66.0, 67.0, FALSE),
-    ('M311', '피부성형센터 피부과', 3, 66.0, 77.0, FALSE),
-    ('M312', '피부성형센터 성형외과', 3, 70.0, 86.0, FALSE),
-    ('M401', '진단검사의학센터', 4, 30.0, 38.0, FALSE),
-    ('M402', '소아재활센터', 4, 44.0, 18.0, FALSE),
-    ('M403', '소아전문센터', 4, 61.0, 13.6, FALSE),
-    ('M404', '지역모자의료센터', 4, 82.0, 12.5, FALSE),
-    ('M405', '고위험분만센터', 4, 71.5, 35.0, FALSE),
-    ('M406', '여성건강센터', 4, 66.0, 49.0, FALSE),
-    ('M407', '병리진단센터', 4, 69.0, 61.5, FALSE),
-    ('M408', '장기이식센터', 4, 56.5, 67.0, FALSE),
-    ('M409', '신장센터', 4, 63.0, 72.0, FALSE),
-    ('M410', '투석센터', 4, 70.0, 82.0, FALSE),
-    ('M503', '외과계중환자실', 5, 29.0, 30.0, FALSE),
-    ('M504', '내과계중환자실 CCU', 5, 64.0, 7.0, FALSE),
-    ('M505', '내과계중환자실 MICU', 5, 85.5, 7.0, FALSE),
-    ('M506', '충남권역심뇌혈관질환센터', 5, 64.0, 19.5, FALSE),
-    ('M507', '마취통증의학과', 5, 31.0, 48.0, FALSE),
-    ('M508', '통원수술센터', 5, 60.0, 50.5, FALSE),
-    ('M509', '회복실', 5, 43.5, 68.0, FALSE)
+INSERT INTO readers (reader_id, location_name, floor, is_real_hardware) VALUES
+    ('M101', '소아전문응급의료센터', 1, FALSE),
+    ('M102', '충남권역응급의료센터', 1, FALSE),
+    ('M201', '채혈실', 2, FALSE),
+    ('M202', '호흡기검사실', 2, FALSE),
+    ('M203', '외래심장검사실', 2, FALSE),
+    ('M204', '암치료센터 종양혈액내과', 2, FALSE),
+    ('M205', '주사센터', 2, FALSE),
+    ('M206', '호흡기센터', 2, FALSE),
+    ('M207', '심장혈관센터', 2, FALSE),
+    ('M208', '권역응급중환자실', 2, FALSE),
+    ('M209', '뇌신경센터', 2, FALSE),
+    ('M210', '소화기센터', 2, FALSE),
+    ('M211', '소화기내시경센터', 2, FALSE),
+    ('M212', '정신건강의학센터', 2, FALSE),
+    ('M301', '가정의학센터', 3, FALSE),
+    ('M302', '당뇨내분비센터', 3, FALSE),
+    ('M303', '유방갑상선센터', 3, FALSE),
+    ('M304', '감염병센터', 3, FALSE),
+    ('M305', '이비인후·두경부센터', 3, FALSE),
+    ('M306', '치아건강센터', 3, FALSE),
+    ('M307', '눈건강센터', 3, FALSE),
+    ('M308', '관절척추센터', 3, FALSE),
+    ('M309', '통증재활·류마티스센터', 3, FALSE),
+    ('M310', '비뇨의학센터', 3, FALSE),
+    ('M311', '피부성형센터 피부과', 3, FALSE),
+    ('M312', '피부성형센터 성형외과', 3, FALSE),
+    ('M401', '진단검사의학센터', 4, FALSE),
+    ('M402', '소아재활센터', 4, FALSE),
+    ('M403', '소아전문센터', 4, FALSE),
+    ('M404', '지역모자의료센터', 4, FALSE),
+    ('M405', '고위험분만센터', 4, FALSE),
+    ('M406', '여성건강센터', 4, FALSE),
+    ('M407', '병리진단센터', 4, FALSE),
+    ('M408', '장기이식센터', 4, FALSE),
+    ('M409', '신장센터', 4, FALSE),
+    ('M410', '투석센터', 4, FALSE),
+    ('M503', '외과계중환자실', 5, FALSE),
+    ('M504', '내과계중환자실 CCU', 5, FALSE),
+    ('M505', '내과계중환자실 MICU', 5, FALSE),
+    ('M506', '충남권역심뇌혈관질환센터', 5, FALSE),
+    ('M507', '마취통증의학과', 5, FALSE),
+    ('M508', '통원수술센터', 5, FALSE)
 ON CONFLICT (reader_id) DO NOTHING;
 
--- 좌표 없이 먼저 시딩된 DB를 위한 보정(map_x IS NULL인 행만).
-UPDATE readers SET floor = 1, map_x = 70.0, map_y = 8.7, updated_at = now()
-    WHERE reader_id = 'M101' AND map_x IS NULL;
-UPDATE readers SET floor = 1, map_x = 70.0, map_y = 32.0, updated_at = now()
-    WHERE reader_id = 'M102' AND map_x IS NULL;
-UPDATE readers SET floor = 1, map_x = 47.0, map_y = 22.0, updated_at = now()
-    WHERE reader_id = 'M103' AND map_x IS NULL;
-UPDATE readers SET floor = 1, map_x = 39.0, map_y = 25.0, updated_at = now()
-    WHERE reader_id = 'M104' AND map_x IS NULL;
-UPDATE readers SET floor = 1, map_x = 21.0, map_y = 41.0, updated_at = now()
-    WHERE reader_id = 'M105' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 13.5, map_y = 39.0, updated_at = now()
-    WHERE reader_id = 'M201' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 27.0, map_y = 34.0, updated_at = now()
-    WHERE reader_id = 'M202' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 35.0, map_y = 28.0, updated_at = now()
-    WHERE reader_id = 'M203' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 44.5, map_y = 18.0, updated_at = now()
-    WHERE reader_id = 'M204' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 68.0, map_y = 7.0, updated_at = now()
-    WHERE reader_id = 'M205' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 66.0, map_y = 15.5, updated_at = now()
-    WHERE reader_id = 'M206' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 66.0, map_y = 23.0, updated_at = now()
-    WHERE reader_id = 'M207' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 70.0, map_y = 33.0, updated_at = now()
-    WHERE reader_id = 'M208' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 66.0, map_y = 51.0, updated_at = now()
-    WHERE reader_id = 'M209' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 67.0, map_y = 62.5, updated_at = now()
-    WHERE reader_id = 'M210' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 67.0, map_y = 77.0, updated_at = now()
-    WHERE reader_id = 'M211' AND map_x IS NULL;
-UPDATE readers SET floor = 2, map_x = 69.0, map_y = 90.0, updated_at = now()
-    WHERE reader_id = 'M212' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 21.5, map_y = 40.0, updated_at = now()
-    WHERE reader_id = 'M301' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 28.5, map_y = 32.0, updated_at = now()
-    WHERE reader_id = 'M302' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 39.0, map_y = 24.5, updated_at = now()
-    WHERE reader_id = 'M303' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 44.5, map_y = 15.0, updated_at = now()
-    WHERE reader_id = 'M304' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 66.0, map_y = 9.0, updated_at = now()
-    WHERE reader_id = 'M305' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 65.0, map_y = 17.0, updated_at = now()
-    WHERE reader_id = 'M306' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 69.0, map_y = 30.0, updated_at = now()
-    WHERE reader_id = 'M307' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 66.0, map_y = 45.0, updated_at = now()
-    WHERE reader_id = 'M308' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 66.0, map_y = 56.0, updated_at = now()
-    WHERE reader_id = 'M309' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 66.0, map_y = 67.0, updated_at = now()
-    WHERE reader_id = 'M310' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 66.0, map_y = 77.0, updated_at = now()
-    WHERE reader_id = 'M311' AND map_x IS NULL;
-UPDATE readers SET floor = 3, map_x = 70.0, map_y = 86.0, updated_at = now()
-    WHERE reader_id = 'M312' AND map_x IS NULL;
-UPDATE readers SET floor = 4, map_x = 30.0, map_y = 38.0, updated_at = now()
-    WHERE reader_id = 'M401' AND map_x IS NULL;
-UPDATE readers SET floor = 4, map_x = 44.0, map_y = 18.0, updated_at = now()
-    WHERE reader_id = 'M402' AND map_x IS NULL;
-UPDATE readers SET floor = 4, map_x = 61.0, map_y = 13.6, updated_at = now()
-    WHERE reader_id = 'M403' AND map_x IS NULL;
-UPDATE readers SET floor = 4, map_x = 82.0, map_y = 12.5, updated_at = now()
-    WHERE reader_id = 'M404' AND map_x IS NULL;
-UPDATE readers SET floor = 4, map_x = 71.5, map_y = 35.0, updated_at = now()
-    WHERE reader_id = 'M405' AND map_x IS NULL;
-UPDATE readers SET floor = 4, map_x = 66.0, map_y = 49.0, updated_at = now()
-    WHERE reader_id = 'M406' AND map_x IS NULL;
-UPDATE readers SET floor = 4, map_x = 69.0, map_y = 61.5, updated_at = now()
-    WHERE reader_id = 'M407' AND map_x IS NULL;
-UPDATE readers SET floor = 4, map_x = 56.5, map_y = 67.0, updated_at = now()
-    WHERE reader_id = 'M408' AND map_x IS NULL;
-UPDATE readers SET floor = 4, map_x = 63.0, map_y = 72.0, updated_at = now()
-    WHERE reader_id = 'M409' AND map_x IS NULL;
-UPDATE readers SET floor = 4, map_x = 70.0, map_y = 82.0, updated_at = now()
-    WHERE reader_id = 'M410' AND map_x IS NULL;
-UPDATE readers SET floor = 5, map_x = 29.0, map_y = 30.0, updated_at = now()
-    WHERE reader_id = 'M503' AND map_x IS NULL;
-UPDATE readers SET floor = 5, map_x = 64.0, map_y = 7.0, updated_at = now()
-    WHERE reader_id = 'M504' AND map_x IS NULL;
-UPDATE readers SET floor = 5, map_x = 85.5, map_y = 7.0, updated_at = now()
-    WHERE reader_id = 'M505' AND map_x IS NULL;
-UPDATE readers SET floor = 5, map_x = 64.0, map_y = 19.5, updated_at = now()
-    WHERE reader_id = 'M506' AND map_x IS NULL;
-UPDATE readers SET floor = 5, map_x = 31.0, map_y = 48.0, updated_at = now()
-    WHERE reader_id = 'M507' AND map_x IS NULL;
-UPDATE readers SET floor = 5, map_x = 60.0, map_y = 50.5, updated_at = now()
-    WHERE reader_id = 'M508' AND map_x IS NULL;
-UPDATE readers SET floor = 5, map_x = 43.5, map_y = 68.0, updated_at = now()
-    WHERE reader_id = 'M509' AND map_x IS NULL;
-
--- 실물 하드웨어 리더의 위치/좌표(생성이 아니라 표시 정보 보정).
-INSERT INTO readers (reader_id, location_name, floor, map_x, map_y) VALUES
-    ('M501', '중앙수술센터', 5, 66.0, 68.0)
+-- 실물 하드웨어 리더의 위치(생성이 아니라 표시 정보 보정).
+INSERT INTO readers (reader_id, location_name, floor) VALUES
+    ('M501', '중앙수술센터', 5)
 ON CONFLICT (reader_id) DO NOTHING;
 
-UPDATE readers SET floor = 5, map_x = 66.0, map_y = 68.0, updated_at = now()
-    WHERE reader_id = 'M501' AND map_x IS NULL;
+UPDATE readers SET floor = 5, updated_at = now()
+    WHERE reader_id = 'M501' AND floor IS NULL;
 
 UPDATE readers SET location_name = '중앙수술센터', updated_at = now()
     WHERE reader_id = 'M501' AND location_name = 'M501';
 
-INSERT INTO readers (reader_id, location_name, floor, map_x, map_y) VALUES
-    ('M502', '영상의학센터', 1, 69.0, 71.0)
+INSERT INTO readers (reader_id, location_name, floor) VALUES
+    ('M502', '영상의학센터', 1)
 ON CONFLICT (reader_id) DO NOTHING;
 
-UPDATE readers SET floor = 1, map_x = 69.0, map_y = 71.0, updated_at = now()
-    WHERE reader_id = 'M502' AND map_x IS NULL;
+UPDATE readers SET floor = 1, updated_at = now()
+    WHERE reader_id = 'M502' AND floor IS NULL;
 
 UPDATE readers SET location_name = '영상의학센터', updated_at = now()
     WHERE reader_id = 'M502' AND location_name = 'M502';
