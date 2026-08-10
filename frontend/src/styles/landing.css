@@ -74,11 +74,16 @@
   padding-block: 0.9rem;
 }
 
+/* 맨 위로 돌려보내는 버튼 — 기본 button 스타일은 걷어내고 텍스트만 남긴다 */
 .landing__brand {
+  padding: 0;
+  border: none;
+  background: none;
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #ffffff;
+  cursor: pointer;
 }
 
 .landing__nav-links {

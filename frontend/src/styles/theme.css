@@ -40,13 +40,17 @@
   --sidebar-ring: rgba(13, 148, 136, 0.35);
   --app-body-background: #ffffff;
   --app-ambient-background: none;
-  --app-nav-background: #ffffff;
+  /* 상단바는 사이드바(--app-muted-panel-background)보다 한 단계만 진한 회색 — 두 면이 붙어도 구분된다 */
+  --app-nav-background: #f1f1f1;
   --app-nav-border: #94a3b8;
   --app-nav-shadow: 0 1px 0 var(--border);
   --app-panel-background: #ffffff;
   --app-panel-border: #94a3b8;
   --app-panel-highlight: transparent;
-  --app-panel-shadow: none;
+  /* 순백 캔버스 위에서 패널이 얹혀 보이도록 */
+  --app-panel-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.08),
+    0 14px 32px -12px rgba(15, 23, 42, 0.22);
   --app-soft-panel-background: #f6f9fb;
   --app-soft-panel-border: #94a3b8;
   --app-soft-panel-highlight: none;
@@ -231,10 +235,6 @@
     background: var(--app-body-background);
   }
 
-  .app-shell__ambient {
-    display: none;
-  }
-
   .app-shell__topbar {
     position: sticky;
     top: 0;
@@ -287,11 +287,17 @@
     padding: 1.75rem 0 3.5rem;
   }
 
+  /* 홈으로 가는 링크 — 밑줄 없이 색만 반응시킨다 */
   .brand-lockup {
     display: flex;
     align-items: center;
     gap: 0.6rem;
     min-width: 0;
+    text-decoration: none;
+  }
+
+  .brand-lockup:hover .brand-copy strong {
+    color: var(--primary);
   }
 
   .brand-copy {
@@ -648,6 +654,81 @@
   padding-inline: 0.05rem;
   font-size: 1.38rem;
   gap: 0;
+}
+
+/* ── 목록 하단 페이저 ─────────────────────────────────────── */
+/* 상단 네비(.app-nav-tab)와 스타일을 공유하지 않는다 — 네비를 손볼 때 페이저가 같이 깨졌다 */
+
+/* 셀 테두리를 -1px로 겹쳐 하나의 세그먼트 그룹처럼 보이게 한다 */
+.pager-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pager-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  margin-left: -1px;
+  padding-inline: 0.65rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.pager-cell:first-child {
+  margin-left: 0;
+}
+
+.pager-cell:hover:not(:disabled) {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+/* 활성 셀은 양옆 테두리에 가려지지 않도록 위로 올린다 */
+.pager-cell--active {
+  position: relative;
+  z-index: 1;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.pager-cell--active:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.pager-cell:disabled {
+  color: var(--muted-foreground);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* '…'는 버튼이 아니지만 셀 간격을 유지해야 번호 줄이 흔들리지 않는다 */
+.pager-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  margin-left: -1px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  user-select: none;
 }
 
 /* ── 인증 화면 split 레이아웃 ─────────────────────────────── */

@@ -13,7 +13,15 @@ import { formatIBeaconTag } from '../lib/iBeaconTag';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
-import { AlertTriangle, CheckCircle2, ChevronDown, CircleMinus, HelpCircle, Loader2, User } from 'lucide-react';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { AlertTriangle, CheckCircle2, CircleMinus, HelpCircle, Loader2, User } from 'lucide-react';
 
 type UsageChainRecord = {
   usageId: string;
@@ -168,25 +176,22 @@ function HistorySkeleton() {
         </div>
       </div>
 
-      {Array.from({ length: 4 }, (_, index) => (
+      {/* 결과 행과 같은 두 줄 높이로 맞춘다 — 다르면 로딩에서 결과로 넘어갈 때 화면이 크게 튄다 */}
+      {Array.from({ length: 8 }, (_, index) => (
         <div
           key={index}
           data-testid="history-skeleton-card"
-          className="relative overflow-hidden border border-border bg-card p-4 pl-5"
+          className="relative flex flex-col gap-1 overflow-hidden border border-border bg-card py-2.5 pl-5 pr-4"
         >
           <div className="skeleton absolute left-0 top-0 h-full w-1.5 border-0" />
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5">
-              <div className="skeleton h-6 w-44" />
-              <div className="skeleton h-4 w-56" />
+              <div className="skeleton h-5 w-40" />
+              <div className="skeleton h-4 w-48" />
             </div>
-            <div className="skeleton h-7 w-28" />
+            <div className="skeleton h-6 w-24" />
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div className="skeleton h-4 w-full" />
-            <div className="skeleton h-4 w-full" />
-            <div className="skeleton h-4 w-2/3" />
-          </div>
+          <div className="skeleton h-4 w-3/4" />
         </div>
       ))}
     </div>
@@ -203,6 +208,24 @@ function formatDateTime(epoch: number | null | undefined) {
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
   return `${year}년 ${month}월 ${day}일 ${hours}시 ${minutes}분 ${seconds}초`;
+}
+
+/** 목록 행 전용 축약 포맷. 전체 포맷은 한 줄에 대여·반납 두 개가 들어가지 않는다. */
+function formatCompactDateTime(epoch: number | null | undefined) {
+  if (!epoch) return '-';
+  const date = new Date(epoch * 1000);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+/** '이름(부서)' — 부서가 없으면 이름만. 행에서 괄호만 덩그러니 남는 걸 막는다. */
+function formatPerson(name: string | null, department: string | null) {
+  const displayName = name ?? '-';
+  return department ? `${displayName}(${department})` : displayName;
 }
 
 function formatDownloadTimestamp(date: Date) {
@@ -346,6 +369,148 @@ function RecordSnapshot({
   );
 }
 
+/** 목록의 한 건. 두 줄로 압축하고, 온체인 원문·머클 값은 팝업에만 둔다. */
+function UsageHistoryRow({ item, onOpen }: { item: UsageHistoryItem; onOpen: () => void }) {
+  const blockchain = item.blockchain;
+  const blockNumber = blockchain?.anchor?.block_number ?? null;
+  const transactionIndex = blockchain?.anchor?.transaction_index ?? null;
+  const verificationStatus = blockchain?.verification_status ?? 'chain_error';
+  const verificationLabel = blockchain?.verification_label ?? '검증 중 오류';
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="relative flex w-full flex-col gap-1 overflow-hidden border border-border bg-card py-2.5 pl-5 pr-4 text-left transition-colors hover:bg-secondary/50"
+    >
+      <span className={`absolute left-0 top-0 h-full w-1.5 ${getVerificationCardTone(verificationStatus)}`} />
+
+      <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="flex flex-wrap items-baseline gap-x-2.5">
+          <span className="text-[1.05rem] font-semibold tracking-[-0.03em] text-foreground">
+            {item.equipment.name}
+          </span>
+          <span className="text-[0.88rem] text-muted-foreground">
+            #{item.usage_id} · {formatIBeaconTag(item.equipment.tag_id)}
+          </span>
+        </span>
+        <span className="flex flex-wrap items-center justify-end gap-1.5">
+          {typeof blockNumber === 'number' ? <Badge variant="outline">Block {blockNumber}</Badge> : null}
+          {typeof transactionIndex === 'number' ? <Badge variant="outline">Tx #{transactionIndex}</Badge> : null}
+          <VerificationStatusPill status={verificationStatus} label={verificationLabel} />
+        </span>
+      </span>
+
+      <span className="flex flex-wrap items-center gap-x-2 text-[0.9rem] leading-5 text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <User className="h-3.5 w-3.5 shrink-0" />
+          {formatPerson(item.user.name, item.user.department)} →{' '}
+          {formatPerson(item.returned_by.name, item.returned_by.department)}
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>
+          {getLocationLabel(item.checkout.location, item.checkout.reader_id)} →{' '}
+          {getLocationLabel(item.return.location, item.return.reader_id)}
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>
+          {formatCompactDateTime(item.checkout.at)} ~ {formatCompactDateTime(item.return.at)}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** 한 건의 전체 기록. 요약 4칸에 이어 온체인 원문과 머클 검증 결과를 보여준다. */
+function UsageDetailDialog({ item, onClose }: { item: UsageHistoryItem | null; onClose: () => void }) {
+  const blockchain = item?.blockchain;
+  const verificationStatus = blockchain?.verification_status ?? 'chain_error';
+  const verificationLabel = blockchain?.verification_label ?? '검증 중 오류';
+
+  return (
+    <Dialog open={Boolean(item)} onOpenChange={(open) => (open ? undefined : onClose())}>
+      {/* 온체인 해시가 길어 기본 max-w-2xl에서는 줄바꿈이 심하다 */}
+      <DialogContent className="max-w-4xl">
+        {item ? (
+          <>
+            <DialogHeader className="pr-12">
+              <DialogTitle>{item.equipment.name}</DialogTitle>
+              <DialogDescription>
+                usage_id {item.usage_id} · {formatIBeaconTag(item.equipment.tag_id)}
+              </DialogDescription>
+              <div className="pt-1">
+                <VerificationStatusPill status={verificationStatus} label={verificationLabel} />
+              </div>
+            </DialogHeader>
+
+            <DialogBody className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <div className="metric-label text-[0.92rem]">대여자</div>
+                  <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <div>이름: {item.user.name}</div>
+                      <div>부서: {getDisplayDepartment(item)}</div>
+                      <div>직책: {getDisplayPosition(item)}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <div className="metric-label text-[0.92rem]">반납자</div>
+                  <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <div>이름: {item.returned_by.name ?? '-'}</div>
+                      <div>부서: {getDisplayReturnedByDepartment(item)}</div>
+                      <div>직책: {getDisplayReturnedByPosition(item)}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <div className="metric-label text-[0.92rem]">장소</div>
+                  <div className="mt-1.5 text-[1rem] leading-6 text-foreground">
+                    대여: {getLocationLabel(item.checkout.location, item.checkout.reader_id)}
+                    <br />
+                    반납: {getLocationLabel(item.return.location, item.return.reader_id)}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <div className="metric-label text-[0.92rem]">시각</div>
+                  <div className="mt-1.5 text-[0.85rem] leading-5 tracking-[-0.02em] text-foreground">
+                    대여: {formatDateTime(item.checkout.at)}
+                    <br />
+                    반납: {formatDateTime(item.return.at)}
+                  </div>
+                </div>
+              </div>
+
+              <RecordSnapshot
+                title="의료 장비 사용 이력"
+                record={blockchain?.db_record ?? null}
+                notice={getOnchainRecordNotice(blockchain?.tx_input_matches_db)}
+                noticeState={blockchain?.tx_input_matches_db}
+              />
+
+              <SnapshotCard title="머클 검증 결과">
+                <div>블록 번호: {blockchain?.anchor?.block_number ?? '-'}</div>
+                <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
+                <div className="break-all">원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}</div>
+                <div className="break-all">
+                  재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}
+                </div>
+                <VerificationNotice value={blockchain?.transactions_root_matches}>
+                  {getMerkleVerificationNotice(blockchain?.transactions_root_matches)}
+                </VerificationNotice>
+              </SnapshotCard>
+            </DialogBody>
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function IntegrityVerification() {
   const isAuthorized = useAuthGuard(() => {
     try {
@@ -365,7 +530,7 @@ export default function IntegrityVerification() {
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [expandedUsageId, setExpandedUsageId] = useState<number | null>(null);
+  const [detailUsageId, setDetailUsageId] = useState<number | null>(null);
   const [locationOptions, setLocationOptions] = useState<Array<{ value: string; label: string }>>([]);
 
   const logout = useLogout();
@@ -420,7 +585,7 @@ export default function IntegrityVerification() {
 
         setItems(Array.isArray(payload.items) ? (payload.items as UsageHistoryItem[]) : []);
         setTotal(typeof payload.total === 'number' ? payload.total : 0);
-        setExpandedUsageId(null);
+        setDetailUsageId(null);
       } catch (err) {
         if (err instanceof Error) setError(err.message);
         else setError('사용 이력 무결성 검증 조회 중 오류가 발생했습니다.');
@@ -595,7 +760,8 @@ export default function IntegrityVerification() {
               </div>
             </div>
 
-            {/* 조건이 많아 사이드바를 넘치므로, 필드만 스크롤시키고 버튼 줄은 하단에 고정한다. */}
+            {/* 조건이 많아 사이드바를 넘치므로 필드는 스크롤시키되, 버튼 줄은 패널 하단에 고정하지 않고
+                마지막 필드 바로 아래에 이어 붙인다. */}
             <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                 <div className="space-y-2">
@@ -708,34 +874,26 @@ export default function IntegrityVerification() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              <div className="mt-4 flex shrink-0 flex-wrap items-center gap-2 border-t border-border/70 pt-4">
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? '조회 중...' : '조회'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setFilters((prev) => ({ ...prev, startDate: '', endDate: '' }))}
-                  disabled={!filters.startDate && !filters.endDate}
-                >
-                  기간 초기화
-                </Button>
-                <Button type="button" variant="outline" onClick={onReset}>
-                  초기화
-                </Button>
-                <Button type="button" variant="outline" onClick={() => void fetchHistory(query)} disabled={isLoading}>
-                  새로고침
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void downloadCsv()}
-                  disabled={isLoading || total === 0}
-                >
-                  CSV 다운로드
-                </Button>
+                <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-4">
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading ? '조회 중...' : '조회'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => void fetchHistory(query)} disabled={isLoading}>
+                    새로고침
+                  </Button>
+                  <Button type="button" variant="outline" onClick={onReset}>
+                    초기화
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void downloadCsv()}
+                    disabled={isLoading || total === 0}
+                  >
+                    CSV 다운로드
+                  </Button>
+                </div>
               </div>
             </form>
 
@@ -772,123 +930,9 @@ export default function IntegrityVerification() {
                 ) : items.length === 0 ? (
                   <div className="empty-state">조회된 사용 이력이 없습니다.</div>
                 ) : (
-                  items.map((item) => {
-                    const blockchain = item.blockchain;
-                    const isExpanded = expandedUsageId === item.usage_id;
-                    const displayDepartment = getDisplayDepartment(item);
-                    const displayPosition = getDisplayPosition(item);
-                    const returnedByDepartment = getDisplayReturnedByDepartment(item);
-                    const returnedByPosition = getDisplayReturnedByPosition(item);
-                    const returnedByName = item.returned_by.name ?? '-';
-                    const checkoutLocation = getLocationLabel(item.checkout.location, item.checkout.reader_id);
-                    const returnLocation = getLocationLabel(item.return.location, item.return.reader_id);
-                    const blockNumber = blockchain?.anchor?.block_number ?? null;
-                    const transactionIndex = blockchain?.anchor?.transaction_index ?? null;
-                    const verificationStatus = blockchain?.verification_status ?? 'chain_error';
-                    const verificationLabel = blockchain?.verification_label ?? '검증 중 오류';
-
-                    return (
-                      <div
-                        key={item.usage_id}
-                        className="relative overflow-hidden border border-border bg-card p-4 pl-5 transition-all"
-                      >
-                        <div
-                          className={`absolute left-0 top-0 h-full w-1.5 ${getVerificationCardTone(verificationStatus)}`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setExpandedUsageId(isExpanded ? null : item.usage_id)}
-                          className="mb-2.5 flex w-full flex-wrap items-center justify-between gap-3 text-left"
-                        >
-                          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-                            <div className="text-[1.2rem] font-semibold tracking-[-0.04em] text-foreground">
-                              {item.equipment.name}
-                            </div>
-                            <div className="text-[0.95rem] text-muted-foreground">
-                              usage_id {item.usage_id} · {formatIBeaconTag(item.equipment.tag_id)}
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap items-center justify-end gap-2">
-                            {typeof blockNumber === 'number' ? (
-                              <Badge variant="outline">Block {blockNumber}</Badge>
-                            ) : null}
-                            {typeof transactionIndex === 'number' ? (
-                              <Badge variant="outline">Tx #{transactionIndex}</Badge>
-                            ) : null}
-                            <VerificationStatusPill status={verificationStatus} label={verificationLabel} />
-                            <ChevronDown
-                              className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                            />
-                          </div>
-                        </button>
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                          <div className="rounded-lg border border-border bg-card p-3">
-                            <div className="metric-label text-[0.92rem]">대여자</div>
-                            <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
-                              <User className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <div>이름: {item.user.name}</div>
-                                <div>부서: {displayDepartment}</div>
-                                <div>직책: {displayPosition}</div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="rounded-lg border border-border bg-card p-3">
-                            <div className="metric-label text-[0.92rem]">반납자</div>
-                            <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
-                              <User className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <div>이름: {returnedByName}</div>
-                                <div>부서: {returnedByDepartment}</div>
-                                <div>직책: {returnedByPosition}</div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="rounded-lg border border-border bg-card p-3">
-                            <div className="metric-label text-[0.92rem]">장소</div>
-                            <div className="mt-1.5 text-[1rem] leading-6 text-foreground">
-                              대여: {checkoutLocation}
-                              <br />
-                              반납: {returnLocation}
-                            </div>
-                          </div>
-                          <div className="rounded-lg border border-border bg-card p-3">
-                            <div className="metric-label text-[0.92rem]">시각</div>
-                            <div className="mt-1.5 text-[0.85rem] leading-5 tracking-[-0.02em] text-foreground">
-                              대여: {formatDateTime(item.checkout.at)}
-                              <br />
-                              반납: {formatDateTime(item.return.at)}
-                            </div>
-                          </div>
-                        </div>
-
-                        {isExpanded ? (
-                          <div className="mt-5 space-y-3 border-t border-border/70 pt-5">
-                            <RecordSnapshot
-                              title="의료 장비 사용 이력"
-                              record={blockchain?.db_record ?? null}
-                              notice={getOnchainRecordNotice(blockchain?.tx_input_matches_db)}
-                              noticeState={blockchain?.tx_input_matches_db}
-                            />
-
-                            <SnapshotCard title="머클 검증 결과">
-                              <div>블록 번호: {blockchain?.anchor?.block_number ?? '-'}</div>
-                              <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
-                              <div className="break-all">
-                                원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}
-                              </div>
-                              <div className="break-all">
-                                재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}
-                              </div>
-                              <VerificationNotice value={blockchain?.transactions_root_matches}>
-                                {getMerkleVerificationNotice(blockchain?.transactions_root_matches)}
-                              </VerificationNotice>
-                            </SnapshotCard>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
+                  items.map((item) => (
+                    <UsageHistoryRow key={item.usage_id} item={item} onOpen={() => setDetailUsageId(item.usage_id)} />
+                  ))
                 )}
               </div>
 
@@ -905,6 +949,11 @@ export default function IntegrityVerification() {
           </div>
         </div>
       </div>
+
+      <UsageDetailDialog
+        item={items.find((item) => item.usage_id === detailUsageId) ?? null}
+        onClose={() => setDetailUsageId(null)}
+      />
     </AppShell>
   );
 }

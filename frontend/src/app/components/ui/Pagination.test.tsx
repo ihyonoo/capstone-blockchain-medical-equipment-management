@@ -69,6 +69,23 @@ describe('Pagination', () => {
     expect(screen.getByRole('button', { name: '이전 페이지' })).toBeEnabled();
   });
 
+  it('jumps to either end with the first and last buttons', () => {
+    const { onPageChange } = renderPagination({ totalItems: 200, pageSize: 10, page: 8 });
+
+    fireEvent.click(screen.getByRole('button', { name: '첫 페이지' }));
+    expect(onPageChange).toHaveBeenCalledWith(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '마지막 페이지' }));
+    expect(onPageChange).toHaveBeenCalledWith(20);
+  });
+
+  it('disables the first and last buttons when already at that end', () => {
+    renderPagination({ totalItems: 200, pageSize: 10, page: 1 });
+
+    expect(screen.getByRole('button', { name: '첫 페이지' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '마지막 페이지' })).toBeEnabled();
+  });
+
   it('collapses long page runs so the row stays on one line', () => {
     renderPagination({ totalItems: 200, pageSize: 10, page: 1 });
 

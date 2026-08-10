@@ -278,11 +278,12 @@ export default function MyPage() {
 
   return (
     <AppShell
-      wide={sessionRole === 'admin'}
+      wide
       actions={sessionRole === 'admin' ? <AdminNav active="mypage" /> : <StaffNav active="mypage" />}
       contentClassName="pt-4 sm:pt-5"
     >
-      <div className="mx-auto w-full max-w-3xl space-y-4">
+      {/* 다른 관리 화면과 같은 본문 폭 */}
+      <div className="mx-auto w-full max-w-[1360px] space-y-4">
         {loading ? (
           <div className="alert">불러오는 중입니다...</div>
         ) : loadError ? (
@@ -292,7 +293,7 @@ export default function MyPage() {
             {/* 내 정보 */}
             <section className="surface-panel p-6 fade-rise">
               <div className="panel-title mb-4">내 정보</div>
-              <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+              <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
                 <InfoField label="아이디" value={user.username} />
                 <InfoField label="이름" value={user.display_name} />
                 <div className="space-y-1">
@@ -341,8 +342,9 @@ export default function MyPage() {
                   {pwOpen ? '닫기' : '변경'}
                 </Button>
               </div>
+              {/* 패널은 넓어져도 입력 줄은 읽기 좋은 폭(max-w-2xl)으로 묶어 둔다 */}
               {pwOpen ? (
-                <form onSubmit={submitPassword} className="mt-4 space-y-4">
+                <form onSubmit={submitPassword} className="mt-4 max-w-2xl space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="current-pw">현재 비밀번호</Label>
                     <Input
@@ -411,7 +413,7 @@ export default function MyPage() {
                 </Button>
               </div>
               {emailOpen ? (
-                <form onSubmit={submitEmail} className="mt-4 space-y-4">
+                <form onSubmit={submitEmail} className="mt-4 max-w-2xl space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="new-email">새 이메일</Label>
                     <Input
@@ -538,7 +540,7 @@ export default function MyPage() {
                   회원 탈퇴
                 </Button>
               ) : (
-                <div className="space-y-4">
+                <div className="max-w-2xl space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="withdraw-pw">현재 비밀번호 확인</Label>
                     <Input

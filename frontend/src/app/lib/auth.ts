@@ -56,6 +56,15 @@ export function getStoredAuthToken(): string | null {
   return getStoredAuthSession()?.token ?? null;
 }
 
+/**
+ * 로고를 눌렀을 때 갈 곳이자 로그인 직후 착지점. 권한마다 첫 화면이 달라
+ * 로그인·OAuth 콜백·상단바가 같은 판정을 쓰도록 여기 한 곳에 둔다.
+ */
+export function getHomePath(user: AuthUser | null): string {
+  if (!user) return '/';
+  return user.role?.toLowerCase() === 'admin' ? '/verification' : '/equipment';
+}
+
 export function buildAuthHeaders(token: string | null, init?: Record<string, string>): Record<string, string> {
   const headers = { ...(init ?? {}) };
   if (token) {
