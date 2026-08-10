@@ -1,9 +1,14 @@
 import contextlib
 import os
 
-# backend/settings.py가 import 시점에 DATABASE_URL을 읽으므로, backend 하위 모듈을
-# import하기 전에 반드시 먼저 테스트 DB로 덮어써야 한다.
+# backend/settings.py가 import 시점에 DATABASE_URL·REDIS_URL을 읽으므로, backend 하위
+# 모듈을 import하기 전에 반드시 먼저 테스트용 값으로 덮어써야 한다.
+# (settings.py의 load_dotenv는 override=False라 여기서 넣은 값이 .env보다 우선한다)
 os.environ["DATABASE_URL"] = "postgresql://mediledger:mediledger@localhost:5432/mediledger_test_db"
+# Redis도 개발용(…/0)과 논리 DB를 나눈다. 같은 머신에서 개발 백엔드나 시뮬레이터가 돌면
+# 그들이 쓴 rtls:tag:* 캐시를 테스트가 함께 읽어, TRUNCATE로 비운 tags와 어긋난 태그가
+# /rtls/live 응답에 섞였다. 매 테스트 전 캐시를 지워도 시뮬레이터가 곧바로 다시 채운다.
+os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/1"
 
 import psycopg
 import pytest
