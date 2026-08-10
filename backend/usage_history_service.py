@@ -253,6 +253,9 @@ def build_usage_history_item(row, blockchain: dict | None = None) -> dict:
             "tag_id": row[10],
             "name": row[11],
             "type": row[12],
+            # 관리자 화면에서 모의 데이터를 숨길 수 있게 함께 내려준다.
+            # tags 행이 지워진 옛 이력은 NULL이 되므로 실물로 간주한다.
+            "is_real_hardware": True if row[25] is None else row[25],
         },
         "checkout": {
             "reader_id": row[13],
@@ -458,8 +461,15 @@ def query_usage_history_rows(
     sort_order: str,
     limit: int,
     max_limit: int,
+    offset: int = 0,
+    hide_simulated: bool = False,
 ):
+    """한 페이지 분량의 행과 조건에 맞는 전체 건수를 함께 돌려준다.
+
+    반환: (safe_limit, safe_offset, total, rows)
+    """
     safe_limit = max(1, min(limit, max_limit))
+    safe_offset = max(0, offset)
     where_clauses = []
     params: list = []
     normalized_sort_by = (sort_by or "time").strip().lower()
@@ -524,6 +534,10 @@ def query_usage_history_rows(
         if parsed_start_date and parsed_end_date and parsed_start_date > parsed_end_date:
             raise HTTPException(400, "start_date는 end_date보다 늦을 수 없습니다.")
 
+    if hide_simulated:
+        # tags 행이 지워진 옛 이력(NULL)은 실물로 간주해 남긴다.
+        where_clauses.append("t.is_real_hardware IS NOT FALSE")
+
     where_sql = ""
     if where_clauses:
         where_sql = "WHERE " + " AND ".join(where_clauses)
@@ -554,22 +568,33 @@ def query_usage_history_rows(
       h.blockchain_block_number,
       h.blockchain_block_hash,
       h.blockchain_transaction_index,
-      EXTRACT(EPOCH FROM h.blockchain_recorded_at)::BIGINT AS blockchain_recorded_at_epoch
+      EXTRACT(EPOCH FROM h.blockchain_recorded_at)::BIGINT AS blockchain_recorded_at_epoch,
+      -- 실물/모의 구분. 다른 자리 기반 row 인덱스를 밀지 않도록 반드시 맨 뒤에 둔다.
+      t.is_real_hardware
     FROM usage_history h
+    LEFT JOIN tags t ON t.tag_id = h.tag_id
     {where_sql}
     ORDER BY {order_sql}
-    LIMIT %s
+    LIMIT %s OFFSET %s
     """
-    params.append(safe_limit)
+    # 전체 건수는 페이지 수 계산에 필요하다. 조건은 같고 SELECT만 다르다.
+    count_sql = f"""
+    SELECT COUNT(*)
+    FROM usage_history h
+    LEFT JOIN tags t ON t.tag_id = h.tag_id
+    {where_sql}
+    """
 
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
-            cur.execute(sql, params)
+            cur.execute(count_sql, params)
+            total = cur.fetchone()[0]
+            cur.execute(sql, [*params, safe_limit, safe_offset])
             rows = cur.fetchall()
     except Exception:
         raise HTTPException(500, "사용 이력 조회 중 데이터베이스 오류가 발생했습니다.")
 
-    return safe_limit, rows
+    return safe_limit, safe_offset, total, rows
 
 
 def query_my_usage_history_rows(user_id: int, limit: int):

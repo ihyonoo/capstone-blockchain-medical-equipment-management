@@ -135,7 +135,7 @@ export default function DeviceStatus() {
                 checked={hideSimulated}
                 onChange={(event) => setHideSimulated(event.target.checked)}
               />
-              모의 데이터 숨기기
+              시뮬레이션 데이터 숨기기
             </label>
           </div>
           {error ? <div className="alert alert-error mb-3">{error}</div> : null}

@@ -49,7 +49,7 @@ INSERT INTO readers (reader_id, location_name, floor, is_real_hardware) VALUES
     ('M505', '내과계중환자실 MICU', 5, FALSE),
     ('M506', '충남권역심뇌혈관질환센터', 5, FALSE),
     ('M507', '마취통증의학과', 5, FALSE),
-    ('M508', '통원수술센터', 5, FALSE)
+    ('M106', '영상의학센터', 1, FALSE)
 ON CONFLICT (reader_id) DO NOTHING;
 
 -- floor 없이 먼저 만들어진 행(/ingest upsert가 만든 행)에 층을 채운다. floor가 비면
@@ -136,8 +136,8 @@ UPDATE readers SET floor = 5, updated_at = now()
     WHERE reader_id = 'M506' AND floor IS NULL;
 UPDATE readers SET floor = 5, updated_at = now()
     WHERE reader_id = 'M507' AND floor IS NULL;
-UPDATE readers SET floor = 5, updated_at = now()
-    WHERE reader_id = 'M508' AND floor IS NULL;
+UPDATE readers SET floor = 1, updated_at = now()
+    WHERE reader_id = 'M106' AND floor IS NULL;
 
 -- 실물 하드웨어 리더의 위치(생성이 아니라 표시 정보 보정).
 INSERT INTO readers (reader_id, location_name, floor) VALUES
@@ -151,13 +151,13 @@ UPDATE readers SET location_name = '중앙수술센터', updated_at = now()
     WHERE reader_id = 'M501' AND location_name = 'M501';
 
 INSERT INTO readers (reader_id, location_name, floor) VALUES
-    ('M502', '영상의학센터', 1)
+    ('M502', '통원수술센터', 5)
 ON CONFLICT (reader_id) DO NOTHING;
 
-UPDATE readers SET floor = 1, updated_at = now()
+UPDATE readers SET floor = 5, updated_at = now()
     WHERE reader_id = 'M502' AND floor IS NULL;
 
-UPDATE readers SET location_name = '영상의학센터', updated_at = now()
+UPDATE readers SET location_name = '통원수술센터', updated_at = now()
     WHERE reader_id = 'M502' AND location_name = 'M502';
 
 INSERT INTO tags (
@@ -210,7 +210,7 @@ INSERT INTO tags (
     ('a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:5:0045', '환자모니터 45호', '환자모니터', 'BME-2020-00045', '0400000000002D', 'available', FALSE),
     ('a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:5:0046', 'C-arm 혈관조영 보조장비 46호', 'C-arm', 'BME-2021-00046', '0400000000002E', 'available', FALSE),
     ('a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:5:0047', '이동형 마취기 47호', '마취기', 'BME-2022-00047', '0400000000002F', 'available', FALSE),
-    ('a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:5:0048', '이동형 환자모니터 48호', '환자모니터', 'BME-2023-00048', '04000000000030', 'available', FALSE),
+    ('a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:1:0048', '이동형 환자모니터 48호', '환자모니터', 'BME-2023-00048', '04000000000030', 'available', FALSE),
     ('a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:5:0049', '제세동기 49호', '제세동기', 'BME-2024-00049', '04000000000031', 'available', FALSE),
     ('a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:5:0050', '환자모니터 50호', '환자모니터', 'BME-2020-00050', '04000000000032', 'available', FALSE)
 ON CONFLICT (tag_id) DO NOTHING;

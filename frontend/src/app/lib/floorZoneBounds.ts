@@ -13,7 +13,7 @@ export const ZONE_BOUNDS: Record<string, ZonePoint[]> = {
     { x: 80.4, y: 13.9 },
     { x: 53.5, y: 14 },
   ], // 소아전문응급의료센터
-  M502: [
+  M106: [
     { x: 53.4, y: 51.9 },
     { x: 85.6, y: 51.8 },
     { x: 85.4, y: 69.9 },
@@ -404,7 +404,7 @@ export const ZONE_BOUNDS: Record<string, ZonePoint[]> = {
     { x: 80.6, y: 20.4 },
     { x: 80.7, y: 9.1 },
   ], // 충남권역심뇌혈관질환센터
-  M508: [
+  M502: [
     { x: 49.2, y: 44.4 },
     { x: 66.4, y: 44.4 },
     { x: 66.3, y: 49.6 },

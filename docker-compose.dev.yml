@@ -13,7 +13,8 @@
 name: mediledger-dev
 
 # blockchain/besu/docker-compose.yml을 그대로 가져옴.
-# validator1~4·rpc-node·redis가 여기서 정의됨.
+# validator1~4·rpc-node가 여기서 정의됨.
+# redis는 블록체인과 무관해 공유하지 않고 아래에 직접 정의함.
 include:
   - path: blockchain/besu/docker-compose.yml
     # BOOTNODE_ENODE·BESU_IMAGE는 blockchain/besu/.env에 있음.
@@ -21,6 +22,15 @@ include:
     env_file: blockchain/besu/.env
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: mediledger-redis-dev
+    restart: unless-stopped
+    ports:
+      # 호스트(uvicorn)에서 127.0.0.1:6379로 접속.
+      # 위치 캐시 전용이라 영속 볼륨 없음.
+      - "127.0.0.1:6379:6379"
+
   postgres:
     image: postgres:17-alpine
     container_name: mediledger-postgres-dev

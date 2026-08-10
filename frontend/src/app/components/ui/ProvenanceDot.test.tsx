@@ -11,7 +11,7 @@ describe('ProvenanceDot', () => {
   it('renders a titled dot for simulated data, with no visible text label', () => {
     render(<ProvenanceDot isRealHardware={false} />);
     const dot = screen.getByTestId('provenance-dot');
-    expect(dot).toHaveAttribute('title', '모의 데이터');
+    expect(dot).toHaveAttribute('title', '시뮬레이션 데이터');
     expect(dot).toHaveTextContent('');
   });
 });

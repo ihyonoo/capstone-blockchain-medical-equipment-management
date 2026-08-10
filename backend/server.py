@@ -990,7 +990,8 @@ def list_nfc_mappings(authorization: str | None = Header(default=None)):
       t.serial_number,
       t.nfc_tag_uid,
       t.asset_status,
-      t.is_active
+      t.is_active,
+      t.is_real_hardware
     FROM tags t
     WHERE t.is_active = TRUE
     ORDER BY t.equipment_name ASC, t.tag_id ASC
@@ -1016,6 +1017,8 @@ def list_nfc_mappings(authorization: str | None = Header(default=None)):
                 "nfc_token": row[4],
                 "asset_status": row[5],
                 "is_active": row[6],
+                # 관리자 화면에서 모의 데이터를 숨길 수 있게 실물 여부를 함께 내려준다.
+                "is_real_hardware": row[7],
                 "reader_id": location_snapshot["reader_id"] if location_snapshot else None,
                 "location": location_snapshot["location"] if location_snapshot else None,
                 "updated_at": location_snapshot["updated_at"] if location_snapshot else None,
@@ -1392,7 +1395,7 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
 
 
 @app.get("/rtls/live")
-def rtls_live(authorization: str | None = Header(default=None)):
+def rtls_live(authorization: str | None = Header(default=None), hide_simulated: bool = False):
     user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
     is_admin = user["role"] == "admin"
     now = int(time.time())
@@ -1459,6 +1462,10 @@ def rtls_live(authorization: str | None = Header(default=None)):
             "is_online": is_online,
             "is_stale": not is_online,
         }
+        # 모의 장비 숨기기는 응답에서 항목을 빼는 방식이다. 직원에게는 어떤 항목이 모의인지
+        # 알려주지 않으므로(아래 is_admin 분기), 필터링을 서버가 대신 해준다.
+        if hide_simulated and metadata.get("is_real_hardware", True) is False:
+            continue
         if is_admin:
             item["is_real_hardware"] = metadata.get("is_real_hardware", True)
         items.append(item)
@@ -1469,7 +1476,9 @@ def rtls_live(authorization: str | None = Header(default=None)):
     )
 
     readers = load_readers_with_status(now, READER_OFFLINE_SEC)
-    if not is_admin:
+    # 직원 화면은 평소 실물/시뮬레이션을 구분하지 않는다. 다만 hide_simulated로 구분을
+    # 명시적으로 요청했다면, 지도에서 실제 리더가 있는 구역만 밝게 남기기 위해 알려준다.
+    if not is_admin and not hide_simulated:
         for reader in readers:
             reader.pop("is_real_hardware", None)
     readers_online = sum(1 for r in readers if r["is_online"])
@@ -1507,10 +1516,12 @@ def usage_history(
     sort_by: str = "time",
     sort_order: str = "desc",
     limit: int = 200,
+    offset: int = 0,
+    hide_simulated: bool = False,
     include_blockchain: bool = False,
 ):
     require_authenticated_user(authorization, allowed_roles={"admin"})
-    safe_limit, rows = query_usage_history_rows(
+    safe_limit, safe_offset, total, rows = query_usage_history_rows(
         user=user,
         equipment=equipment,
         checkout_location=checkout_location,
@@ -1522,6 +1533,8 @@ def usage_history(
         sort_order=sort_order,
         limit=limit,
         max_limit=200 if include_blockchain else 1000,
+        offset=offset,
+        hide_simulated=hide_simulated,
     )
 
     integrity_results = {}
@@ -1539,7 +1552,10 @@ def usage_history(
 
     return {
         "ok": True,
+        # count는 이번 페이지 건수, total은 조건에 맞는 전체 건수(페이지 수 계산용).
         "count": len(items),
+        "total": total,
+        "offset": safe_offset,
         "filters": {
             "user": user,
             "equipment": equipment,
@@ -1551,6 +1567,8 @@ def usage_history(
             "sort_by": sort_by,
             "sort_order": sort_order,
             "limit": safe_limit,
+            "offset": safe_offset,
+            "hide_simulated": hide_simulated,
             "include_blockchain": include_blockchain,
         },
         "integrity_summary": integrity_summary,
