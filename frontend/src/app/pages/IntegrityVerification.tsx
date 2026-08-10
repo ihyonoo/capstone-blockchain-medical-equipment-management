@@ -6,6 +6,9 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
+import ResizableSidebar from '../components/layout/ResizableSidebar';
+import Pagination from '../components/ui/Pagination';
+import { clampPage, DEFAULT_PAGE_SIZE, getPageSlice, getTotalPages } from '../lib/pagination';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
@@ -294,6 +297,8 @@ export default function IntegrityVerification() {
   const [error, setError] = useState('');
   const [expandedUsageId, setExpandedUsageId] = useState<number | null>(null);
   const [locationOptions, setLocationOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const logout = useLogout();
 
@@ -371,6 +376,7 @@ export default function IntegrityVerification() {
         setAllItems(fetchedItems);
         setItems(applyClientFilters(fetchedItems, targetFilters));
         setExpandedUsageId(null);
+        setPage(1);
       } catch (err) {
         if (err instanceof Error) setError(err.message);
         else setError('사용 이력 무결성 검증 조회 중 오류가 발생했습니다.');
@@ -492,6 +498,7 @@ export default function IntegrityVerification() {
     setFilters(nextFilters);
     setItems(applyClientFilters(allItems, nextFilters));
     setExpandedUsageId(null);
+    setPage(1);
   };
 
   const onSelectVerificationStatus = (verificationStatus: string) => {
@@ -499,7 +506,12 @@ export default function IntegrityVerification() {
     setFilters(nextFilters);
     setItems(applyClientFilters(allItems, nextFilters));
     setExpandedUsageId(null);
+    setPage(1);
   };
+
+  // 결과가 줄어 현재 페이지가 사라진 경우에도 빈 화면이 되지 않도록 렌더 시점에 페이지를 좁힌다.
+  const safePage = clampPage(page, getTotalPages(items.length, pageSize));
+  const pagedItems = getPageSlice(items, safePage, pageSize);
 
   const blockOptions = useMemo(() => {
     const seen = new Set<number>();
@@ -525,322 +537,354 @@ export default function IntegrityVerification() {
   }
 
   return (
-    <AppShell wide actions={<AdminNav active="verification" />} contentClassName="pt-4 sm:pt-5">
-      <div className="space-y-4">
-        <section className="surface-panel p-5 fade-rise">
-          <div className="panel-header">
-            <div>
-              <div className="panel-title">검색 조건</div>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
+    <AppShell bleed actions={<AdminNav active="verification" />} contentClassName="pt-4 sm:pt-5">
+      {/* 사이드바를 상하 꽉 채우기 위해, AppShell 공용 상하 패딩(contentClassName="pt-4 sm:pt-5" +
+          .app-shell__content의 3.5rem 하단 패딩)을 이 행 전체에서 걷어내고, 사이드바가 아닌
+          나머지(이력 목록) 쪽에만 그 패딩을 되돌려준다. */}
+      {/* xl:items-start — 자식이 stretch로 늘어나면 사이드바의 sticky가 동작하지 않는다 */}
+      <div className="-mt-4 -mb-14 flex w-full flex-col gap-4 sm:-mt-5 xl:flex-row xl:items-start">
+        <ResizableSidebar testId="verification-sidebar">
+          <>
+            <div className="panel-header shrink-0">
+              <div>
+                <div className="panel-title">검색 조건</div>
+              </div>
               <Badge variant="outline">최대 200건</Badge>
             </div>
-          </div>
 
-          <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">사용자</label>
-              <Input
-                type="text"
-                value={filters.user}
-                onChange={(e) => updateFilter('user', e.target.value)}
-                placeholder="이름, 사용자 ID"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">장비</label>
-              <Input
-                type="text"
-                value={filters.equipment}
-                onChange={(e) => updateFilter('equipment', e.target.value)}
-                placeholder="장비명 또는 태그 ID"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">대여 위치</label>
-              <Select
-                value={filters.checkoutLocation || 'all'}
-                onValueChange={(value) => updateFilter('checkoutLocation', value === 'all' ? '' : value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="대여 위치 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 위치</SelectItem>
-                  {locationOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">반납 위치</label>
-              <Select
-                value={filters.returnLocation || 'all'}
-                onValueChange={(value) => updateFilter('returnLocation', value === 'all' ? '' : value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="반납 위치 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 위치</SelectItem>
-                  {locationOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">조회 시작일</label>
-              <Input
-                type="date"
-                value={filters.startDate}
-                max={filters.endDate || undefined}
-                onChange={(e) => updateStartDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">조회 종료일</label>
-              <Input
-                type="date"
-                value={filters.endDate}
-                min={filters.startDate || undefined}
-                onChange={(e) => updateEndDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">검증 상태</label>
-              <Select value={filters.verificationStatus} onValueChange={onSelectVerificationStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="검증 상태 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {VERIFICATION_STATUS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">블록</label>
-              <Select value={filters.blockNumber} onValueChange={onSelectBlock}>
-                <SelectTrigger>
-                  <SelectValue placeholder="블록 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 블록</SelectItem>
-                  {blockOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">정렬 기준</label>
-              <Select
-                value={filters.sortField}
-                onValueChange={(value) => updateFilter('sortField', value as SortField)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="정렬 기준 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_FIELD_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">정렬 방향</label>
-              <Select
-                value={filters.sortOrder}
-                onValueChange={(value) => updateFilter('sortOrder', value as SortOrder)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="정렬 방향 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_ORDER_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-wrap items-end gap-2 xl:col-span-5">
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? '조회 중...' : '조회'}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setFilters((prev) => ({ ...prev, startDate: '', endDate: '' }))}
-                disabled={!filters.startDate && !filters.endDate}
-              >
-                기간 초기화
-              </Button>
-              <Button type="button" variant="outline" onClick={onReset}>
-                초기화
-              </Button>
-              <Button type="button" variant="outline" onClick={() => void fetchHistory(filters)} disabled={isLoading}>
-                새로고침
-              </Button>
-              <Button type="button" variant="outline" onClick={downloadCsv} disabled={isLoading || items.length === 0}>
-                CSV 다운로드
-              </Button>
-            </div>
-          </form>
-
-          {error ? <div className="alert alert-error mt-4">{error}</div> : null}
-        </section>
-
-        <section className="surface-panel p-5 fade-rise-delay">
-          <div className="panel-header">
-            <div>
-              <div className="panel-title">장비 사용 이력</div>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Badge variant="outline">검증 완료 {visibleVerifiedCount}건</Badge>
-              <Badge variant="outline">검증 실패 {visibleIssueCount}건</Badge>
-            </div>
-          </div>
-
-          <div className="space-y-2.5">
-            {isLoading ? (
-              <div className="empty-state">조회 중입니다.</div>
-            ) : items.length === 0 ? (
-              <div className="empty-state">조회된 사용 이력이 없습니다.</div>
-            ) : (
-              items.map((item) => {
-                const blockchain = item.blockchain;
-                const isExpanded = expandedUsageId === item.usage_id;
-                const displayDepartment = getDisplayDepartment(item);
-                const displayPosition = getDisplayPosition(item);
-                const returnedByDepartment = getDisplayReturnedByDepartment(item);
-                const returnedByPosition = getDisplayReturnedByPosition(item);
-                const returnedByName = item.returned_by.name ?? '-';
-                const checkoutLocation = getLocationLabel(item.checkout.location, item.checkout.reader_id);
-                const returnLocation = getLocationLabel(item.return.location, item.return.reader_id);
-                const blockNumber = blockchain?.anchor?.block_number ?? null;
-                const transactionIndex = blockchain?.anchor?.transaction_index ?? null;
-                const verificationStatus = blockchain?.verification_status ?? 'chain_error';
-                const verificationLabel = blockchain?.verification_label ?? '검증 중 오류';
-
-                return (
-                  <div
-                    key={item.usage_id}
-                    className="relative overflow-hidden border border-border bg-card p-4 pl-5 transition-all"
+            {/* 조건이 많아 사이드바를 넘치므로, 필드만 스크롤시키고 버튼 줄은 하단에 고정한다. */}
+            <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">사용자</label>
+                  <Input
+                    type="text"
+                    value={filters.user}
+                    onChange={(e) => updateFilter('user', e.target.value)}
+                    placeholder="이름, 사용자 ID"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">장비</label>
+                  <Input
+                    type="text"
+                    value={filters.equipment}
+                    onChange={(e) => updateFilter('equipment', e.target.value)}
+                    placeholder="장비명 또는 태그 ID"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">대여 위치</label>
+                  <Select
+                    value={filters.checkoutLocation || 'all'}
+                    onValueChange={(value) => updateFilter('checkoutLocation', value === 'all' ? '' : value)}
                   >
-                    <div
-                      className={`absolute left-0 top-0 h-full w-1.5 ${getVerificationCardTone(verificationStatus)}`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setExpandedUsageId(isExpanded ? null : item.usage_id)}
-                      className="mb-2.5 flex w-full flex-wrap items-center justify-between gap-3 text-left"
-                    >
-                      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-                        <div className="text-[1.2rem] font-semibold tracking-[-0.04em] text-foreground">
-                          {item.equipment.name}
+                    <SelectTrigger>
+                      <SelectValue placeholder="대여 위치 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체 위치</SelectItem>
+                      {locationOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">반납 위치</label>
+                  <Select
+                    value={filters.returnLocation || 'all'}
+                    onValueChange={(value) => updateFilter('returnLocation', value === 'all' ? '' : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="반납 위치 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체 위치</SelectItem>
+                      {locationOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">조회 시작일</label>
+                  <Input
+                    type="date"
+                    value={filters.startDate}
+                    max={filters.endDate || undefined}
+                    onChange={(e) => updateStartDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">조회 종료일</label>
+                  <Input
+                    type="date"
+                    value={filters.endDate}
+                    min={filters.startDate || undefined}
+                    onChange={(e) => updateEndDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">검증 상태</label>
+                  <Select value={filters.verificationStatus} onValueChange={onSelectVerificationStatus}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="검증 상태 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VERIFICATION_STATUS_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">블록</label>
+                  <Select value={filters.blockNumber} onValueChange={onSelectBlock}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="블록 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체 블록</SelectItem>
+                      {blockOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">정렬 기준</label>
+                  <Select
+                    value={filters.sortField}
+                    onValueChange={(value) => updateFilter('sortField', value as SortField)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="정렬 기준 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SORT_FIELD_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">정렬 방향</label>
+                  <Select
+                    value={filters.sortOrder}
+                    onValueChange={(value) => updateFilter('sortOrder', value as SortOrder)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="정렬 방향 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SORT_ORDER_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="mt-4 flex shrink-0 flex-wrap items-center gap-2 border-t border-border/70 pt-4">
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? '조회 중...' : '조회'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setFilters((prev) => ({ ...prev, startDate: '', endDate: '' }))}
+                  disabled={!filters.startDate && !filters.endDate}
+                >
+                  기간 초기화
+                </Button>
+                <Button type="button" variant="outline" onClick={onReset}>
+                  초기화
+                </Button>
+                <Button type="button" variant="outline" onClick={() => void fetchHistory(filters)} disabled={isLoading}>
+                  새로고침
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={downloadCsv}
+                  disabled={isLoading || items.length === 0}
+                >
+                  CSV 다운로드
+                </Button>
+              </div>
+            </form>
+
+            {error ? <div className="alert alert-error mt-4 shrink-0">{error}</div> : null}
+          </>
+        </ResizableSidebar>
+
+        <div className="flex w-full min-w-0 flex-1 justify-center pt-4 pb-14 pr-[clamp(1rem,2.5vw,2rem)] sm:pt-5">
+          <div className="w-full max-w-[1360px]">
+            <section className="surface-panel p-5 fade-rise-delay">
+              <div className="panel-header">
+                <div>
+                  <div className="panel-title">장비 사용 이력</div>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Badge variant="outline">검증 완료 {visibleVerifiedCount}건</Badge>
+                  <Badge variant="outline">검증 실패 {visibleIssueCount}건</Badge>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                {isLoading ? (
+                  <div className="empty-state">조회 중입니다.</div>
+                ) : items.length === 0 ? (
+                  <div className="empty-state">조회된 사용 이력이 없습니다.</div>
+                ) : (
+                  pagedItems.map((item) => {
+                    const blockchain = item.blockchain;
+                    const isExpanded = expandedUsageId === item.usage_id;
+                    const displayDepartment = getDisplayDepartment(item);
+                    const displayPosition = getDisplayPosition(item);
+                    const returnedByDepartment = getDisplayReturnedByDepartment(item);
+                    const returnedByPosition = getDisplayReturnedByPosition(item);
+                    const returnedByName = item.returned_by.name ?? '-';
+                    const checkoutLocation = getLocationLabel(item.checkout.location, item.checkout.reader_id);
+                    const returnLocation = getLocationLabel(item.return.location, item.return.reader_id);
+                    const blockNumber = blockchain?.anchor?.block_number ?? null;
+                    const transactionIndex = blockchain?.anchor?.transaction_index ?? null;
+                    const verificationStatus = blockchain?.verification_status ?? 'chain_error';
+                    const verificationLabel = blockchain?.verification_label ?? '검증 중 오류';
+
+                    return (
+                      <div
+                        key={item.usage_id}
+                        className="relative overflow-hidden border border-border bg-card p-4 pl-5 transition-all"
+                      >
+                        <div
+                          className={`absolute left-0 top-0 h-full w-1.5 ${getVerificationCardTone(verificationStatus)}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setExpandedUsageId(isExpanded ? null : item.usage_id)}
+                          className="mb-2.5 flex w-full flex-wrap items-center justify-between gap-3 text-left"
+                        >
+                          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                            <div className="text-[1.2rem] font-semibold tracking-[-0.04em] text-foreground">
+                              {item.equipment.name}
+                            </div>
+                            <div className="text-[0.95rem] text-muted-foreground">
+                              usage_id {item.usage_id} · tag {getShortTagId(item.equipment.tag_id)}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {typeof blockNumber === 'number' ? (
+                              <Badge variant="outline">Block {blockNumber}</Badge>
+                            ) : null}
+                            {typeof transactionIndex === 'number' ? (
+                              <Badge variant="outline">Tx #{transactionIndex}</Badge>
+                            ) : null}
+                            <VerificationStatusPill status={verificationStatus} label={verificationLabel} />
+                            <ChevronDown
+                              className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            />
+                          </div>
+                        </button>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-lg border border-border bg-card p-3">
+                            <div className="metric-label text-[0.92rem]">대여자</div>
+                            <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <div>이름: {item.user.name}</div>
+                                <div>부서: {displayDepartment}</div>
+                                <div>직책: {displayPosition}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-border bg-card p-3">
+                            <div className="metric-label text-[0.92rem]">반납자</div>
+                            <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <div>이름: {returnedByName}</div>
+                                <div>부서: {returnedByDepartment}</div>
+                                <div>직책: {returnedByPosition}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-border bg-card p-3">
+                            <div className="metric-label text-[0.92rem]">장소</div>
+                            <div className="mt-1.5 text-[1rem] leading-6 text-foreground">
+                              대여: {checkoutLocation}
+                              <br />
+                              반납: {returnLocation}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-border bg-card p-3">
+                            <div className="metric-label text-[0.92rem]">시각</div>
+                            <div className="mt-1.5 text-[0.85rem] leading-5 tracking-[-0.02em] text-foreground">
+                              대여: {formatDateTime(item.checkout.at)}
+                              <br />
+                              반납: {formatDateTime(item.return.at)}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-[0.95rem] text-muted-foreground">
-                          usage_id {item.usage_id} · tag {getShortTagId(item.equipment.tag_id)}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        {typeof blockNumber === 'number' ? <Badge variant="outline">Block {blockNumber}</Badge> : null}
-                        {typeof transactionIndex === 'number' ? (
-                          <Badge variant="outline">Tx #{transactionIndex}</Badge>
+
+                        {isExpanded ? (
+                          <div className="mt-5 space-y-3 border-t border-border/70 pt-5">
+                            <RecordSnapshot
+                              title="의료 장비 사용 이력"
+                              record={blockchain?.db_record ?? null}
+                              notice={getOnchainRecordNotice(blockchain?.tx_input_matches_db)}
+                              noticeState={blockchain?.tx_input_matches_db}
+                            />
+
+                            <SnapshotCard title="머클 검증 결과">
+                              <div>블록 번호: {blockchain?.anchor?.block_number ?? '-'}</div>
+                              <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
+                              <div className="break-all">
+                                원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}
+                              </div>
+                              <div className="break-all">
+                                재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}
+                              </div>
+                              <VerificationNotice value={blockchain?.transactions_root_matches}>
+                                {getMerkleVerificationNotice(blockchain?.transactions_root_matches)}
+                              </VerificationNotice>
+                            </SnapshotCard>
+                          </div>
                         ) : null}
-                        <VerificationStatusPill status={verificationStatus} label={verificationLabel} />
-                        <ChevronDown
-                          className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                        />
                       </div>
-                    </button>
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-lg border border-border bg-card p-3">
-                        <div className="metric-label text-[0.92rem]">대여자</div>
-                        <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <div>이름: {item.user.name}</div>
-                            <div>부서: {displayDepartment}</div>
-                            <div>직책: {displayPosition}</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-border bg-card p-3">
-                        <div className="metric-label text-[0.92rem]">반납자</div>
-                        <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <div>이름: {returnedByName}</div>
-                            <div>부서: {returnedByDepartment}</div>
-                            <div>직책: {returnedByPosition}</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-border bg-card p-3">
-                        <div className="metric-label text-[0.92rem]">장소</div>
-                        <div className="mt-1.5 text-[1rem] leading-6 text-foreground">
-                          대여: {checkoutLocation}
-                          <br />
-                          반납: {returnLocation}
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-border bg-card p-3">
-                        <div className="metric-label text-[0.92rem]">시각</div>
-                        <div className="mt-1.5 text-[0.85rem] leading-5 tracking-[-0.02em] text-foreground">
-                          대여: {formatDateTime(item.checkout.at)}
-                          <br />
-                          반납: {formatDateTime(item.return.at)}
-                        </div>
-                      </div>
-                    </div>
+                    );
+                  })
+                )}
+              </div>
 
-                    {isExpanded ? (
-                      <div className="mt-5 space-y-3 border-t border-border/70 pt-5">
-                        <RecordSnapshot
-                          title="의료 장비 사용 이력"
-                          record={blockchain?.db_record ?? null}
-                          notice={getOnchainRecordNotice(blockchain?.tx_input_matches_db)}
-                          noticeState={blockchain?.tx_input_matches_db}
-                        />
-
-                        <SnapshotCard title="머클 검증 결과">
-                          <div>블록 번호: {blockchain?.anchor?.block_number ?? '-'}</div>
-                          <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
-                          <div className="break-all">
-                            원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}
-                          </div>
-                          <div className="break-all">
-                            재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}
-                          </div>
-                          <VerificationNotice value={blockchain?.transactions_root_matches}>
-                            {getMerkleVerificationNotice(blockchain?.transactions_root_matches)}
-                          </VerificationNotice>
-                        </SnapshotCard>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
-            )}
+              {items.length > 0 ? (
+                <Pagination
+                  page={safePage}
+                  pageSize={pageSize}
+                  totalItems={items.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={(nextSize) => {
+                    setPageSize(nextSize);
+                    setPage(1);
+                  }}
+                />
+              ) : null}
+            </section>
           </div>
-        </section>
+        </div>
       </div>
     </AppShell>
   );

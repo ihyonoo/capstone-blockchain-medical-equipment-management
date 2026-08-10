@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -13,7 +13,7 @@ import { FLOOR_MAPS, type FloorNumber } from '../lib/floorMaps';
 import { getAmenityZonesForFloor } from '../lib/floorZones';
 import { ZONE_BOUNDS } from '../lib/floorZoneBounds';
 import { polygonCentroid } from '../lib/floorMapLayout';
-import { clampSidebarWidth } from '../lib/sidebarResize';
+import ResizableSidebar from '../components/layout/ResizableSidebar';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout } from '../lib/useAuthGuard';
@@ -104,9 +104,6 @@ function getShortTagId(tagId: string) {
 // 우측 위치 패널 그리드·위치 필터 드롭다운에는 실제 위치가 아니므로 절대 새어 들어가면 안 된다.
 const UNLOCATED_LABEL = '감지 안 됨';
 
-// 접힌 사이드바는 리사이즈 핸들 한 줄만 남기고 좁힌다(클릭하면 펼쳐짐).
-const SIDEBAR_COLLAPSED_WIDTH = 10;
-
 export default function EquipmentSearch() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('전체');
@@ -118,11 +115,6 @@ export default function EquipmentSearch() {
   const [selectedFloor, setSelectedFloor] = useState<FloorNumber>(1);
   const [availableOnly, setAvailableOnly] = useState(false);
   const [highlightedZone, setHighlightedZone] = useState<FloorMapHighlight | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(420);
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
-  const resizeStartX = useRef(0);
-  const resizeStartWidth = useRef(0);
   const isAuthorized = useAuthGuard(() => {
     try {
       const session = getStoredAuthSession();
@@ -364,29 +356,6 @@ export default function EquipmentSearch() {
     }
   }, [locations, selectedLocation]);
 
-  // 사이드바 리사이즈: 핸들에서 mousedown 시점의 폭·커서 위치를 기준으로, 드래그 중에는
-  // window 전역에서 mousemove를 듣는다(커서가 핸들을 벗어나도 계속 따라오게 하기 위함).
-  useEffect(() => {
-    if (!isResizingSidebar) return;
-    const handleMouseMove = (event: MouseEvent) => {
-      const delta = event.clientX - resizeStartX.current;
-      setSidebarWidth(clampSidebarWidth(resizeStartWidth.current + delta));
-    };
-    const handleMouseUp = () => setIsResizingSidebar(false);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizingSidebar]);
-
-  const handleSidebarResizeStart = (event: React.MouseEvent) => {
-    resizeStartX.current = event.clientX;
-    resizeStartWidth.current = sidebarWidth;
-    setIsResizingSidebar(true);
-  };
-
   if (!isAuthorized) {
     return null;
   }
@@ -398,146 +367,119 @@ export default function EquipmentSearch() {
           나머지(지도+상세/구역안내) 쪽에만 그 패딩을 되돌려준다. */}
       {/* xl:items-start — 자식이 stretch로 늘어나면 사이드바의 sticky가 동작하지 않는다 */}
       <div className="-mt-4 -mb-14 flex w-full flex-col gap-4 sm:-mt-5 xl:flex-row xl:items-start">
-        <div
-          data-testid="equipment-sidebar"
-          // 검색 결과가 아무리 많아도 페이지 전체가 늘어나지 않도록, 사이드바 높이를
-          // 뷰포트(정확히는 상단 바를 뺀 나머지)로 고정하고 넘치는 만큼은 내부(장비
-          // 목록)에서만 스크롤되게 한다.
-          // 넓은 화면에서는 sticky로 상단바 바로 아래에 붙여, 오른쪽 본문을 스크롤해도
-          // 사이드바가 따라 밀려 하단이 잘리지 않게 한다(좁은 화면은 위아래로 쌓이므로 제외).
-          className="relative max-h-[calc(100vh-4.8rem-1px)] w-full max-w-full shrink-0 overflow-hidden xl:sticky xl:top-[calc(4.8rem+1px)] xl:h-[calc(100vh-4.8rem-1px)]"
-          style={{ width: sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth }}
-        >
-          {!sidebarCollapsed ? (
-            <section className="flex h-full flex-col fade-rise pr-3">
-              <div className="surface-panel surface-panel--muted flex h-full min-h-0 flex-col p-5">
-                <div className="panel-header shrink-0">
-                  <div>
-                    <div className="panel-title">장비 위치 검색</div>
-                  </div>
-                  <Badge variant="outline">추적 중 {equipment.length}개</Badge>
-                </div>
-                <div className="shrink-0 space-y-3">
-                  <Input
-                    placeholder="태그 ID, 장비명, 위치 검색"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-
-                  <div className="space-y-2">
-                    <label className="text-base font-medium">장비 유형</label>
-                    <Select value={selectedType} onValueChange={setSelectedType}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="유형 선택" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {equipmentTypes.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-base font-medium">층</label>
-                    <Select
-                      value={String(selectedListFloor)}
-                      onValueChange={(value) =>
-                        setSelectedListFloor(value === '전체' ? '전체' : (Number(value) as FloorNumber))
-                      }
-                    >
-                      <SelectTrigger aria-label="층">
-                        <SelectValue placeholder="층 선택" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="전체">전체</SelectItem>
-                        {FLOOR_MAPS.map((f) => (
-                          <SelectItem key={f.floor} value={String(f.floor)}>
-                            {f.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-base font-medium">위치 필터</label>
-                    <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                      <SelectTrigger aria-label="위치">
-                        <SelectValue placeholder="위치 선택" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {locations.map((location) => (
-                          <SelectItem key={location} value={location}>
-                            {location}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <label className="flex items-center gap-2 text-base font-medium">
-                    <input
-                      type="checkbox"
-                      checked={availableOnly}
-                      onChange={(event) => setAvailableOnly(event.target.checked)}
-                    />
-                    사용 가능 장비만 보기
-                  </label>
-
-                  {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
-                </div>
-
-                <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto">
-                  {isLoading ? (
-                    <div className="empty-state">실시간 데이터 로딩 중입니다.</div>
-                  ) : filteredEquipment.length === 0 ? (
-                    <div className="empty-state">표시할 실시간 태그가 없습니다.</div>
-                  ) : (
-                    filteredEquipment.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => toggleSelectedEquipment(item.id)}
-                        title={item.id}
-                        className={`w-full border-b border-border px-3 py-2 text-left transition-all last:border-b-0 ${
-                          selectedEquipment === item.id
-                            ? 'border-l-2 border-l-foreground bg-secondary'
-                            : 'border-l-2 border-l-transparent hover:bg-secondary'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-[1.05rem] leading-tight">{item.name}</span>
-                          <span className={`shrink-0 ${getAssetStatusColor(item.assetStatus)}`} />
-                        </div>
-                        <div className="truncate text-sm text-muted-foreground">
-                          {item.location}
-                          {item.currentHolderName ? ` · ${item.currentHolderName}` : ''}
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
+        <ResizableSidebar testId="equipment-sidebar">
+          <>
+            <div className="panel-header shrink-0">
+              <div>
+                <div className="panel-title">장비 위치 검색</div>
               </div>
-            </section>
-          ) : null}
+              <Badge variant="outline">추적 중 {equipment.length}개</Badge>
+            </div>
+            <div className="shrink-0 space-y-3">
+              <Input
+                placeholder="태그 ID, 장비명, 위치 검색"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
 
-          <button
-            type="button"
-            data-testid="sidebar-resize-handle"
-            aria-label={sidebarCollapsed ? '검색 패널 펼치기' : '검색 패널 크기 조절 — 더블클릭하면 접힙니다'}
-            onMouseDown={sidebarCollapsed ? undefined : handleSidebarResizeStart}
-            onDoubleClick={() => setSidebarCollapsed((prev) => !prev)}
-            onClick={sidebarCollapsed ? () => setSidebarCollapsed(false) : undefined}
-            className={`group absolute -right-1 top-0 z-10 flex h-full w-3 items-center justify-center border-0 bg-transparent p-0 ${
-              sidebarCollapsed ? 'cursor-pointer' : 'cursor-col-resize'
-            }`}
-          >
-            <span className="h-full w-px bg-border transition-all group-hover:w-1 group-hover:bg-primary" />
-          </button>
-        </div>
+              <div className="space-y-2">
+                <label className="text-base font-medium">장비 유형</label>
+                <Select value={selectedType} onValueChange={setSelectedType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="유형 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {equipmentTypes.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-base font-medium">층</label>
+                <Select
+                  value={String(selectedListFloor)}
+                  onValueChange={(value) =>
+                    setSelectedListFloor(value === '전체' ? '전체' : (Number(value) as FloorNumber))
+                  }
+                >
+                  <SelectTrigger aria-label="층">
+                    <SelectValue placeholder="층 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="전체">전체</SelectItem>
+                    {FLOOR_MAPS.map((f) => (
+                      <SelectItem key={f.floor} value={String(f.floor)}>
+                        {f.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-base font-medium">위치 필터</label>
+                <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                  <SelectTrigger aria-label="위치">
+                    <SelectValue placeholder="위치 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations.map((location) => (
+                      <SelectItem key={location} value={location}>
+                        {location}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <label className="flex items-center gap-2 text-base font-medium">
+                <input
+                  type="checkbox"
+                  checked={availableOnly}
+                  onChange={(event) => setAvailableOnly(event.target.checked)}
+                />
+                사용 가능 장비만 보기
+              </label>
+
+              {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
+            </div>
+
+            <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto">
+              {isLoading ? (
+                <div className="empty-state">실시간 데이터 로딩 중입니다.</div>
+              ) : filteredEquipment.length === 0 ? (
+                <div className="empty-state">표시할 실시간 태그가 없습니다.</div>
+              ) : (
+                filteredEquipment.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => toggleSelectedEquipment(item.id)}
+                    title={item.id}
+                    className={`w-full border-b border-border px-3 py-2 text-left transition-all last:border-b-0 ${
+                      selectedEquipment === item.id
+                        ? 'border-l-2 border-l-foreground bg-secondary'
+                        : 'border-l-2 border-l-transparent hover:bg-secondary'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[1.05rem] leading-tight">{item.name}</span>
+                      <span className={`shrink-0 ${getAssetStatusColor(item.assetStatus)}`} />
+                    </div>
+                    <div className="truncate text-sm text-muted-foreground">
+                      {item.location}
+                      {item.currentHolderName ? ` · ${item.currentHolderName}` : ''}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        </ResizableSidebar>
 
         <div className="flex w-full min-w-0 flex-1 justify-center pt-4 pb-14 pr-[clamp(1rem,2.5vw,2rem)] sm:pt-5">
           <div className="grid w-full max-w-[1360px] grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
