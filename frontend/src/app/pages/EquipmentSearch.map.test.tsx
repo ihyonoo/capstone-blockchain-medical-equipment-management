@@ -297,6 +297,70 @@ describe('EquipmentSearch map view', () => {
     expect(screen.getAllByText('수액펌프 1호').length).toBeGreaterThan(0);
   });
 
+  it('clears the highlight and the location filter when the same reader zone is clicked twice', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    const zoneButton = () => getZoneGuidePanel().getByRole('button', { name: /1층 병동 A/ });
+
+    fireEvent.click(zoneButton());
+    expect(await screen.findByTestId('floor-map-highlight-M101')).toBeInTheDocument();
+
+    fireEvent.click(zoneButton());
+    await waitFor(() => {
+      expect(screen.queryByTestId('floor-map-highlight-M101')).not.toBeInTheDocument();
+    });
+    // 켤 때 같이 걸렸던 위치 필터도 함께 풀려, 다른 층 장비가 목록에 다시 보인다.
+    expect(screen.getByText('제세동기 1호')).toBeInTheDocument();
+  });
+
+  it('clears the highlight when the same amenity zone is clicked twice', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    const zoneButton = () => getZoneGuidePanel().getByRole('button', { name: /GATE1/ });
+
+    fireEvent.click(zoneButton());
+    expect(await screen.findByTestId('floor-map-highlight-1f-gate1')).toBeInTheDocument();
+
+    fireEvent.click(zoneButton());
+    await waitFor(() => {
+      expect(screen.queryByTestId('floor-map-highlight-1f-gate1')).not.toBeInTheDocument();
+    });
+  });
+
+  it('switches the map to the floor of the equipment picked in the sidebar and blinks its marker', async () => {
+    render(
+      <MemoryRouter initialEntries={['/equipment']}>
+        <Routes>
+          <Route path="/equipment" element={<EquipmentSearch />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('floor-map-container');
+    // 지도는 1층으로 시작하므로 2층 장비(M201)의 마커는 아직 그려지지 않는다.
+    expect(screen.queryByTestId('floor-map-equipment-EQ-0003')).not.toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByTestId('equipment-sidebar')).getByText('제세동기 1호'));
+
+    const dot = await screen.findByTestId('floor-map-equipment-dot-EQ-0003');
+    expect(dot).toHaveClass('animate-pulse');
+    expect(screen.getByRole('img', { name: '2층 평면도' })).toBeInTheDocument();
+  });
+
   it('collapses the sidebar to a thin handle when the resize handle is double-clicked', async () => {
     render(
       <MemoryRouter initialEntries={['/equipment']}>

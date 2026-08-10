@@ -312,4 +312,88 @@ describe('FloorMapView', () => {
     expect(screen.queryByTestId('floor-map-equipment-label-EQ-0001')).not.toBeInTheDocument();
     expect(screen.getByTestId('floor-map-cluster-list-M102')).toBeInTheDocument();
   });
+
+  it('blinks the spotlighted equipment dot and leaves the others steady', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[
+          { tag_id: 'EQ-0001', reader_id: 'M101', label: '수액펌프 1호' },
+          { tag_id: 'EQ-0002', reader_id: 'M101', label: '수액펌프 2호' },
+        ]}
+        zoneBounds={SQUARE_BOUNDS}
+        spotlightTagId="EQ-0001"
+      />,
+    );
+
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0001')).toHaveClass('animate-pulse');
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0002')).not.toHaveClass('animate-pulse');
+  });
+
+  it('blinks nothing when no equipment is spotlighted', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[{ tag_id: 'EQ-0001', reader_id: 'M101', label: '수액펌프 1호' }]}
+        zoneBounds={SQUARE_BOUNDS}
+      />,
+    );
+
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0001')).not.toHaveClass('animate-pulse');
+  });
+
+  it('blinks the cluster badge instead when the spotlighted equipment is hidden inside it', () => {
+    const tinyBounds: Record<string, ZonePoint[]> = {
+      M101: [
+        { x: 10, y: 10 },
+        { x: 12, y: 10 },
+        { x: 12, y: 12 },
+        { x: 10, y: 12 },
+      ],
+    };
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[
+          { tag_id: 'EQ-0001', reader_id: 'M101', label: '제세동기' },
+          { tag_id: 'EQ-0002', reader_id: 'M101', label: '환자모니터' },
+          { tag_id: 'EQ-0003', reader_id: 'M101', label: '인공호흡기' },
+        ]}
+        zoneBounds={tinyBounds}
+        spotlightTagId="EQ-0003"
+      />,
+    );
+
+    // 2x2 퍼센트 방은 상한이 1이라 3개 전부 배지로 뭉친다 — 개별 마커가 없으니 배지가 대신 깜빡인다.
+    expect(screen.queryByTestId('floor-map-equipment-dot-EQ-0003')).not.toBeInTheDocument();
+    expect(screen.getByTestId('floor-map-cluster-M101')).toHaveClass('animate-pulse');
+  });
+
+  it('leaves the cluster badge steady when the spotlighted equipment is not inside it', () => {
+    const tinyBounds: Record<string, ZonePoint[]> = {
+      M101: [
+        { x: 10, y: 10 },
+        { x: 12, y: 10 },
+        { x: 12, y: 12 },
+        { x: 10, y: 12 },
+      ],
+    };
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[
+          { tag_id: 'EQ-0001', reader_id: 'M101', label: '제세동기' },
+          { tag_id: 'EQ-0002', reader_id: 'M101', label: '환자모니터' },
+        ]}
+        zoneBounds={tinyBounds}
+        spotlightTagId="EQ-9999"
+      />,
+    );
+
+    expect(screen.getByTestId('floor-map-cluster-M101')).not.toHaveClass('animate-pulse');
+  });
 });

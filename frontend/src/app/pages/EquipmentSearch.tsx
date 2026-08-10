@@ -262,6 +262,12 @@ export default function EquipmentSearch() {
 
   const handleZoneGuideClick = (zone: ZoneGuideRow) => {
     setViewMode('map');
+    // 이미 강조 중인 구역을 다시 누르면 해제한다 — 켤 때 같이 걸었던 위치 필터도 함께 푼다.
+    if (highlightedZone?.id === zone.id) {
+      setHighlightedZone(null);
+      if (zone.hasReader) setSelectedLocation('전체');
+      return;
+    }
     if (zone.hasReader) {
       setSelectedLocation(zone.name);
     }
@@ -331,6 +337,19 @@ export default function EquipmentSearch() {
       setSelectedEquipment(null);
     }
   }, [equipment, selectedEquipment]);
+
+  // 목록에서 다른 층 장비를 고르면 지도도 그 층으로 따라간다 — 안 그러면 선택해도
+  // 지도에 아무 반응이 없다.
+  useEffect(() => {
+    if (!selectedEquipment) return;
+    const picked = equipment.find((item) => item.id === selectedEquipment);
+    if (!picked) return;
+    const floor = readerFloorById.get(picked.readerId);
+    if (floor && floor !== selectedFloor) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedFloor(floor as FloorNumber);
+    }
+  }, [selectedEquipment, equipment, readerFloorById, selectedFloor]);
 
   useEffect(() => {
     if (selectedLocation === '전체') return;
@@ -563,6 +582,7 @@ export default function EquipmentSearch() {
                           onEquipmentClick={(tagId) => setSelectedEquipment(tagId)}
                           zoneBounds={ZONE_BOUNDS}
                           highlightedZone={highlightedZone}
+                          spotlightTagId={selectedEquipment}
                         />
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1.5">
@@ -649,23 +669,23 @@ export default function EquipmentSearch() {
                 {zoneGuideRows.length === 0 ? (
                   <div className="empty-state">이 층에 안내할 구역이 없습니다.</div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col">
                     {zoneGuideRows.map((zone) => (
                       <button
                         key={zone.id}
                         type="button"
                         onClick={() => handleZoneGuideClick(zone)}
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-all ${
+                        className={`flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm transition-all last:border-b-0 ${
                           highlightedZone?.id === zone.id
-                            ? 'border-foreground bg-secondary'
-                            : 'border-border bg-card hover:bg-secondary'
+                            ? 'border-l-2 border-l-foreground bg-secondary'
+                            : 'border-l-2 border-l-transparent hover:bg-secondary'
                         }`}
                       >
-                        <span>{zone.name}</span>
+                        <span className="truncate">{zone.name}</span>
                         {zone.hasReader ? (
-                          <Badge variant="outline">{zone.equipmentCount}개</Badge>
+                          <span className="shrink-0 text-muted-foreground">{zone.equipmentCount}개</span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">편의시설</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">편의시설</span>
                         )}
                       </button>
                     ))}

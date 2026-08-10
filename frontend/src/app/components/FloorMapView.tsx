@@ -50,6 +50,8 @@ type FloorMapViewProps = {
   onEquipmentClick?: (tagId: string) => void;
   zoneBounds: Record<string, ZonePoint[]>;
   highlightedZone?: FloorMapHighlight | null;
+  // 목록에서 선택된 장비. 지도에서 어느 점인지 찾기 쉽도록 그 마커만 깜빡인다.
+  spotlightTagId?: string | null;
 };
 
 function renderEquipmentMarker(
@@ -58,9 +60,11 @@ function renderEquipmentMarker(
   activeMarkerId: string | null,
   toggleMarker: (id: string) => void,
   onEquipmentClick?: (tagId: string) => void,
+  spotlightTagId?: string | null,
 ) {
   const status = assetStatusDot(dot.assetStatus);
   const isActive = activeMarkerId === dot.tag_id;
+  const isSpotlighted = spotlightTagId === dot.tag_id;
   return (
     <div key={dot.tag_id}>
       <button
@@ -77,7 +81,7 @@ function renderEquipmentMarker(
       >
         <span
           data-testid={`floor-map-equipment-dot-${dot.tag_id}`}
-          className={`block rounded-full ${status.className}`}
+          className={`block rounded-full ${status.className}${isSpotlighted ? ' animate-pulse' : ''}`}
           style={{ width: 14, height: 14 }}
         >
           {dot.badge}
@@ -103,6 +107,7 @@ export default function FloorMapView({
   onEquipmentClick,
   zoneBounds,
   highlightedZone = null,
+  spotlightTagId = null,
 }: FloorMapViewProps) {
   const [activeMarkerId, setActiveMarkerId] = useState<string | null>(null);
   const floorInfo = getFloorMapInfo(floor);
@@ -135,7 +140,7 @@ export default function FloorMapView({
           const dot = dots[0];
           const centroid = polygonCentroid(polygon);
           const position = pointInPolygon(centroid, polygon) ? centroid : polygon[0];
-          return renderEquipmentMarker(dot, position, activeMarkerId, toggleMarker, onEquipmentClick);
+          return renderEquipmentMarker(dot, position, activeMarkerId, toggleMarker, onEquipmentClick, spotlightTagId);
         }
 
         const maxVisible = maxVisibleForPolygon(polygon);
@@ -152,11 +157,13 @@ export default function FloorMapView({
         const clusterId = `cluster:${pin.reader_id}`;
         const isClusterActive = activeMarkerId === clusterId;
         const clusterPosition = hiddenDots.length > 0 ? polygonCentroid(polygon) : null;
+        // 선택된 장비가 배지 안에 숨어 있으면 개별 마커가 없으니 배지가 대신 깜빡인다.
+        const isClusterSpotlighted = hiddenDots.some((dot) => dot.tag_id === spotlightTagId);
 
         return (
           <div key={pin.reader_id}>
             {placed.map(({ dot, position }) =>
-              renderEquipmentMarker(dot, position, activeMarkerId, toggleMarker, onEquipmentClick),
+              renderEquipmentMarker(dot, position, activeMarkerId, toggleMarker, onEquipmentClick, spotlightTagId),
             )}
             {clusterPosition ? (
               <div>
@@ -164,7 +171,9 @@ export default function FloorMapView({
                   type="button"
                   data-testid={`floor-map-cluster-${pin.reader_id}`}
                   aria-label={`장비 ${hiddenDots.length}개 더보기`}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-foreground px-1.5 text-xs text-background"
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-foreground px-1.5 text-xs text-background${
+                    isClusterSpotlighted ? ' animate-pulse' : ''
+                  }`}
                   style={{
                     left: `${clusterPosition.x}%`,
                     top: `${clusterPosition.y}%`,
