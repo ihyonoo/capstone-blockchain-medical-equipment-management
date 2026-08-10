@@ -33,6 +33,9 @@ function makeTag(tagId: string, name: string, readerId = 'M101') {
   };
 }
 
+const REAL_TAG_ID = 'fda50693-a4e2-4fb1-afcf-c6eb07647825:1:2';
+const SIM_TAG_ID = 'a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:2:0010';
+
 const SIM_READER = { reader_id: 'M101', location: '1층 병동 A', is_online: true, last_seen: 0, floor: 1 };
 const REAL_READER = { reader_id: 'M502', location: '통원수술센터', is_online: true, last_seen: 0, floor: 5 };
 
@@ -43,8 +46,8 @@ const REAL_READER = { reader_id: 'M502', location: '통원수술센터', is_onli
 function livePayloadFor(url: string) {
   const hideSimulated = new URL(url, 'http://localhost').searchParams.get('hide_simulated') === 'true';
   const items = hideSimulated
-    ? [makeTag('EQ-REAL-0001', '실물 제세동기', 'M502')]
-    : [makeTag('EQ-REAL-0001', '실물 제세동기', 'M502'), makeTag('EQ-SIM-0001', '모의 수액펌프', 'M101')];
+    ? [makeTag(REAL_TAG_ID, '실물 제세동기', 'M502')]
+    : [makeTag(REAL_TAG_ID, '실물 제세동기', 'M502'), makeTag(SIM_TAG_ID, '모의 수액펌프', 'M101')];
   const readers = hideSimulated
     ? [
         { ...SIM_READER, is_real_hardware: false },
@@ -190,6 +193,17 @@ describe('EquipmentSearch simulated equipment toggle', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: '시뮬레이션 장비 숨기기' }));
     fireEvent.click(screen.getByRole('checkbox', { name: '시뮬레이션 장비 숨기기' }));
     await waitFor(() => expect(screen.getByRole('img', { name: '5층 평면도' })).toBeInTheDocument());
+  });
+
+  it('identifies equipment by major and minor rather than the shared uuid', async () => {
+    renderPage();
+
+    await sidebar().findByText('실물 제세동기');
+    // 목록(list) 탭으로 전환해야 태그 식별자가 보인다.
+    fireEvent.click(screen.getByRole('button', { name: '목록' }));
+
+    expect(await screen.findByText(/major 1 · minor 2/)).toBeInTheDocument();
+    expect(screen.queryByText(/^fda50693$/)).not.toBeInTheDocument();
   });
 
   it('brings the equipment back when the toggle is off again', async () => {

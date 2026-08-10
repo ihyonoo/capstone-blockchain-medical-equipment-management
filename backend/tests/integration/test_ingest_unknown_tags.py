@@ -4,6 +4,9 @@
 Redis 캐시·실시간 화면까지 전부 오염되므로, 자산으로 등록된 태그만 통과시킨다.
 """
 
+import pytest
+
+from backend.rtls_utils import REDIS_LOCATION_KEY_PREFIX, get_redis_client
 from backend.server import tag_obs, tag_state
 
 UNKNOWN_TAG = "d546df97-4757-47ef-be09-3e2dcbdd0c77:36788:17584"
@@ -48,6 +51,17 @@ class TestIngestRejectsUnknownTags:
         body = client.get("/rtls/live", headers=headers).json()
 
         assert all(item["tag_id"] != UNKNOWN_TAG for item in body["items"])
+
+    def test_leaves_no_last_seen_key_in_the_cache_for_an_unknown_tag(self, client, seed_reader):
+        """mark_tags_seen도 필터를 거쳐야 한다 — 안 그러면 스쳐간 비콘만큼 캐시가 계속 쌓인다."""
+        seed_reader("M501")
+
+        _post_ingest(client, "M501", [_obs(UNKNOWN_TAG)])
+
+        redis_client = get_redis_client()
+        if redis_client is None:
+            pytest.skip("Redis를 쓸 수 없는 환경")
+        assert redis_client.exists(f"{REDIS_LOCATION_KEY_PREFIX}{UNKNOWN_TAG}:seen") == 0
 
     def test_a_registered_tag_in_the_same_batch_still_gets_through(self, client, seed_reader, seed_tag, db_conn):
         seed_reader("M501")

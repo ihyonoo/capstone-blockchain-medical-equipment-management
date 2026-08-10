@@ -14,6 +14,7 @@ import { getAmenityZonesForFloor } from '../lib/floorZones';
 import { ZONE_BOUNDS } from '../lib/floorZoneBounds';
 import { polygonCentroid } from '../lib/floorMapLayout';
 import ResizableSidebar from '../components/layout/ResizableSidebar';
+import { formatIBeaconTag } from '../lib/iBeaconTag';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout } from '../lib/useAuthGuard';
@@ -95,11 +96,6 @@ function getAssetStatusLabel(status: string) {
     default:
       return '사용 가능';
   }
-}
-
-function getShortTagId(tagId: string) {
-  const head = tagId.split(':')[0] ?? tagId;
-  return head.split('-')[0] ?? head;
 }
 
 // 위치 미확인(오프라인) 태그의 표시용 라벨. 좌측 "장비 목록"에는 그대로 노출되어야 하지만,
@@ -630,7 +626,7 @@ export default function EquipmentSearch() {
                                   <div className="min-w-0">
                                     <div className="truncate font-medium text-foreground">{eq.name}</div>
                                     <div className="mt-1 text-sm text-muted-foreground" title={eq.id}>
-                                      {getShortTagId(eq.id)}
+                                      {formatIBeaconTag(eq.id)}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
