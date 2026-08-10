@@ -258,6 +258,20 @@ describe('EquipmentSearch map view', () => {
     expect(sidebar.className).toContain('xl:h-[calc(100vh-4.8rem-1px)]');
   });
 
+  it('tints the sidebar panel so it stands apart from the white page background', async () => {
+    renderPage();
+
+    await screen.findByTestId('floor-map-container');
+    expect(screen.getByTestId('equipment-sidebar').querySelector('.surface-panel')).toHaveClass('surface-panel--muted');
+  });
+
+  it('tints the zone guide panel too, so only the map stays white', async () => {
+    renderPage();
+
+    await screen.findByTestId('floor-map-container');
+    expect(screen.getByTestId('zone-guide-panel')).toHaveClass('surface-panel--muted');
+  });
+
   it('toggles the selection off when the same sidebar item is clicked twice', async () => {
     renderPage();
 

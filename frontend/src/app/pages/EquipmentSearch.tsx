@@ -410,7 +410,7 @@ export default function EquipmentSearch() {
         >
           {!sidebarCollapsed ? (
             <section className="flex h-full flex-col fade-rise pr-3">
-              <div className="surface-panel flex h-full min-h-0 flex-col p-5">
+              <div className="surface-panel surface-panel--muted flex h-full min-h-0 flex-col p-5">
                 <div className="panel-header shrink-0">
                   <div>
                     <div className="panel-title">장비 위치 검색</div>
@@ -669,7 +669,7 @@ export default function EquipmentSearch() {
             </section>
 
             <section className="space-y-4 fade-rise-delay">
-              <div data-testid="zone-guide-panel" className="surface-panel p-5">
+              <div data-testid="zone-guide-panel" className="surface-panel surface-panel--muted p-5">
                 <div className="panel-header">
                   <div>
                     <div className="panel-title">{FLOOR_MAPS.find((f) => f.floor === selectedFloor)?.label ?? ''}</div>
