@@ -8,7 +8,7 @@
 
 from pathlib import Path
 
-from simulation.demo_data import HOSPITAL_BEACON_UUID, REAL_READERS, ROOMS, STAFF_ACCOUNTS
+from simulation.demo_data import HOSPITAL_BEACON_UUID, REAL_READER_EQUIPMENT, REAL_READERS, ROOMS, STAFF_ACCOUNTS
 
 OUTPUT_PATH = Path(__file__).resolve().parents[1] / "database" / "seed_demo_topology.sql"
 
@@ -19,20 +19,8 @@ def sql_escape(value: str) -> str:
 
 def build_reader_rows() -> list[str]:
     rows = []
-    for reader_id, floor, location_name, map_x, map_y, _equipment in ROOMS:
-        rows.append(f"    ('{reader_id}', '{sql_escape(location_name)}', {floor}, {map_x}, {map_y}, FALSE)")
-    return rows
-
-
-def build_reader_position_updates() -> list[str]:
-    # 이미 시딩된 DB(좌표가 비어 있는 기존 행)에도 좌표를 채우기 위한 보정 UPDATE.
-    # map_x IS NULL 조건 덕분에 관리자가 핀 편집기로 옮겨둔 좌표는 덮어쓰지 않는다.
-    rows = []
-    for reader_id, floor, _location_name, map_x, map_y, _equipment in ROOMS:
-        rows.append(
-            f"UPDATE readers SET floor = {floor}, map_x = {map_x}, map_y = {map_y}, updated_at = now()\n"
-            f"    WHERE reader_id = '{reader_id}' AND map_x IS NULL;"
-        )
+    for reader_id, floor, location_name, _equipment in ROOMS:
+        rows.append(f"    ('{reader_id}', '{sql_escape(location_name)}', {floor}, FALSE)")
     return rows
 
 
@@ -40,16 +28,16 @@ def build_real_reader_statements() -> list[str]:
     # 실물 리더는 /ingest가 자동 upsert하지만, 하드웨어가 꺼져 있어도 지도에 보이도록
     # 미리 만들어 둔다. is_real_hardware는 명시하지 않아 DB 기본값 TRUE가 적용된다.
     statements = []
-    for reader_id, floor, location_name, map_x, map_y in REAL_READERS:
+    for reader_id, floor, location_name in REAL_READERS:
         escaped = sql_escape(location_name)
         statements.append(
-            f"INSERT INTO readers (reader_id, location_name, floor, map_x, map_y) VALUES\n"
-            f"    ('{reader_id}', '{escaped}', {floor}, {map_x}, {map_y})\n"
+            f"INSERT INTO readers (reader_id, location_name, floor) VALUES\n"
+            f"    ('{reader_id}', '{escaped}', {floor})\n"
             f"ON CONFLICT (reader_id) DO NOTHING;"
         )
         statements.append(
-            f"UPDATE readers SET floor = {floor}, map_x = {map_x}, map_y = {map_y}, updated_at = now()\n"
-            f"    WHERE reader_id = '{reader_id}' AND map_x IS NULL;"
+            f"UPDATE readers SET floor = {floor}, updated_at = now()\n"
+            f"    WHERE reader_id = '{reader_id}' AND floor IS NULL;"
         )
         # location_name이 플레이스홀더(reader_id 그대로)로 남아 있는 경우에만 실제 이름으로 교체한다.
         # upsert_readers_from_ingest는 COALESCE라 기존 값을 못 고치기 때문.
@@ -63,7 +51,9 @@ def build_real_reader_statements() -> list[str]:
 def build_tag_rows() -> list[str]:
     rows = []
     seq = 0
-    for _reader_id, floor, _location_name, _map_x, _map_y, equipment in ROOMS:
+
+    def emit(floor: int, equipment: list[tuple[str, str, int]]) -> None:
+        nonlocal seq
         for equipment_name, equipment_type, count in equipment:
             for _ in range(count):
                 seq += 1
@@ -75,6 +65,12 @@ def build_tag_rows() -> list[str]:
                 rows.append(
                     f"    ('{tag_id}', '{name}', '{etype}', '{serial_number}', '{nfc_tag_uid}', 'available', FALSE)"
                 )
+
+    for _reader_id, floor, _location_name, equipment in ROOMS:
+        emit(floor, equipment)
+    for reader_id, floor, _location_name in REAL_READERS:
+        emit(floor, REAL_READER_EQUIPMENT.get(reader_id, []))
+
     return rows
 
 
@@ -98,7 +94,6 @@ def main() -> None:
     reader_rows = build_reader_rows()
     tag_rows = build_tag_rows()
     user_rows = build_user_rows()
-    position_updates = build_reader_position_updates()
     real_reader_statements = build_real_reader_statements()
 
     sql = f"""-- database/seed_demo_topology.sql
@@ -106,18 +101,15 @@ def main() -> None:
 -- 수동 수정하지 말 것 — 데이터를 바꾸려면 demo_data.py를 고치고 다시 생성한다).
 -- 순천향대학교 천안병원 본관 1~5층 실제 부서 구성을 본뜬 모의(시뮬레이션) 리더/장비/staff.
 -- 전부 is_real_hardware = FALSE로 표시되어 실물(M501/M502, 실물 태그)과 구분된다.
--- 멱등적 — 재실행해도 안전하고, 관리자가 핀 편집기로 옮긴 좌표를 덮어쓰지 않는다.
+-- 멱등적 — 재실행해도 안전하다.
 
 BEGIN;
 
-INSERT INTO readers (reader_id, location_name, floor, map_x, map_y, is_real_hardware) VALUES
+INSERT INTO readers (reader_id, location_name, floor, is_real_hardware) VALUES
 {",\n".join(reader_rows)}
 ON CONFLICT (reader_id) DO NOTHING;
 
--- 좌표 없이 먼저 시딩된 DB를 위한 보정(map_x IS NULL인 행만).
-{"\n".join(position_updates)}
-
--- 실물 하드웨어 리더의 위치/좌표(생성이 아니라 표시 정보 보정).
+-- 실물 하드웨어 리더의 위치(생성이 아니라 표시 정보 보정).
 {"\n\n".join(real_reader_statements)}
 
 INSERT INTO tags (

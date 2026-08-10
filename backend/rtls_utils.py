@@ -363,8 +363,6 @@ def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
       COALESCE(location_name, reader_id) AS location,
       EXTRACT(EPOCH FROM last_seen_at)::bigint AS last_seen,
       floor,
-      map_x,
-      map_y,
       is_real_hardware
     FROM readers
     ORDER BY reader_id
@@ -377,7 +375,7 @@ def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
         return []
 
     readers: list[dict] = []
-    for reader_id, location, last_seen, floor, map_x, map_y, is_real_hardware in rows:
+    for reader_id, location, last_seen, floor, is_real_hardware in rows:
         last_seen_int = int(last_seen) if last_seen is not None else None
         is_online = last_seen_int is not None and (now_epoch - last_seen_int) <= offline_sec
         readers.append(
@@ -387,8 +385,6 @@ def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
                 "last_seen": last_seen_int,
                 "is_online": is_online,
                 "floor": floor,
-                "map_x": float(map_x) if map_x is not None else None,
-                "map_y": float(map_y) if map_y is not None else None,
                 "is_real_hardware": is_real_hardware,
             }
         )
@@ -397,7 +393,7 @@ def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
 
 def load_readers_for_admin(floor: int | None = None) -> list[dict]:
     sql = """
-    SELECT reader_id, location_name, floor, map_x, map_y, is_active, is_real_hardware, last_seen_at
+    SELECT reader_id, location_name, floor, is_active, is_real_hardware, last_seen_at
     FROM readers
     """
     params: tuple = ()
@@ -415,46 +411,12 @@ def load_readers_for_admin(floor: int | None = None) -> list[dict]:
             "reader_id": reader_id,
             "location_name": location_name,
             "floor": floor_value,
-            "map_x": float(map_x) if map_x is not None else None,
-            "map_y": float(map_y) if map_y is not None else None,
             "is_active": is_active,
             "is_real_hardware": is_real_hardware,
             "last_seen_at": last_seen_at.isoformat() if last_seen_at else None,
         }
-        for reader_id, location_name, floor_value, map_x, map_y, is_active, is_real_hardware, last_seen_at in rows
+        for reader_id, location_name, floor_value, is_active, is_real_hardware, last_seen_at in rows
     ]
-
-
-def update_reader_map_position(
-    reader_id: str,
-    floor: int,
-    map_x: float,
-    map_y: float,
-    location_name: str | None = None,
-) -> dict | None:
-    sql = """
-    UPDATE readers
-    SET floor = %s, map_x = %s, map_y = %s,
-        location_name = COALESCE(%s, location_name),
-        updated_at = now()
-    WHERE reader_id = %s
-    RETURNING reader_id, location_name, floor, map_x, map_y, is_real_hardware
-    """
-    with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
-        cur.execute(sql, (floor, map_x, map_y, location_name, reader_id))
-        row = cur.fetchone()
-
-    if not row:
-        return None
-
-    return {
-        "reader_id": row[0],
-        "location_name": row[1],
-        "floor": row[2],
-        "map_x": float(row[3]) if row[3] is not None else None,
-        "map_y": float(row[4]) if row[4] is not None else None,
-        "is_real_hardware": row[5],
-    }
 
 
 def load_tag_metadata(tag_ids: set[str]) -> dict[str, dict]:

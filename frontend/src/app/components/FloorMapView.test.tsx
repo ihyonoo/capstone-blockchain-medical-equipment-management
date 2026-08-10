@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import FloorMapView from './FloorMapView';
+import type { ZonePoint } from '../lib/floorMapLayout';
 
 function mockContainerRect() {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -16,92 +17,31 @@ function mockContainerRect() {
   });
 }
 
+const SQUARE_BOUNDS: Record<string, ZonePoint[]> = {
+  M101: [
+    { x: 20, y: 50 },
+    { x: 30, y: 50 },
+    { x: 30, y: 60 },
+    { x: 20, y: 60 },
+  ],
+};
+
 describe('FloorMapView', () => {
   beforeEach(() => {
     mockContainerRect();
   });
 
   it('renders the floor image for the given floor', () => {
-    render(<FloorMapView floor={3} pins={[]} />);
+    render(<FloorMapView floor={3} pins={[]} zoneBounds={{}} />);
     const img = screen.getByRole('img', { name: '3층 평면도' });
     expect(img).toHaveAttribute('src', '/images/floor-maps/3f.png');
   });
 
   it('draws no reader marker at all by default — the floor plan already labels every zone', () => {
-    render(<FloorMapView floor={1} pins={[{ reader_id: 'M101', label: '주사센터', map_x: 25, map_y: 60 }]} />);
+    render(<FloorMapView floor={1} pins={[{ reader_id: 'M101', label: '주사센터' }]} zoneBounds={{}} />);
 
     expect(screen.queryByTestId('floor-map-pin-M101')).not.toBeInTheDocument();
     expect(screen.queryByText('주사센터')).not.toBeInTheDocument();
-  });
-
-  it('positions each pin using its map_x/map_y as left/top percentages when showPins is set', () => {
-    render(<FloorMapView floor={1} pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]} showPins />);
-    const pin = screen.getByTestId('floor-map-pin-M101');
-    expect(pin.style.left).toBe('25%');
-    expect(pin.style.top).toBe('60%');
-  });
-
-  it('exposes the zone name as a tooltip rather than drawing it, even when pins are shown', () => {
-    render(<FloorMapView floor={1} pins={[{ reader_id: 'M101', label: '주사센터', map_x: 25, map_y: 60 }]} showPins />);
-
-    const pin = screen.getByTestId('floor-map-pin-M101');
-    expect(pin).toHaveAttribute('title', '주사센터');
-    expect(pin).toHaveTextContent('');
-    expect(screen.queryByText('주사센터')).not.toBeInTheDocument();
-  });
-
-  it('calls onPinClick with the reader id when a pin is clicked', () => {
-    const onPinClick = vi.fn();
-    render(
-      <FloorMapView
-        floor={1}
-        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
-        onPinClick={onPinClick}
-        showPins
-      />,
-    );
-    fireEvent.click(screen.getByTestId('floor-map-pin-M101'));
-    expect(onPinClick).toHaveBeenCalledWith('M101');
-  });
-
-  it('calls onPendingPlace with the click position converted to percentages when a reader is pending', () => {
-    const onPendingPlace = vi.fn();
-    render(<FloorMapView floor={1} pins={[]} pendingReaderId="M102" onPendingPlace={onPendingPlace} />);
-    fireEvent.click(screen.getByTestId('floor-map-container'), { clientX: 250, clientY: 500 });
-    expect(onPendingPlace).toHaveBeenCalledWith(25, 50);
-  });
-
-  it('does not fire onPendingPlace when clicking directly on an existing pin', () => {
-    const onPendingPlace = vi.fn();
-    render(
-      <FloorMapView
-        floor={1}
-        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
-        pendingReaderId="M102"
-        onPendingPlace={onPendingPlace}
-        showPins
-      />,
-    );
-    fireEvent.click(screen.getByTestId('floor-map-pin-M101'));
-    expect(onPendingPlace).not.toHaveBeenCalled();
-  });
-
-  it('reports the final position via onPinMoved after a drag', () => {
-    const onPinMoved = vi.fn();
-    render(
-      <FloorMapView
-        floor={1}
-        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
-        onPinMoved={onPinMoved}
-        showPins
-      />,
-    );
-    const pin = screen.getByTestId('floor-map-pin-M101');
-    const container = screen.getByTestId('floor-map-container');
-    fireEvent.mouseDown(pin);
-    fireEvent.mouseMove(container, { clientX: 400, clientY: 700 });
-    fireEvent.mouseUp(container);
-    expect(onPinMoved).toHaveBeenCalledWith('M101', 40, 70);
   });
 
   it('renders equipment dots near their reader pin and reports clicks', () => {
@@ -109,9 +49,10 @@ describe('FloorMapView', () => {
     render(
       <FloorMapView
         floor={1}
-        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
         equipment={[{ tag_id: 'EQ-0001', reader_id: 'M101', label: '수액펌프 1호' }]}
         onEquipmentClick={onEquipmentClick}
+        zoneBounds={SQUARE_BOUNDS}
       />,
     );
     const dot = screen.getByTestId('floor-map-equipment-EQ-0001');
@@ -124,11 +65,12 @@ describe('FloorMapView', () => {
     render(
       <FloorMapView
         floor={1}
-        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
         equipment={[
           { tag_id: 'EQ-FREE', reader_id: 'M101', label: '수액펌프 1호', assetStatus: 'available' },
           { tag_id: 'EQ-BUSY', reader_id: 'M101', label: '수액펌프 2호', assetStatus: 'checked_out' },
         ]}
+        zoneBounds={SQUARE_BOUNDS}
       />,
     );
 
@@ -140,8 +82,9 @@ describe('FloorMapView', () => {
     render(
       <FloorMapView
         floor={1}
-        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
         equipment={[{ tag_id: 'EQ-OFF', reader_id: 'M101', label: '비활성 장비', assetStatus: 'inactive' }]}
+        zoneBounds={SQUARE_BOUNDS}
       />,
     );
 
@@ -152,8 +95,9 @@ describe('FloorMapView', () => {
     render(
       <FloorMapView
         floor={1}
-        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
         equipment={[{ tag_id: 'EQ-BUSY', reader_id: 'M101', label: '수액펌프 2호', assetStatus: 'checked_out' }]}
+        zoneBounds={SQUARE_BOUNDS}
       />,
     );
 
@@ -164,8 +108,9 @@ describe('FloorMapView', () => {
     render(
       <FloorMapView
         floor={1}
-        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
         equipment={[{ tag_id: 'EQ-0001', reader_id: 'M101', label: '이동형 초음파기기 1호' }]}
+        zoneBounds={SQUARE_BOUNDS}
       />,
     );
 
@@ -177,47 +122,31 @@ describe('FloorMapView', () => {
     );
   });
 
-  it('renders equipment dots larger than the old low-visibility size', () => {
+  it('renders equipment dots at 14px with no background ring', () => {
     render(
       <FloorMapView
         floor={1}
-        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 25, map_y: 60 }]}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
         equipment={[{ tag_id: 'EQ-0001', reader_id: 'M101', label: '수액펌프 1호' }]}
+        zoneBounds={SQUARE_BOUNDS}
       />,
     );
 
     const dot = screen.getByTestId('floor-map-equipment-dot-EQ-0001');
-    expect(dot.style.width).toBe('18px');
-    expect(dot.style.height).toBe('18px');
-  });
-
-  it('lines up multiple equipment at the same reader in a row instead of overlapping them', () => {
-    render(
-      <FloorMapView
-        floor={1}
-        pins={[{ reader_id: 'M101', label: '병동 A', map_x: 50, map_y: 60 }]}
-        equipment={[
-          { tag_id: 'EQ-0001', reader_id: 'M101', label: '제세동기' },
-          { tag_id: 'EQ-0002', reader_id: 'M101', label: '환자모니터 1호' },
-          { tag_id: 'EQ-0003', reader_id: 'M101', label: '인공호흡기 1호' },
-        ]}
-      />,
-    );
-
-    const first = screen.getByTestId('floor-map-equipment-EQ-0001');
-    const second = screen.getByTestId('floor-map-equipment-EQ-0002');
-    const third = screen.getByTestId('floor-map-equipment-EQ-0003');
-
-    // 셋 다 같은 y(구역 위치)에, x만 겹치지 않게 일정 간격으로 벌어져 나란히 놓인다.
-    expect(first.style.top).toBe(second.style.top);
-    expect(second.style.top).toBe(third.style.top);
-    const lefts = [first, second, third].map((el) => parseFloat(el.style.left));
-    expect(new Set(lefts).size).toBe(3);
-    expect(lefts[1] - lefts[0]).toBeCloseTo(lefts[2] - lefts[1]);
+    expect(dot.style.width).toBe('14px');
+    expect(dot.style.height).toBe('14px');
+    expect(dot.className).not.toContain('ring-background');
   });
 
   it('renders a highlight marker at the given zone position when highlightedZone is set', () => {
-    render(<FloorMapView floor={1} pins={[]} highlightedZone={{ id: '1f-cafe', label: '카페', mapX: 19, mapY: 57 }} />);
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[]}
+        zoneBounds={{}}
+        highlightedZone={{ id: '1f-cafe', label: '카페', mapX: 19, mapY: 57 }}
+      />,
+    );
 
     const highlight = screen.getByTestId('floor-map-highlight-1f-cafe');
     expect(highlight.style.left).toBe('19%');
@@ -225,7 +154,246 @@ describe('FloorMapView', () => {
   });
 
   it('renders no highlight marker when highlightedZone is not set', () => {
-    render(<FloorMapView floor={1} pins={[]} />);
+    render(<FloorMapView floor={1} pins={[]} zoneBounds={{}} />);
     expect(screen.queryByTestId(/floor-map-highlight-/)).not.toBeInTheDocument();
+  });
+
+  it('places a single equipment dot inside its zone polygon', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[{ tag_id: 'EQ-0001', reader_id: 'M101', label: '수액펌프 1호' }]}
+        zoneBounds={SQUARE_BOUNDS}
+      />,
+    );
+    const dot = screen.getByTestId('floor-map-equipment-EQ-0001');
+    const left = parseFloat(dot.style.left);
+    const top = parseFloat(dot.style.top);
+    expect(left).toBeGreaterThanOrEqual(20);
+    expect(left).toBeLessThanOrEqual(30);
+    expect(top).toBeGreaterThanOrEqual(50);
+    expect(top).toBeLessThanOrEqual(60);
+  });
+
+  it('does not draw anything for a reader with no traced polygon', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M999', label: '경계 없는 구역' }]}
+        equipment={[{ tag_id: 'EQ-0002', reader_id: 'M999', label: '장비' }]}
+        zoneBounds={{}}
+      />,
+    );
+    expect(screen.queryByTestId('floor-map-equipment-EQ-0002')).not.toBeInTheDocument();
+  });
+
+  it('shows the equipment name label above the dot when clicked, and hides it on a second click', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[{ tag_id: 'EQ-0001', reader_id: 'M101', label: '수액펌프 1호' }]}
+        zoneBounds={SQUARE_BOUNDS}
+      />,
+    );
+    expect(screen.queryByTestId('floor-map-equipment-label-EQ-0001')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('floor-map-equipment-EQ-0001'));
+    expect(screen.getByTestId('floor-map-equipment-label-EQ-0001')).toHaveTextContent('수액펌프 1호');
+
+    fireEvent.click(screen.getByTestId('floor-map-equipment-EQ-0001'));
+    expect(screen.queryByTestId('floor-map-equipment-label-EQ-0001')).not.toBeInTheDocument();
+  });
+
+  it('places multiple equipment inside the same zone polygon without lining them up in a row', () => {
+    const roomyBounds: Record<string, ZonePoint[]> = {
+      M101: [
+        { x: 10, y: 10 },
+        { x: 40, y: 10 },
+        { x: 40, y: 40 },
+        { x: 10, y: 40 },
+      ],
+    };
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[
+          { tag_id: 'EQ-0001', reader_id: 'M101', label: '제세동기' },
+          { tag_id: 'EQ-0002', reader_id: 'M101', label: '환자모니터' },
+        ]}
+        zoneBounds={roomyBounds}
+      />,
+    );
+    const first = screen.getByTestId('floor-map-equipment-EQ-0001');
+    const second = screen.getByTestId('floor-map-equipment-EQ-0002');
+    for (const el of [first, second]) {
+      const left = parseFloat(el.style.left);
+      const top = parseFloat(el.style.top);
+      expect(left).toBeGreaterThanOrEqual(10);
+      expect(left).toBeLessThanOrEqual(40);
+      expect(top).toBeGreaterThanOrEqual(10);
+      expect(top).toBeLessThanOrEqual(40);
+    }
+    expect(first.style.left === second.style.left && first.style.top === second.style.top).toBe(false);
+  });
+
+  it('clusters equipment into a +N badge once the zone is too small to show them all individually, and expands the list on click', () => {
+    const tinyBounds: Record<string, ZonePoint[]> = {
+      M101: [
+        { x: 10, y: 10 },
+        { x: 12, y: 10 },
+        { x: 12, y: 12 },
+        { x: 10, y: 12 },
+      ],
+    };
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[
+          { tag_id: 'EQ-0001', reader_id: 'M101', label: '제세동기', assetStatus: 'available' },
+          { tag_id: 'EQ-0002', reader_id: 'M101', label: '환자모니터', assetStatus: 'checked_out' },
+          { tag_id: 'EQ-0003', reader_id: 'M101', label: '인공호흡기', assetStatus: 'available' },
+        ]}
+        zoneBounds={tinyBounds}
+      />,
+    );
+    // 2x2 퍼센트짜리 방은 maxVisibleForPolygon이 1이라, 3개 전부 배지 하나로 뭉친다.
+    const badge = screen.getByTestId('floor-map-cluster-M101');
+    expect(badge).toHaveTextContent('+3');
+    expect(screen.queryByTestId('floor-map-cluster-list-M101')).not.toBeInTheDocument();
+
+    fireEvent.click(badge);
+    const list = screen.getByTestId('floor-map-cluster-list-M101');
+    expect(within(list).getByTestId('floor-map-cluster-item-EQ-0001')).toHaveTextContent('제세동기');
+    expect(within(list).getByTestId('floor-map-cluster-item-EQ-0002')).toHaveTextContent('환자모니터');
+    expect(within(list).getByTestId('floor-map-cluster-item-EQ-0003')).toHaveTextContent('인공호흡기');
+
+    fireEvent.click(badge);
+    expect(screen.queryByTestId('floor-map-cluster-list-M101')).not.toBeInTheDocument();
+  });
+
+  it('closes the name label when a cluster badge elsewhere is opened (single active overlay)', () => {
+    const bounds: Record<string, ZonePoint[]> = {
+      M101: [
+        { x: 10, y: 10 },
+        { x: 40, y: 10 },
+        { x: 40, y: 40 },
+        { x: 10, y: 40 },
+      ],
+      M102: [
+        { x: 10, y: 10.1 },
+        { x: 12, y: 10.1 },
+        { x: 12, y: 12.1 },
+        { x: 10, y: 12.1 },
+      ],
+    };
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[
+          { reader_id: 'M101', label: '병동 A' },
+          { reader_id: 'M102', label: '병동 B' },
+        ]}
+        equipment={[
+          { tag_id: 'EQ-0001', reader_id: 'M101', label: '단일 장비' },
+          { tag_id: 'EQ-0002', reader_id: 'M102', label: '장비2' },
+          { tag_id: 'EQ-0003', reader_id: 'M102', label: '장비3' },
+        ]}
+        zoneBounds={bounds}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('floor-map-equipment-EQ-0001'));
+    expect(screen.getByTestId('floor-map-equipment-label-EQ-0001')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('floor-map-cluster-M102'));
+    expect(screen.queryByTestId('floor-map-equipment-label-EQ-0001')).not.toBeInTheDocument();
+    expect(screen.getByTestId('floor-map-cluster-list-M102')).toBeInTheDocument();
+  });
+
+  it('blinks the spotlighted equipment dot and leaves the others steady', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[
+          { tag_id: 'EQ-0001', reader_id: 'M101', label: '수액펌프 1호' },
+          { tag_id: 'EQ-0002', reader_id: 'M101', label: '수액펌프 2호' },
+        ]}
+        zoneBounds={SQUARE_BOUNDS}
+        spotlightTagId="EQ-0001"
+      />,
+    );
+
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0001')).toHaveClass('animate-pulse');
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0002')).not.toHaveClass('animate-pulse');
+  });
+
+  it('blinks nothing when no equipment is spotlighted', () => {
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[{ tag_id: 'EQ-0001', reader_id: 'M101', label: '수액펌프 1호' }]}
+        zoneBounds={SQUARE_BOUNDS}
+      />,
+    );
+
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0001')).not.toHaveClass('animate-pulse');
+  });
+
+  it('blinks the cluster badge instead when the spotlighted equipment is hidden inside it', () => {
+    const tinyBounds: Record<string, ZonePoint[]> = {
+      M101: [
+        { x: 10, y: 10 },
+        { x: 12, y: 10 },
+        { x: 12, y: 12 },
+        { x: 10, y: 12 },
+      ],
+    };
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[
+          { tag_id: 'EQ-0001', reader_id: 'M101', label: '제세동기' },
+          { tag_id: 'EQ-0002', reader_id: 'M101', label: '환자모니터' },
+          { tag_id: 'EQ-0003', reader_id: 'M101', label: '인공호흡기' },
+        ]}
+        zoneBounds={tinyBounds}
+        spotlightTagId="EQ-0003"
+      />,
+    );
+
+    // 2x2 퍼센트 방은 상한이 1이라 3개 전부 배지로 뭉친다 — 개별 마커가 없으니 배지가 대신 깜빡인다.
+    expect(screen.queryByTestId('floor-map-equipment-dot-EQ-0003')).not.toBeInTheDocument();
+    expect(screen.getByTestId('floor-map-cluster-M101')).toHaveClass('animate-pulse');
+  });
+
+  it('leaves the cluster badge steady when the spotlighted equipment is not inside it', () => {
+    const tinyBounds: Record<string, ZonePoint[]> = {
+      M101: [
+        { x: 10, y: 10 },
+        { x: 12, y: 10 },
+        { x: 12, y: 12 },
+        { x: 10, y: 12 },
+      ],
+    };
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[
+          { tag_id: 'EQ-0001', reader_id: 'M101', label: '제세동기' },
+          { tag_id: 'EQ-0002', reader_id: 'M101', label: '환자모니터' },
+        ]}
+        zoneBounds={tinyBounds}
+        spotlightTagId="EQ-9999"
+      />,
+    );
+
+    expect(screen.getByTestId('floor-map-cluster-M101')).not.toHaveClass('animate-pulse');
   });
 });

@@ -11,6 +11,8 @@ import FloorMapView, {
 } from '../components/FloorMapView';
 import { FLOOR_MAPS, type FloorNumber } from '../lib/floorMaps';
 import { getAmenityZonesForFloor } from '../lib/floorZones';
+import { ZONE_BOUNDS } from '../lib/floorZoneBounds';
+import { polygonCentroid } from '../lib/floorMapLayout';
 import { clampSidebarWidth } from '../lib/sidebarResize';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
@@ -39,8 +41,6 @@ type LiveReaderItem = {
   is_online: boolean;
   last_seen: number | null;
   floor: number | null;
-  map_x: number | null;
-  map_y: number | null;
 };
 
 // "층별 구역 안내" 패널 한 줄. 리더가 있는 구역은 클릭 시 장비 목록도 필터링되지만,
@@ -111,6 +111,7 @@ export default function EquipmentSearch() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('전체');
   const [selectedLocation, setSelectedLocation] = useState('전체');
+  const [selectedListFloor, setSelectedListFloor] = useState<FloorNumber | '전체'>('전체');
   const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
   // 직원이 가장 먼저 보고 싶은 건 "장비가 지금 어디 있나"라서 지도를 기본으로 연다.
   const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
@@ -168,21 +169,27 @@ export default function EquipmentSearch() {
       Array.from(
         new Set(
           readers
+            .filter((reader) => selectedListFloor === '전체' || reader.floor === selectedListFloor)
             .map((reader) => reader.location)
             .filter((location) => location.length > 0 && location !== UNLOCATED_LABEL),
         ),
       ),
-    [readers],
+    [readers, selectedListFloor],
   );
+
+  const readerFloorById = useMemo(() => new Map(readers.map((r) => [r.reader_id, r.floor])), [readers]);
 
   // 장비가 아직 하나도 위치하지 않은 활성 리더 구역도 필터·패널에 노출되도록 리더 로스터를 합친다.
   const locations = useMemo(() => {
     const set = new Set([
-      ...equipment.map((e) => e.location).filter((location) => location !== UNLOCATED_LABEL),
+      ...equipment
+        .filter((e) => e.location !== UNLOCATED_LABEL)
+        .filter((e) => selectedListFloor === '전체' || readerFloorById.get(e.readerId) === selectedListFloor)
+        .map((e) => e.location),
       ...readerLocations,
     ]);
     return ['전체', ...Array.from(set)];
-  }, [equipment, readerLocations]);
+  }, [equipment, readerLocations, selectedListFloor, readerFloorById]);
 
   const locationPanels = useMemo(() => locations.filter((loc) => loc !== '전체'), [locations]);
 
@@ -205,21 +212,15 @@ export default function EquipmentSearch() {
 
   const filteredEquipment = useMemo(() => {
     return searchAndTypeFilteredEquipment.filter(
-      (item) => selectedLocation === '전체' || item.location === selectedLocation,
+      (item) =>
+        (selectedLocation === '전체' || item.location === selectedLocation) &&
+        (selectedListFloor === '전체' || readerFloorById.get(item.readerId) === selectedListFloor),
     );
-  }, [searchAndTypeFilteredEquipment, selectedLocation]);
+  }, [searchAndTypeFilteredEquipment, selectedLocation, selectedListFloor, readerFloorById]);
 
   // 지도 탭: 선택된 층에 좌표가 배치된 리더만 핀으로 그리고, 그 리더에 속한 장비를 점으로 흩뿌린다.
   const floorPins = useMemo<FloorMapPin[]>(
-    () =>
-      readers
-        .filter((r) => r.floor === selectedFloor && r.map_x !== null && r.map_y !== null)
-        .map((r) => ({
-          reader_id: r.reader_id,
-          label: r.location,
-          map_x: r.map_x as number,
-          map_y: r.map_y as number,
-        })),
+    () => readers.filter((r) => r.floor === selectedFloor).map((r) => ({ reader_id: r.reader_id, label: r.location })),
     [readers, selectedFloor],
   );
 
@@ -236,14 +237,18 @@ export default function EquipmentSearch() {
   const zoneGuideRows = useMemo<ZoneGuideRow[]>(() => {
     const readerRows: ZoneGuideRow[] = readers
       .filter((r) => r.floor === selectedFloor)
-      .map((r) => ({
-        id: r.reader_id,
-        name: r.location,
-        hasReader: true,
-        mapX: r.map_x,
-        mapY: r.map_y,
-        equipmentCount: searchAndTypeFilteredEquipment.filter((eq) => eq.readerId === r.reader_id).length,
-      }));
+      .map((r) => {
+        const polygon = ZONE_BOUNDS[r.reader_id];
+        const centroid = polygon ? polygonCentroid(polygon) : null;
+        return {
+          id: r.reader_id,
+          name: r.location,
+          hasReader: true,
+          mapX: centroid ? centroid.x : null,
+          mapY: centroid ? centroid.y : null,
+          equipmentCount: searchAndTypeFilteredEquipment.filter((eq) => eq.readerId === r.reader_id).length,
+        };
+      });
     const amenityRows: ZoneGuideRow[] = getAmenityZonesForFloor(selectedFloor).map((zone) => ({
       id: zone.id,
       name: zone.name,
@@ -257,6 +262,12 @@ export default function EquipmentSearch() {
 
   const handleZoneGuideClick = (zone: ZoneGuideRow) => {
     setViewMode('map');
+    // 이미 강조 중인 구역을 다시 누르면 해제한다 — 켤 때 같이 걸었던 위치 필터도 함께 푼다.
+    if (highlightedZone?.id === zone.id) {
+      setHighlightedZone(null);
+      if (zone.hasReader) setSelectedLocation('전체');
+      return;
+    }
     if (zone.hasReader) {
       setSelectedLocation(zone.name);
     }
@@ -326,6 +337,27 @@ export default function EquipmentSearch() {
       setSelectedEquipment(null);
     }
   }, [equipment, selectedEquipment]);
+
+  // 목록에서 다른 층 장비를 고르면 지도도 그 층으로 따라간다 — 안 그러면 선택해도
+  // 지도에 아무 반응이 없다.
+  useEffect(() => {
+    if (!selectedEquipment) return;
+    const picked = equipment.find((item) => item.id === selectedEquipment);
+    if (!picked) return;
+    const floor = readerFloorById.get(picked.readerId);
+    if (floor && floor !== selectedFloor) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedFloor(floor as FloorNumber);
+    }
+  }, [selectedEquipment, equipment, readerFloorById, selectedFloor]);
+
+  useEffect(() => {
+    if (selectedLocation === '전체') return;
+    if (!locations.includes(selectedLocation)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedLocation('전체');
+    }
+  }, [locations, selectedLocation]);
 
   // 사이드바 리사이즈: 핸들에서 mousedown 시점의 폭·커서 위치를 기준으로, 드래그 중에는
   // window 전역에서 mousemove를 듣는다(커서가 핸들을 벗어나도 계속 따라오게 하기 위함).
@@ -401,9 +433,31 @@ export default function EquipmentSearch() {
                   </div>
 
                   <div className="space-y-2">
+                    <label className="text-base font-medium">층</label>
+                    <Select
+                      value={String(selectedListFloor)}
+                      onValueChange={(value) =>
+                        setSelectedListFloor(value === '전체' ? '전체' : (Number(value) as FloorNumber))
+                      }
+                    >
+                      <SelectTrigger aria-label="층">
+                        <SelectValue placeholder="층 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="전체">전체</SelectItem>
+                        {FLOOR_MAPS.map((f) => (
+                          <SelectItem key={f.floor} value={String(f.floor)}>
+                            {f.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-base font-medium">위치 필터</label>
                     <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="위치">
                         <SelectValue placeholder="위치 선택" />
                       </SelectTrigger>
                       <SelectContent>
@@ -440,10 +494,10 @@ export default function EquipmentSearch() {
                         type="button"
                         onClick={() => setSelectedEquipment(item.id)}
                         title={item.id}
-                        className={`w-full rounded-lg border px-3 py-2 text-left transition-all ${
+                        className={`w-full border-b border-border px-3 py-2 text-left transition-all last:border-b-0 ${
                           selectedEquipment === item.id
-                            ? 'border-foreground bg-secondary'
-                            : 'border-border bg-card hover:bg-secondary'
+                            ? 'border-l-2 border-l-foreground bg-secondary'
+                            : 'border-l-2 border-l-transparent hover:bg-secondary'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -526,7 +580,9 @@ export default function EquipmentSearch() {
                           pins={floorPins}
                           equipment={floorEquipmentDots}
                           onEquipmentClick={(tagId) => setSelectedEquipment(tagId)}
+                          zoneBounds={ZONE_BOUNDS}
                           highlightedZone={highlightedZone}
+                          spotlightTagId={selectedEquipment}
                         />
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1.5">
@@ -603,34 +659,33 @@ export default function EquipmentSearch() {
             </section>
 
             <section className="space-y-4 fade-rise-delay">
-              <div className="surface-panel p-5">
+              <div data-testid="zone-guide-panel" className="surface-panel p-5">
                 <div className="panel-header">
                   <div>
-                    <div className="panel-title">층별 구역 안내</div>
+                    <div className="panel-title">{FLOOR_MAPS.find((f) => f.floor === selectedFloor)?.label ?? ''}</div>
                   </div>
-                  <Badge variant="outline">{FLOOR_MAPS.find((f) => f.floor === selectedFloor)?.label ?? ''}</Badge>
                 </div>
 
                 {zoneGuideRows.length === 0 ? (
                   <div className="empty-state">이 층에 안내할 구역이 없습니다.</div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="flex flex-col">
                     {zoneGuideRows.map((zone) => (
                       <button
                         key={zone.id}
                         type="button"
                         onClick={() => handleZoneGuideClick(zone)}
-                        className={`flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-all ${
+                        className={`flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm transition-all last:border-b-0 ${
                           highlightedZone?.id === zone.id
-                            ? 'border-foreground bg-secondary'
-                            : 'border-border bg-card hover:bg-secondary'
+                            ? 'border-l-2 border-l-foreground bg-secondary'
+                            : 'border-l-2 border-l-transparent hover:bg-secondary'
                         }`}
                       >
-                        <span className="text-base">{zone.name}</span>
+                        <span className="truncate">{zone.name}</span>
                         {zone.hasReader ? (
-                          <Badge variant="outline">{zone.equipmentCount}개</Badge>
+                          <span className="shrink-0 text-muted-foreground">{zone.equipmentCount}개</span>
                         ) : (
-                          <span className="text-sm text-muted-foreground">편의시설</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">편의시설</span>
                         )}
                       </button>
                     ))}

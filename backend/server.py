@@ -42,7 +42,6 @@ try:
         mark_tags_seen,
         normalize_nfc_token,
         resolve_tag_location_snapshot,
-        update_reader_map_position,
         upsert_readers_from_ingest,
     )
     from backend.schemas import (
@@ -55,7 +54,6 @@ try:
         NfcMappingUpsertRequest,
         NfcUsageActionRequest,
         Payload,
-        ReaderMapPositionRequest,
         RegisterRequest,
         ResendVerificationRequest,
         ResetPasswordRequest,
@@ -122,7 +120,6 @@ except ModuleNotFoundError as exc:
         mark_tags_seen,
         normalize_nfc_token,
         resolve_tag_location_snapshot,
-        update_reader_map_position,
         upsert_readers_from_ingest,
     )
     from schemas import (
@@ -135,7 +132,6 @@ except ModuleNotFoundError as exc:
         NfcMappingUpsertRequest,
         NfcUsageActionRequest,
         Payload,
-        ReaderMapPositionRequest,
         RegisterRequest,
         ResendVerificationRequest,
         ResetPasswordRequest,
@@ -981,30 +977,6 @@ def list_admin_readers(
         raise HTTPException(500, "리더 목록 조회 중 데이터베이스 오류가 발생했습니다.")
 
     return {"ok": True, "count": len(items), "items": items}
-
-
-@app.put("/admin/readers/{reader_id}/map-position")
-def set_reader_map_position(
-    reader_id: str,
-    body: ReaderMapPositionRequest,
-    authorization: str | None = Header(default=None),
-):
-    require_authenticated_user(authorization, allowed_roles={"admin"})
-    try:
-        item = update_reader_map_position(
-            reader_id,
-            body.floor,
-            body.map_x,
-            body.map_y,
-            body.location_name,
-        )
-    except Exception:
-        raise HTTPException(500, "리더 좌표 저장 중 데이터베이스 오류가 발생했습니다.")
-
-    if not item:
-        raise HTTPException(404, "리더를 찾을 수 없습니다.")
-
-    return {"ok": True, "item": item}
 
 
 @app.get("/admin/nfc-mappings")

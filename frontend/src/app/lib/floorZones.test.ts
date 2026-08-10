@@ -23,4 +23,12 @@ describe('floorZones', () => {
 
     expect(getAmenityZonesForFloor(4)).toEqual([]);
   });
+
+  it('includes the four rooms that lost their reader as amenity zones', () => {
+    const names = AMENITY_ZONES.map((zone) => zone.name);
+    expect(names).toContain('외래약국');
+    expect(names).toContain('원무팀');
+    expect(names).toContain('진료협력센터');
+    expect(names).toContain('회복실');
+  });
 });
