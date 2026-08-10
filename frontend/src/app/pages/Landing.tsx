@@ -78,7 +78,14 @@ export default function Landing() {
     <div className="landing">
       <header className={`landing__nav ${scrolled ? 'landing__nav--scrolled' : ''}`}>
         <div className="landing__container landing__nav-inner">
-          <span className="landing__brand">MediLedger &amp; EquipTrace</span>
+          {/* 랜딩이 이미 홈이라 이동할 곳이 없다 — 로고를 누르면 맨 위로 돌려보낸다. */}
+          <button
+            type="button"
+            className="landing__brand"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          >
+            MediLedger &amp; EquipTrace
+          </button>
           <nav className="landing__nav-links">
             <a className="landing__nav-link" href="#features">
               기능

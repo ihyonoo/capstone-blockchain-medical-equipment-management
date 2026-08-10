@@ -53,4 +53,14 @@ describe('MyPage header', () => {
     renderMyPage();
     expect(document.querySelector('.page-header__title')).toBeNull();
   });
+
+  // 다른 관리 화면(NFC 매핑·장비 검색)과 같은 1360px 본문 폭을 쓴다. 권한에 따라 달라지지 않는다.
+  it.each(['staff', 'admin'] as const)('gives the %s content the same wide body as other pages', (role) => {
+    storeSession(role);
+    renderMyPage();
+
+    expect(document.querySelector('.max-w-\\[1360px\\]')).not.toBeNull();
+    expect(document.querySelector('.max-w-3xl')).toBeNull();
+    expect(document.querySelector('.app-shell__container--wide')).not.toBeNull();
+  });
 });

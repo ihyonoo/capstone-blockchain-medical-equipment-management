@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 import { buildPageList, getTotalPages, PAGE_SIZE_OPTIONS } from '../../lib/pagination';
 import { cn } from './utils';
@@ -38,20 +38,31 @@ export default function Pagination({ page, pageSize, totalItems, onPageChange, o
       </div>
 
       {totalPages > 1 ? (
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="pager-group">
+          <button
+            type="button"
+            aria-label="첫 페이지"
+            disabled={page <= 1}
+            onClick={() => onPageChange(1)}
+            className="pager-cell"
+          >
+            <ChevronFirst className="h-4 w-4" />
+          </button>
           <button
             type="button"
             aria-label="이전 페이지"
             disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}
-            className="app-nav-tab disabled:pointer-events-none disabled:opacity-40"
+            className="pager-cell"
           >
             <ChevronLeft className="h-4 w-4" />
+            {/* 좁은 화면에서는 아이콘만 남겨 번호 줄이 접히지 않게 한다 */}
+            <span className="hidden sm:inline">이전</span>
           </button>
 
           {buildPageList(page, totalPages).map((item, index) =>
             item === 'ellipsis' ? (
-              <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">
+              <span key={`ellipsis-${index}`} className="pager-ellipsis">
                 …
               </span>
             ) : (
@@ -61,7 +72,7 @@ export default function Pagination({ page, pageSize, totalItems, onPageChange, o
                 aria-label={`${item}페이지`}
                 aria-current={item === page ? 'page' : undefined}
                 onClick={() => onPageChange(item)}
-                className={cn('app-nav-tab', item === page && 'app-nav-tab--active')}
+                className={cn('pager-cell', item === page && 'pager-cell--active')}
               >
                 {item}
               </button>
@@ -73,9 +84,19 @@ export default function Pagination({ page, pageSize, totalItems, onPageChange, o
             aria-label="다음 페이지"
             disabled={page >= totalPages}
             onClick={() => onPageChange(page + 1)}
-            className="app-nav-tab disabled:pointer-events-none disabled:opacity-40"
+            className="pager-cell"
           >
+            <span className="hidden sm:inline">다음</span>
             <ChevronRight className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="마지막 페이지"
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(totalPages)}
+            className="pager-cell"
+          >
+            <ChevronLast className="h-4 w-4" />
           </button>
         </div>
       ) : null}

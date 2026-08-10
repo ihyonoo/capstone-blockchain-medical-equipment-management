@@ -5,7 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import AuthSplitLayout from '../components/layout/AuthSplitLayout';
 import GoogleButton from '../components/GoogleButton';
-import { getRedirectTarget, storeAuthSession, withRedirectQuery } from '../lib/auth';
+import { getHomePath, getRedirectTarget, storeAuthSession, withRedirectQuery } from '../lib/auth';
 import { API_BASE_URL } from '../lib/runtime';
 
 const ROLE_OPTIONS = [
@@ -75,8 +75,7 @@ export default function Login() {
         expires_at: Number(payload.expires_at ?? 0),
         user: payload.user,
       });
-      const loginRole = (payload.user?.role as string | undefined)?.toLowerCase();
-      navigate(redirectTarget ?? (loginRole === 'admin' ? '/verification' : '/equipment'), { replace: true });
+      navigate(redirectTarget ?? getHomePath(payload.user), { replace: true });
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
