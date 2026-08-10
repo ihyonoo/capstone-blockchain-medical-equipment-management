@@ -137,7 +137,8 @@ export default function SignUp() {
 
         <div className="space-y-2">
           <Label>가입 권한</Label>
-          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="가입 권한 선택">
+          {/* 로그인 화면의 권한 선택과 같은 세그먼트 모양 — 라벨은 박스 안 중앙에 둔다. */}
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="가입 권한 선택">
             {ROLE_OPTIONS.map((item) => {
               const selected = role === item.value;
               return (
@@ -148,13 +149,14 @@ export default function SignUp() {
                   aria-checked={selected}
                   onClick={() => setRole(item.value)}
                   className={cn(
-                    'border px-4 py-4 text-left transition-all duration-200',
+                    'flex h-12 items-center justify-center rounded-md border text-[0.98rem] tracking-[-0.01em] transition-[border-color,box-shadow,background-color,color]',
+                    'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 outline-none',
                     selected
-                      ? 'border-foreground bg-secondary'
-                      : 'border-border bg-card hover:-translate-y-0.5 hover:bg-card',
+                      ? 'border-primary bg-secondary font-medium text-foreground'
+                      : 'border-input bg-input-background text-muted-foreground',
                   )}
                 >
-                  <div className="text-base font-semibold text-foreground">{item.label}</div>
+                  {item.label}
                 </button>
               );
             })}

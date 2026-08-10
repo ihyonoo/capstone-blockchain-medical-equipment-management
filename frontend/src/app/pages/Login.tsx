@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AuthSplitLayout from '../components/layout/AuthSplitLayout';
 import GoogleButton from '../components/GoogleButton';
 import { getRedirectTarget, storeAuthSession, withRedirectQuery } from '../lib/auth';
@@ -137,18 +136,24 @@ export default function Login() {
 
         <div className="space-y-2">
           <Label>로그인 권한</Label>
-          <Select value={role} onValueChange={(value) => setRole(value as LoginRole)}>
-            <SelectTrigger>
-              <SelectValue placeholder="권한 선택" />
-            </SelectTrigger>
-            <SelectContent>
-              {ROLE_OPTIONS.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
+          {/* 선택지가 둘뿐이라 드롭다운 대신 한눈에 보이는 라디오 세그먼트로 둔다. */}
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="로그인 권한">
+            {ROLE_OPTIONS.map((item) => (
+              <label key={item.value} className="cursor-pointer">
+                <input
+                  type="radio"
+                  name="login-role"
+                  value={item.value}
+                  checked={role === item.value}
+                  onChange={() => setRole(item.value)}
+                  className="peer sr-only"
+                />
+                <span className="flex h-12 items-center justify-center rounded-md border border-input bg-input-background text-[0.98rem] tracking-[-0.01em] text-muted-foreground transition-[border-color,box-shadow,background-color,color] peer-checked:border-primary peer-checked:bg-secondary peer-checked:font-medium peer-checked:text-foreground peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/40">
                   {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                </span>
+              </label>
+            ))}
+          </div>
         </div>
 
         {error ? (
