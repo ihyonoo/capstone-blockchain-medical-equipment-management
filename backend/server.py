@@ -30,6 +30,7 @@ try:
     )
     from backend.rtls_utils import (
         cache_location_updates,
+        filter_registered_tag_ids,
         insert_location_history,
         load_active_tag_ids,
         load_all_cached_tag_locations,
@@ -108,6 +109,7 @@ except ModuleNotFoundError as exc:
     )
     from rtls_utils import (
         cache_location_updates,
+        filter_registered_tag_ids,
         insert_location_history,
         load_active_tag_ids,
         load_all_cached_tag_locations,
@@ -860,8 +862,14 @@ def ingest(payload: Payload):
     last_tag_id = None
     last_best = None
 
+    # 등록되지 않은 태그는 여기서 끊는다. 통과시키면 메모리 상태·Redis 캐시·실시간 화면까지
+    # 전부 오염되고, 스쳐가는 외부 비콘만큼 tag_obs가 무한정 커진다.
+    registered_tag_ids = filter_registered_tag_ids({o.tag_id for o in payload.observations})
+
     for observation in payload.observations:
         tag_id = observation.tag_id
+        if tag_id not in registered_tag_ids:
+            continue
         last_tag_id = tag_id
 
         tag_obs.setdefault(tag_id, {})
@@ -933,7 +941,7 @@ def ingest(payload: Payload):
             state["candidate_since"] = None
             db_updates[tag_id] = (best_reader_id, best_rssi, now)
 
-    insert_location_history(db_updates)
+    insert_location_history(db_updates, known_tag_ids=registered_tag_ids)
     cache_location_updates(db_updates, reader_locations=reader_locations)
     mark_tags_seen({obs.tag_id for obs in payload.observations}, now)
 
