@@ -278,9 +278,9 @@ export default function MyPage() {
 
   return (
     <AppShell
-      title="마이페이지"
       wide={sessionRole === 'admin'}
       actions={sessionRole === 'admin' ? <AdminNav active="mypage" /> : <StaffNav active="mypage" />}
+      contentClassName="pt-4 sm:pt-5"
     >
       <div className="mx-auto w-full max-w-3xl space-y-4">
         {loading ? (
