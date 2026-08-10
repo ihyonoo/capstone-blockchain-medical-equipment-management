@@ -6,10 +6,16 @@
 
 
 def _ingest(client, reader_id, tag_id, rssi=-50):
-    return client.post(
+    response = client.post(
         "/ingest",
-        json={"reader_id": reader_id, "readings": [{"tag_id": tag_id, "rssi": rssi}]},
+        json={
+            "reader_id": reader_id,
+            "ts": 1000,
+            "observations": [{"tag_id": tag_id, "rssi": rssi, "count": 1, "last_seen": 1000}],
+        },
     )
+    assert response.status_code == 200, response.text
+    return response
 
 
 class TestRtlsLiveHideSimulated:

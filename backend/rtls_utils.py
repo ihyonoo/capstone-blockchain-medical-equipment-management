@@ -307,17 +307,36 @@ def upsert_readers_from_ingest(reader_ids: set[str]) -> None:
             cur.executemany(sql, rows)
 
 
-def insert_location_history(updates: dict[str, tuple[str, int | None, int]]) -> None:
+def filter_registered_tag_ids(tag_ids: set[str]) -> set[str]:
+    """자산으로 등록된 활성 태그만 남긴다.
+
+    리더에는 UUID 필터가 없어 주변의 아무 iBeacon이나 /ingest로 올라온다. 이걸 받아주면
+    메모리 상태·Redis 캐시·실시간 화면이 전부 오염되므로 입구에서 걸러낸다.
+    조회에 실패하면 빈 집합을 돌려준다 — 정체 모를 태그를 통과시키는 것보다 낫다.
+    """
+    if not tag_ids:
+        return set()
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT tag_id FROM tags WHERE is_active = TRUE AND tag_id = ANY(%s)",
+                (list(tag_ids),),
+            )
+            return {row[0] for row in cur.fetchall()}
+    except Exception:
+        return set()
+
+
+def insert_location_history(
+    updates: dict[str, tuple[str, int | None, int]],
+    known_tag_ids: set[str] | None = None,
+) -> None:
     if not updates:
         return
 
-    known_tag_ids: set[str] = set()
-    try:
-        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
-            cur.execute("SELECT tag_id FROM tags WHERE tag_id = ANY(%s)", (list(updates.keys()),))
-            known_tag_ids = {row[0] for row in cur.fetchall()}
-    except Exception:
-        return
+    # 호출부가 이미 걸러낸 집합을 넘기면 같은 조회를 두 번 하지 않는다.
+    if known_tag_ids is None:
+        known_tag_ids = filter_registered_tag_ids(set(updates.keys()))
 
     if not known_tag_ids:
         return

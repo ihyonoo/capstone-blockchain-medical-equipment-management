@@ -3,6 +3,7 @@ import { Badge } from '../components/ui/badge';
 import AppShell from '../components/layout/AppShell';
 import AdminNav from '../components/layout/AdminNav';
 import ProvenanceDot from '../components/ui/ProvenanceDot';
+import { formatIBeaconTag } from '../lib/iBeaconTag';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout } from '../lib/useAuthGuard';
@@ -32,11 +33,6 @@ function dotClass(isOnline: boolean) {
 function formatSeen(epoch: number | null) {
   if (!epoch) return '-';
   return new Date(epoch * 1000).toLocaleString('ko-KR', { hour12: false });
-}
-
-function shortTag(tagId: string) {
-  const head = tagId.split(':')[0] ?? tagId;
-  return head.split('-')[0] ?? head;
 }
 
 export default function DeviceStatus() {
@@ -213,7 +209,7 @@ export default function DeviceStatus() {
                       <ProvenanceDot isRealHardware={t.is_real_hardware ?? true} />
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground" title={t.tag_id}>
-                      {shortTag(t.tag_id)} · {t.location ?? '감지 안 됨'}
+                      {formatIBeaconTag(t.tag_id)} · {t.location ?? '감지 안 됨'}
                     </div>
                   </div>
                   <div className="text-right text-xs text-muted-foreground">
