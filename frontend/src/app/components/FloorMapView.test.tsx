@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import FloorMapView from './FloorMapView';
-import type { ZonePoint } from '../lib/floorMapLayout';
+import { pointInPolygon, distanceToPolygonEdge, type ZonePoint } from '../lib/floorMapLayout';
 
 function mockContainerRect() {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -176,6 +176,30 @@ describe('FloorMapView', () => {
     expect(top).toBeLessThanOrEqual(60);
   });
 
+  it('keeps a single equipment dot off the border of an L-shaped zone whose centroid falls outside', () => {
+    // L자 구역 — 면적 중심 (11, 11)이 폴리곤 밖이라 예전에는 첫 정점(0, 0), 즉 모서리에 찍혔다.
+    const lShaped: ZonePoint[] = [
+      { x: 0, y: 0 },
+      { x: 30, y: 0 },
+      { x: 30, y: 10 },
+      { x: 10, y: 10 },
+      { x: 10, y: 30 },
+      { x: 0, y: 30 },
+    ];
+    render(
+      <FloorMapView
+        floor={1}
+        pins={[{ reader_id: 'M101', label: '병동 A' }]}
+        equipment={[{ tag_id: 'EQ-0001', reader_id: 'M101', label: '수액펌프 1호' }]}
+        zoneBounds={{ M101: lShaped }}
+      />,
+    );
+    const dot = screen.getByTestId('floor-map-equipment-EQ-0001');
+    const position = { x: parseFloat(dot.style.left), y: parseFloat(dot.style.top) };
+    expect(pointInPolygon(position, lShaped)).toBe(true);
+    expect(distanceToPolygonEdge(position, lShaped)).toBeGreaterThanOrEqual(2);
+  });
+
   it('does not draw anything for a reader with no traced polygon', () => {
     render(
       <FloorMapView
@@ -313,7 +337,7 @@ describe('FloorMapView', () => {
     expect(screen.getByTestId('floor-map-cluster-list-M102')).toBeInTheDocument();
   });
 
-  it('blinks the spotlighted equipment dot and leaves the others steady', () => {
+  function renderSpotlighted() {
     render(
       <FloorMapView
         floor={1}
@@ -326,12 +350,27 @@ describe('FloorMapView', () => {
         spotlightTagId="EQ-0001"
       />,
     );
+  }
 
-    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0001')).toHaveClass('animate-pulse');
-    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0002')).not.toHaveClass('animate-pulse');
+  it('enlarges the spotlighted equipment dot beyond the normal 14px', () => {
+    renderSpotlighted();
+    expect(parseFloat(screen.getByTestId('floor-map-equipment-dot-EQ-0001').style.width)).toBeGreaterThan(14);
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0002').style.width).toBe('14px');
   });
 
-  it('blinks nothing when no equipment is spotlighted', () => {
+  it('gives the spotlighted equipment dot the glow style and leaves the others plain', () => {
+    renderSpotlighted();
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0001')).toHaveClass('map-marker-spotlight');
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0002')).not.toHaveClass('map-marker-spotlight');
+  });
+
+  it('draws a pulsing ring around the spotlighted equipment dot only', () => {
+    renderSpotlighted();
+    expect(screen.getByTestId('floor-map-equipment-ring-EQ-0001')).toHaveClass('animate-ping');
+    expect(screen.queryByTestId('floor-map-equipment-ring-EQ-0002')).not.toBeInTheDocument();
+  });
+
+  it('highlights nothing when no equipment is spotlighted', () => {
     render(
       <FloorMapView
         floor={1}
@@ -341,7 +380,8 @@ describe('FloorMapView', () => {
       />,
     );
 
-    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0001')).not.toHaveClass('animate-pulse');
+    expect(screen.getByTestId('floor-map-equipment-dot-EQ-0001')).not.toHaveClass('map-marker-spotlight');
+    expect(screen.queryByTestId('floor-map-equipment-ring-EQ-0001')).not.toBeInTheDocument();
   });
 
   it('blinks the cluster badge instead when the spotlighted equipment is hidden inside it', () => {

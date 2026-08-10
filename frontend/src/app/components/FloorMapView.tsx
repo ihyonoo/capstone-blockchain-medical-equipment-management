@@ -43,6 +43,11 @@ function assetStatusDot(status: string | undefined) {
   return ASSET_STATUS_DOT[status ?? 'available'] ?? ASSET_STATUS_DOT.available;
 }
 
+// 마커 크기(px). 선택된 장비는 키우고 그 바깥에 퍼지는 링을 겹쳐 한눈에 찾게 한다.
+const DOT_SIZE = 14;
+const SPOTLIGHT_DOT_SIZE = 22;
+const SPOTLIGHT_RING_SIZE = 40;
+
 type FloorMapViewProps = {
   floor: FloorNumber;
   pins: FloorMapPin[];
@@ -65,6 +70,7 @@ function renderEquipmentMarker(
   const status = assetStatusDot(dot.assetStatus);
   const isActive = activeMarkerId === dot.tag_id;
   const isSpotlighted = spotlightTagId === dot.tag_id;
+  const dotSize = isSpotlighted ? SPOTLIGHT_DOT_SIZE : DOT_SIZE;
   return (
     <div key={dot.tag_id}>
       <button
@@ -72,17 +78,24 @@ function renderEquipmentMarker(
         data-testid={`floor-map-equipment-${dot.tag_id}`}
         title={`${dot.label} · ${status.label}`}
         aria-label={`${dot.label} · ${status.label}`}
-        className="absolute -translate-x-1/2 -translate-y-1/2"
+        className={`absolute -translate-x-1/2 -translate-y-1/2${isSpotlighted ? ' z-10' : ''}`}
         style={{ left: `${position.x}%`, top: `${position.y}%` }}
         onClick={() => {
           toggleMarker(dot.tag_id);
           onEquipmentClick?.(dot.tag_id);
         }}
       >
+        {isSpotlighted ? (
+          <span
+            data-testid={`floor-map-equipment-ring-${dot.tag_id}`}
+            className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full opacity-70 ${status.className}`}
+            style={{ width: SPOTLIGHT_RING_SIZE, height: SPOTLIGHT_RING_SIZE }}
+          />
+        ) : null}
         <span
           data-testid={`floor-map-equipment-dot-${dot.tag_id}`}
-          className={`block rounded-full ${status.className}${isSpotlighted ? ' animate-pulse' : ''}`}
-          style={{ width: 14, height: 14 }}
+          className={`relative block rounded-full ${status.className}${isSpotlighted ? ' map-marker-spotlight' : ''}`}
+          style={{ width: dotSize, height: dotSize }}
         >
           {dot.badge}
         </span>
@@ -139,7 +152,8 @@ export default function FloorMapView({
         if (dots.length === 1) {
           const dot = dots[0];
           const centroid = polygonCentroid(polygon);
-          const position = pointInPolygon(centroid, polygon) ? centroid : polygon[0];
+          // 오목한 방은 면적 중심이 폴리곤 밖일 수 있다 — 그때는 경계에서 띄운 내부 자리를 찾는다.
+          const position = pointInPolygon(centroid, polygon) ? centroid : placeInPolygon(polygon, dot.tag_id, []);
           return renderEquipmentMarker(dot, position, activeMarkerId, toggleMarker, onEquipmentClick, spotlightTagId);
         }
 

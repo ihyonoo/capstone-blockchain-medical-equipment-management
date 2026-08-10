@@ -221,7 +221,7 @@ describe('EquipmentSearch map view', () => {
     expect(screen.queryByText('리더 위치 패널')).not.toBeInTheDocument();
   });
 
-  it('highlights the equipment in the list when its map dot is clicked', async () => {
+  function renderPage() {
     render(
       <MemoryRouter initialEntries={['/equipment']}>
         <Routes>
@@ -229,16 +229,57 @@ describe('EquipmentSearch map view', () => {
         </Routes>
       </MemoryRouter>,
     );
+  }
+
+  function sidebarItem(name: string) {
+    return within(screen.getByTestId('equipment-sidebar')).getByText(name).closest('button') as HTMLElement;
+  }
+
+  it('drops the selection when a map dot is clicked — the map click only opens that dot label', async () => {
+    renderPage();
 
     await screen.findAllByText('수액펌프 1호');
-    fireEvent.click(screen.getByRole('button', { name: '지도' }));
-    const dot = await screen.findByTestId('floor-map-equipment-EQ-0001');
-    fireEvent.click(dot);
+    fireEvent.click(sidebarItem('수액펌프 1호'));
+    await waitFor(() => expect(sidebarItem('수액펌프 1호')).toHaveClass('border-l-foreground'));
 
-    await waitFor(() => {
-      const sidebar = screen.getByTestId('equipment-sidebar');
-      expect(within(sidebar).getByText('수액펌프 1호').closest('button')).toHaveClass('border-l-foreground');
-    });
+    fireEvent.click(await screen.findByTestId('floor-map-equipment-EQ-0002'));
+
+    await waitFor(() => expect(sidebarItem('수액펌프 1호')).not.toHaveClass('border-l-foreground'));
+    expect(sidebarItem('수액펌프 2호')).not.toHaveClass('border-l-foreground');
+    expect(screen.getByTestId('floor-map-equipment-label-EQ-0002')).toBeInTheDocument();
+  });
+
+  it('pins the sidebar to the viewport on wide screens so page scroll never cuts its bottom off', async () => {
+    renderPage();
+
+    await screen.findByTestId('floor-map-container');
+    const sidebar = screen.getByTestId('equipment-sidebar');
+    expect(sidebar).toHaveClass('xl:sticky');
+    expect(sidebar.className).toContain('xl:h-[calc(100vh-4.8rem-1px)]');
+  });
+
+  it('toggles the selection off when the same sidebar item is clicked twice', async () => {
+    renderPage();
+
+    await screen.findAllByText('수액펌프 1호');
+    fireEvent.click(sidebarItem('수액펌프 1호'));
+    await waitFor(() => expect(sidebarItem('수액펌프 1호')).toHaveClass('border-l-foreground'));
+
+    fireEvent.click(sidebarItem('수액펌프 1호'));
+
+    await waitFor(() => expect(sidebarItem('수액펌프 1호')).not.toHaveClass('border-l-foreground'));
+  });
+
+  it('drops the selection when the user switches to another floor', async () => {
+    renderPage();
+
+    await screen.findAllByText('수액펌프 1호');
+    fireEvent.click(sidebarItem('수액펌프 1호'));
+    await waitFor(() => expect(sidebarItem('수액펌프 1호')).toHaveClass('border-l-foreground'));
+
+    fireEvent.click(screen.getByRole('button', { name: '2층' }));
+
+    await waitFor(() => expect(sidebarItem('수액펌프 1호')).not.toHaveClass('border-l-foreground'));
   });
 
   function getZoneGuidePanel() {
@@ -357,7 +398,7 @@ describe('EquipmentSearch map view', () => {
     fireEvent.click(within(screen.getByTestId('equipment-sidebar')).getByText('제세동기 1호'));
 
     const dot = await screen.findByTestId('floor-map-equipment-dot-EQ-0003');
-    expect(dot).toHaveClass('animate-pulse');
+    expect(dot).toHaveClass('map-marker-spotlight');
     expect(screen.getByRole('img', { name: '2층 평면도' })).toBeInTheDocument();
   });
 

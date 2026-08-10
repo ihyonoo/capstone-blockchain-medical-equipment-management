@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { polygonArea, polygonCentroid, pointInPolygon, maxVisibleForPolygon, placeInPolygon } from './floorMapLayout';
+import {
+  polygonArea,
+  polygonCentroid,
+  pointInPolygon,
+  maxVisibleForPolygon,
+  placeInPolygon,
+  distanceToPolygonEdge,
+} from './floorMapLayout';
 
 const SQUARE = [
   { x: 10, y: 10 },
@@ -70,6 +77,17 @@ describe('maxVisibleForPolygon', () => {
   });
 });
 
+describe('distanceToPolygonEdge', () => {
+  it('measures the distance to the nearest edge, not to the nearest vertex', () => {
+    // (12, 15)는 왼쪽 변(x=10)에서 2, 가장 가까운 정점(10,10)/(10,20)에서는 약 5.4.
+    expect(distanceToPolygonEdge({ x: 12, y: 15 }, SQUARE)).toBeCloseTo(2);
+  });
+
+  it('reports zero for a point sitting on the border', () => {
+    expect(distanceToPolygonEdge({ x: 10, y: 15 }, SQUARE)).toBeCloseTo(0);
+  });
+});
+
 describe('placeInPolygon', () => {
   it('always places the point inside the polygon', () => {
     const point = placeInPolygon(SQUARE, 'EQ-0001', []);
@@ -86,6 +104,31 @@ describe('placeInPolygon', () => {
     const a = placeInPolygon(SQUARE, 'EQ-0001', []);
     const b = placeInPolygon(SQUARE, 'EQ-0002', []);
     expect(a).not.toEqual(b);
+  });
+
+  it('keeps the point away from the zone border when the zone has room to spare', () => {
+    const roomyPolygon = [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 40 },
+      { x: 0, y: 40 },
+    ];
+    const point = placeInPolygon(roomyPolygon, 'EQ-0001', []);
+    expect(distanceToPolygonEdge(point, roomyPolygon)).toBeGreaterThanOrEqual(2);
+  });
+
+  it('still spreads points out in a zone too narrow for the full border margin', () => {
+    // 두께 3짜리 복도 — 여유 2를 그대로 요구하면 배치가 전부 실패해 중심점으로 뭉친다.
+    const narrowCorridor = [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 3 },
+      { x: 0, y: 3 },
+    ];
+    const first = placeInPolygon(narrowCorridor, 'EQ-0001', []);
+    const second = placeInPolygon(narrowCorridor, 'EQ-0002', [first]);
+    expect(pointInPolygon(first, narrowCorridor)).toBe(true);
+    expect(first).not.toEqual(second);
   });
 
   it('keeps new points at least 3 percent away from already-taken points when there is room', () => {

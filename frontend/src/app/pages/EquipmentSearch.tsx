@@ -260,6 +260,11 @@ export default function EquipmentSearch() {
     return [...readerRows, ...amenityRows];
   }, [readers, selectedFloor, searchAndTypeFilteredEquipment]);
 
+  // 같은 장비를 다시 고르면 강조를 끈다 — 지도에서 계속 깜빡이는 점이 남지 않게.
+  const toggleSelectedEquipment = (tagId: string) => {
+    setSelectedEquipment((prev) => (prev === tagId ? null : tagId));
+  };
+
   const handleZoneGuideClick = (zone: ZoneGuideRow) => {
     setViewMode('map');
     // 이미 강조 중인 구역을 다시 누르면 해제한다 — 켤 때 같이 걸었던 위치 필터도 함께 푼다.
@@ -391,13 +396,16 @@ export default function EquipmentSearch() {
       {/* 사이드바를 상하 꽉 채우기 위해, AppShell 공용 상하 패딩(contentClassName="pt-4 sm:pt-5" +
           .app-shell__content의 3.5rem 하단 패딩)을 이 행 전체에서 걷어내고, 사이드바가 아닌
           나머지(지도+상세/구역안내) 쪽에만 그 패딩을 되돌려준다. */}
-      <div className="-mt-4 -mb-14 flex w-full flex-col gap-4 sm:-mt-5 xl:flex-row">
+      {/* xl:items-start — 자식이 stretch로 늘어나면 사이드바의 sticky가 동작하지 않는다 */}
+      <div className="-mt-4 -mb-14 flex w-full flex-col gap-4 sm:-mt-5 xl:flex-row xl:items-start">
         <div
           data-testid="equipment-sidebar"
           // 검색 결과가 아무리 많아도 페이지 전체가 늘어나지 않도록, 사이드바 높이를
           // 뷰포트(정확히는 상단 바를 뺀 나머지)로 고정하고 넘치는 만큼은 내부(장비
           // 목록)에서만 스크롤되게 한다.
-          className="relative max-h-[calc(100vh-4.8rem-1px)] w-full max-w-full shrink-0 overflow-hidden"
+          // 넓은 화면에서는 sticky로 상단바 바로 아래에 붙여, 오른쪽 본문을 스크롤해도
+          // 사이드바가 따라 밀려 하단이 잘리지 않게 한다(좁은 화면은 위아래로 쌓이므로 제외).
+          className="relative max-h-[calc(100vh-4.8rem-1px)] w-full max-w-full shrink-0 overflow-hidden xl:sticky xl:top-[calc(4.8rem+1px)] xl:h-[calc(100vh-4.8rem-1px)]"
           style={{ width: sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth }}
         >
           {!sidebarCollapsed ? (
@@ -492,7 +500,7 @@ export default function EquipmentSearch() {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setSelectedEquipment(item.id)}
+                        onClick={() => toggleSelectedEquipment(item.id)}
                         title={item.id}
                         className={`w-full border-b border-border px-3 py-2 text-left transition-all last:border-b-0 ${
                           selectedEquipment === item.id
@@ -565,6 +573,7 @@ export default function EquipmentSearch() {
                           onClick={() => {
                             setSelectedFloor(f.floor);
                             setHighlightedZone(null);
+                            setSelectedEquipment(null);
                           }}
                         >
                           {f.label}
@@ -579,7 +588,8 @@ export default function EquipmentSearch() {
                           floor={selectedFloor}
                           pins={floorPins}
                           equipment={floorEquipmentDots}
-                          onEquipmentClick={(tagId) => setSelectedEquipment(tagId)}
+                          // 지도 마커 클릭은 그 점의 이름표만 여는 동작 — 목록에서 건 강조는 함께 풀어준다.
+                          onEquipmentClick={() => setSelectedEquipment(null)}
                           zoneBounds={ZONE_BOUNDS}
                           highlightedZone={highlightedZone}
                           spotlightTagId={selectedEquipment}
@@ -629,7 +639,7 @@ export default function EquipmentSearch() {
                                 <button
                                   key={eq.id}
                                   type="button"
-                                  onClick={() => setSelectedEquipment(eq.id)}
+                                  onClick={() => toggleSelectedEquipment(eq.id)}
                                   className={`flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-all ${
                                     selectedEquipment === eq.id
                                       ? 'border-foreground bg-secondary'
