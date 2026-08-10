@@ -206,7 +206,21 @@ export default function EquipmentSearch() {
     return ['전체', ...Array.from(set)];
   }, [equipment, readerLocations, selectedListFloor, readerFloorById]);
 
-  const locationPanels = useMemo(() => locations.filter((loc) => loc !== '전체'), [locations]);
+  // 목록 뷰 구역 카드는 층 탭(selectedFloor)만 따른다 — 사이드바 층 Select와는 무관하다.
+  // 장비가 아직 하나도 없는 구역도 리더 로스터에서 끌어와 카드를 띄운다.
+  const locationPanels = useMemo(() => {
+    const set = new Set([
+      ...equipment
+        .filter((e) => e.location !== UNLOCATED_LABEL)
+        .filter((e) => readerFloorById.get(e.readerId) === selectedFloor)
+        .map((e) => e.location),
+      ...readers
+        .filter((r) => r.floor === selectedFloor)
+        .map((r) => r.location)
+        .filter((location) => location.length > 0 && location !== UNLOCATED_LABEL),
+    ]);
+    return Array.from(set);
+  }, [equipment, readers, readerFloorById, selectedFloor]);
 
   // 검색어·종류·대여 여부 필터만 반영한 목록. 리더 위치 패널과 지도는 위치 필터와
   // 무관하게 항상 이 목록을 사용한다.
@@ -232,6 +246,19 @@ export default function EquipmentSearch() {
         (selectedListFloor === '전체' || readerFloorById.get(item.readerId) === selectedListFloor),
     );
   }, [searchAndTypeFilteredEquipment, selectedLocation, selectedListFloor, readerFloorById]);
+
+  // 목록이 전체인지 검색 결과인지 알 수 있게, 지금 걸린 조건을 사람이 읽을 라벨로 모은다.
+  const activeFilterLabels = useMemo(() => {
+    const labels: string[] = [];
+    const q = searchQuery.trim();
+    if (q.length > 0) labels.push(`"${q}"`);
+    if (selectedType !== '전체') labels.push(selectedType);
+    if (selectedListFloor !== '전체') labels.push(`${selectedListFloor}층`);
+    if (selectedLocation !== '전체') labels.push(selectedLocation);
+    if (availableOnly) labels.push('사용 가능만');
+    if (hideSimulated) labels.push('시뮬레이션 제외');
+    return labels;
+  }, [searchQuery, selectedType, selectedListFloor, selectedLocation, availableOnly, hideSimulated]);
 
   // 지도 탭: 선택된 층에 좌표가 배치된 리더만 핀으로 그리고, 그 리더에 속한 장비를 점으로 흩뿌린다.
   const floorPins = useMemo<FloorMapPin[]>(
@@ -274,6 +301,26 @@ export default function EquipmentSearch() {
     }));
     return [...readerRows, ...amenityRows];
   }, [readers, selectedFloor, searchAndTypeFilteredEquipment]);
+
+  // 지도 뷰와 목록 뷰가 같은 층 탭을 쓴다 — 뷰를 오가도 보고 있던 층이 유지된다.
+  const floorTabs = (
+    <div data-testid="floor-tabs" className="flex gap-2">
+      {FLOOR_MAPS.map((f) => (
+        <button
+          key={f.floor}
+          type="button"
+          className={f.floor === selectedFloor ? 'app-nav-tab app-nav-tab--active' : 'app-nav-tab'}
+          onClick={() => {
+            setSelectedFloor(f.floor);
+            setHighlightedZone(null);
+            setSelectedEquipment(null);
+          }}
+        >
+          {f.label}
+        </button>
+      ))}
+    </div>
+  );
 
   // 같은 장비를 다시 고르면 강조를 끈다 — 지도에서 계속 깜빡이는 점이 남지 않게.
   const toggleSelectedEquipment = (tagId: string) => {
@@ -461,28 +508,40 @@ export default function EquipmentSearch() {
                 </Select>
               </div>
 
-              <label className="flex items-center gap-2 text-base font-medium">
-                <input
-                  type="checkbox"
-                  checked={availableOnly}
-                  onChange={(event) => setAvailableOnly(event.target.checked)}
-                />
-                사용 가능 장비만 보기
-              </label>
+              {/* 두 토글은 짝이라 한 줄에 둔다 — 사이드바를 좁히면 자동으로 줄바꿈된다. */}
+              <div data-testid="equipment-filter-toggles" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <label className="flex items-center gap-2 text-base font-medium">
+                  <input
+                    type="checkbox"
+                    checked={availableOnly}
+                    onChange={(event) => setAvailableOnly(event.target.checked)}
+                  />
+                  사용 가능 장비만 보기
+                </label>
 
-              <label className="flex items-center gap-2 text-base font-medium">
-                <input
-                  type="checkbox"
-                  checked={hideSimulated}
-                  onChange={(event) => setHideSimulated(event.target.checked)}
-                />
-                시뮬레이션 장비 숨기기
-              </label>
+                <label className="flex items-center gap-2 text-base font-medium">
+                  <input
+                    type="checkbox"
+                    checked={hideSimulated}
+                    onChange={(event) => setHideSimulated(event.target.checked)}
+                  />
+                  시뮬레이션 장비 숨기기
+                </label>
+              </div>
 
               {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
             </div>
 
-            <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto">
+            <div data-testid="equipment-result-summary" className="mt-4 shrink-0 border-t border-border pt-3">
+              <div className="text-base font-medium">
+                {activeFilterLabels.length > 0 ? '검색 결과' : '전체'} {filteredEquipment.length}건
+              </div>
+              {activeFilterLabels.length > 0 ? (
+                <div className="mt-0.5 text-sm text-muted-foreground">{activeFilterLabels.join(' · ')}</div>
+              ) : null}
+            </div>
+
+            <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto">
               {isLoading ? (
                 <div className="empty-state">실시간 데이터 로딩 중입니다.</div>
               ) : filteredEquipment.length === 0 ? (
@@ -516,7 +575,7 @@ export default function EquipmentSearch() {
         </ResizableSidebar>
 
         <div className="flex w-full min-w-0 flex-1 justify-center pt-4 pb-14 pr-[clamp(1rem,2.5vw,2rem)] sm:pt-5">
-          <div className="grid w-full max-w-[1360px] grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid w-full max-w-[1360px] grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <section className="space-y-4 fade-rise-delay">
               <div className="surface-panel p-5">
                 <div className="panel-header">
@@ -540,22 +599,7 @@ export default function EquipmentSearch() {
 
                 {viewMode === 'map' ? (
                   <div className="space-y-3">
-                    <div className="flex gap-2">
-                      {FLOOR_MAPS.map((f) => (
-                        <button
-                          key={f.floor}
-                          type="button"
-                          className={f.floor === selectedFloor ? 'app-nav-tab app-nav-tab--active' : 'app-nav-tab'}
-                          onClick={() => {
-                            setSelectedFloor(f.floor);
-                            setHighlightedZone(null);
-                            setSelectedEquipment(null);
-                          }}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
+                    {floorTabs}
                     {floorPins.length === 0 ? (
                       <div className="empty-state">이 층에는 아직 배치된 구역이 없습니다.</div>
                     ) : (
@@ -585,61 +629,66 @@ export default function EquipmentSearch() {
                       </>
                     )}
                   </div>
-                ) : locationPanels.length === 0 ? (
-                  <div className="empty-state">아직 수신된 RTLS 위치 데이터가 없습니다.</div>
                 ) : (
-                  <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                    {locationPanels.map((location) => {
-                      const roomItems = searchAndTypeFilteredEquipment.filter((eq) => eq.location === location);
-                      const readerForLocation = readers.find((r) => r.location === location);
-                      return (
-                        <section key={location} className="rounded-lg border border-border bg-card p-4">
-                          <div className="mb-4 flex items-center justify-between gap-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="text-[1.15rem]">{location}</h3>
-                                {readerForLocation ? (
-                                  <span className={getOnlineDotClass(readerForLocation.is_online)} />
-                                ) : null}
-                              </div>
-                              <p className="mt-1 text-base text-muted-foreground">{roomItems.length}개 장비 수신</p>
-                            </div>
-                            <Badge variant="outline">{location}</Badge>
-                          </div>
-                          <div className="space-y-2">
-                            {roomItems.length === 0 ? (
-                              <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-base text-muted-foreground">
-                                현재 태그 없음
-                              </div>
-                            ) : (
-                              roomItems.map((eq) => (
-                                <button
-                                  key={eq.id}
-                                  type="button"
-                                  onClick={() => toggleSelectedEquipment(eq.id)}
-                                  className={`flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-all ${
-                                    selectedEquipment === eq.id
-                                      ? 'border-foreground bg-secondary'
-                                      : 'border-border bg-card hover:bg-secondary'
-                                  }`}
-                                >
-                                  <div className="min-w-0">
-                                    <div className="truncate font-medium text-foreground">{eq.name}</div>
-                                    <div className="mt-1 text-sm text-muted-foreground" title={eq.id}>
-                                      {formatIBeaconTag(eq.id)}
-                                    </div>
+                  <div className="space-y-3">
+                    {floorTabs}
+                    {locationPanels.length === 0 ? (
+                      <div className="empty-state">이 층에는 아직 수신된 RTLS 위치 데이터가 없습니다.</div>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                        {locationPanels.map((location) => {
+                          const roomItems = searchAndTypeFilteredEquipment.filter((eq) => eq.location === location);
+                          const readerForLocation = readers.find((r) => r.location === location);
+                          return (
+                            <section key={location} className="rounded-lg border border-border bg-card p-4">
+                              <div className="mb-4 flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="text-[1.15rem]">{location}</h3>
+                                    {readerForLocation ? (
+                                      <span className={getOnlineDotClass(readerForLocation.is_online)} />
+                                    ) : null}
                                   </div>
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <span className={getAssetStatusColor(eq.assetStatus)} />
-                                    <span className="whitespace-nowrap">{getAssetStatusLabel(eq.assetStatus)}</span>
+                                  <p className="mt-1 text-base text-muted-foreground">{roomItems.length}개 장비 수신</p>
+                                </div>
+                                <Badge variant="outline">{location}</Badge>
+                              </div>
+                              <div className="space-y-2">
+                                {roomItems.length === 0 ? (
+                                  <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-base text-muted-foreground">
+                                    현재 태그 없음
                                   </div>
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        </section>
-                      );
-                    })}
+                                ) : (
+                                  roomItems.map((eq) => (
+                                    <button
+                                      key={eq.id}
+                                      type="button"
+                                      onClick={() => toggleSelectedEquipment(eq.id)}
+                                      className={`flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-all ${
+                                        selectedEquipment === eq.id
+                                          ? 'border-foreground bg-secondary'
+                                          : 'border-border bg-card hover:bg-secondary'
+                                      }`}
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="truncate font-medium text-foreground">{eq.name}</div>
+                                        <div className="mt-1 text-sm text-muted-foreground" title={eq.id}>
+                                          {formatIBeaconTag(eq.id)}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <span className={getAssetStatusColor(eq.assetStatus)} />
+                                        <span className="whitespace-nowrap">{getAssetStatusLabel(eq.assetStatus)}</span>
+                                      </div>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            </section>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

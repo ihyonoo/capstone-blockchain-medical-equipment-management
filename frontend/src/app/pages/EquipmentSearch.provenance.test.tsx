@@ -201,6 +201,8 @@ describe('EquipmentSearch simulated equipment toggle', () => {
     await sidebar().findByText('실물 제세동기');
     // 목록(list) 탭으로 전환해야 태그 식별자가 보인다.
     fireEvent.click(screen.getByRole('button', { name: '목록' }));
+    // 목록 뷰도 층 탭 단위라, 실물 태그가 있는 5층(M502)으로 옮겨야 그 카드가 보인다.
+    fireEvent.click(screen.getByRole('button', { name: '5층' }));
 
     expect(await screen.findByText(/major 1 · minor 2/)).toBeInTheDocument();
     expect(screen.queryByText(/^fda50693$/)).not.toBeInTheDocument();

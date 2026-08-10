@@ -136,6 +136,12 @@
     overflow: hidden;
   }
 
+  /* 체크박스·라디오는 커스텀 컴포넌트 없이 네이티브를 쓰므로, 강조색만 앱 팔레트로 맞춘다. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--primary);
+  }
+
   html {
     font-size: var(--font-size);
     background: var(--background);

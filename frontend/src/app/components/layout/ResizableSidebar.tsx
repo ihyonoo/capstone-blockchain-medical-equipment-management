@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { clampSidebarWidth } from '../../lib/sidebarResize';
 
-// 접힌 사이드바는 리사이즈 핸들 한 줄만 남기고 좁힌다(클릭하면 펼쳐짐).
-const SIDEBAR_COLLAPSED_WIDTH = 10;
+// 접힌 사이드바는 접기 토글 버튼이 들어갈 만큼만 남기고 좁힌다.
+const SIDEBAR_COLLAPSED_WIDTH = 32;
 
-const DEFAULT_SIDEBAR_WIDTH = 420;
+const DEFAULT_SIDEBAR_WIDTH = 480;
 
 type ResizableSidebarProps = {
   /** 바깥 컨테이너의 data-testid. 페이지마다 다르게 준다. */
@@ -77,6 +78,20 @@ export default function ResizableSidebar({ testId, children }: ResizableSidebarP
         }`}
       >
         <span className="h-full w-px bg-border transition-all group-hover:w-1 group-hover:bg-primary" />
+      </button>
+
+      {/* 핸들 더블클릭만으로는 접기를 발견할 수 없어, 경계선 세로 중앙에 눌러 보이는 버튼을 따로 둔다. */}
+      {/* 컨테이너에 overflow-hidden이 걸려 있어 경계선 밖으로 내밀면 잘리므로 안쪽에 붙인다. */}
+      {/* 핸들(z-10)과 겹치는 자리라 z-20으로 올린다. */}
+      {/* 접힌 핸들도 '펼치기' 라벨을 갖고 있어, 접근성 이름이 겹치지 않게 '열기'로 구분한다. */}
+      <button
+        type="button"
+        data-testid="sidebar-collapse-toggle"
+        aria-label={collapsed ? '검색 패널 열기' : '검색 패널 접기'}
+        onClick={() => setCollapsed((prev) => !prev)}
+        className="absolute right-0 top-1/2 z-20 flex h-8 w-4 -translate-y-1/2 items-center justify-center rounded-l-md border border-r-0 border-border bg-card p-0 text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+      >
+        {collapsed ? <ChevronsRight className="h-3 w-3" /> : <ChevronsLeft className="h-3 w-3" />}
       </button>
     </div>
   );

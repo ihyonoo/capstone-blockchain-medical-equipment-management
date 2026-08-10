@@ -56,6 +56,28 @@ describe('ResizableSidebar', () => {
     expect(screen.getByText('검색 패널 내용')).toBeInTheDocument();
   });
 
+  it('opens at the default width', () => {
+    const { sidebar } = renderSidebar();
+
+    expect(sidebar.style.width).toBe('480px');
+  });
+
+  it('collapses and expands from the toggle button on the panel edge', () => {
+    const { sidebar } = renderSidebar();
+
+    const toggle = screen.getByTestId('sidebar-collapse-toggle');
+    expect(toggle).toHaveAttribute('aria-label', '검색 패널 접기');
+
+    fireEvent.click(toggle);
+    expect(screen.queryByText('검색 패널 내용')).not.toBeInTheDocument();
+    expect(sidebar.style.width).toBe('32px');
+    expect(screen.getByTestId('sidebar-collapse-toggle')).toHaveAttribute('aria-label', '검색 패널 열기');
+
+    fireEvent.click(screen.getByTestId('sidebar-collapse-toggle'));
+    expect(screen.getByText('검색 패널 내용')).toBeInTheDocument();
+    expect(sidebar.style.width).toBe('480px');
+  });
+
   it('widens by the horizontal drag distance', () => {
     const { sidebar, handle } = renderSidebar();
 
@@ -63,7 +85,7 @@ describe('ResizableSidebar', () => {
     fireEvent.mouseMove(window, { clientX: 560 });
     fireEvent.mouseUp(window);
 
-    expect(sidebar.style.width).toBe('480px');
+    expect(sidebar.style.width).toBe('540px');
   });
 
   it('clamps the dragged width to the allowed range', () => {
@@ -85,6 +107,6 @@ describe('ResizableSidebar', () => {
     fireEvent.mouseUp(window);
     fireEvent.mouseMove(window, { clientX: 600 });
 
-    expect(sidebar.style.width).toBe('480px');
+    expect(sidebar.style.width).toBe('540px');
   });
 });
