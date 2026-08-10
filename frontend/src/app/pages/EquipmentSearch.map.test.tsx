@@ -431,7 +431,7 @@ describe('EquipmentSearch map view', () => {
     fireEvent.doubleClick(screen.getByTestId('sidebar-resize-handle'));
 
     expect(screen.queryByPlaceholderText('태그 ID, 장비명, 위치 검색')).not.toBeInTheDocument();
-    expect(screen.getByTestId('equipment-sidebar').style.width).toBe('10px');
+    expect(screen.getByTestId('equipment-sidebar').style.width).toBe('32px');
     expect(screen.getByRole('button', { name: '검색 패널 펼치기' })).toBeInTheDocument();
   });
 
@@ -462,13 +462,13 @@ describe('EquipmentSearch map view', () => {
 
     await screen.findByTestId('floor-map-container');
     const sidebar = screen.getByTestId('equipment-sidebar');
-    expect(sidebar.style.width).toBe('420px');
+    expect(sidebar.style.width).toBe('480px');
 
     fireEvent.mouseDown(screen.getByTestId('sidebar-resize-handle'), { clientX: 0 });
     fireEvent.mouseMove(window, { clientX: 80 });
     fireEvent.mouseUp(window);
 
-    expect(sidebar.style.width).toBe('500px');
+    expect(sidebar.style.width).toBe('560px');
   });
 
   it('does not resize the sidebar past the minimum width', async () => {
