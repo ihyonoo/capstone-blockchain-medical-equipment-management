@@ -52,6 +52,93 @@ INSERT INTO readers (reader_id, location_name, floor, is_real_hardware) VALUES
     ('M508', '통원수술센터', 5, FALSE)
 ON CONFLICT (reader_id) DO NOTHING;
 
+-- floor 없이 먼저 만들어진 행(/ingest upsert가 만든 행)에 층을 채운다. floor가 비면
+-- 프론트가 그 구역을 지도에서 건너뛴다.
+UPDATE readers SET floor = 1, updated_at = now()
+    WHERE reader_id = 'M101' AND floor IS NULL;
+UPDATE readers SET floor = 1, updated_at = now()
+    WHERE reader_id = 'M102' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M201' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M202' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M203' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M204' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M205' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M206' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M207' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M208' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M209' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M210' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M211' AND floor IS NULL;
+UPDATE readers SET floor = 2, updated_at = now()
+    WHERE reader_id = 'M212' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M301' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M302' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M303' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M304' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M305' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M306' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M307' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M308' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M309' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M310' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M311' AND floor IS NULL;
+UPDATE readers SET floor = 3, updated_at = now()
+    WHERE reader_id = 'M312' AND floor IS NULL;
+UPDATE readers SET floor = 4, updated_at = now()
+    WHERE reader_id = 'M401' AND floor IS NULL;
+UPDATE readers SET floor = 4, updated_at = now()
+    WHERE reader_id = 'M402' AND floor IS NULL;
+UPDATE readers SET floor = 4, updated_at = now()
+    WHERE reader_id = 'M403' AND floor IS NULL;
+UPDATE readers SET floor = 4, updated_at = now()
+    WHERE reader_id = 'M404' AND floor IS NULL;
+UPDATE readers SET floor = 4, updated_at = now()
+    WHERE reader_id = 'M405' AND floor IS NULL;
+UPDATE readers SET floor = 4, updated_at = now()
+    WHERE reader_id = 'M406' AND floor IS NULL;
+UPDATE readers SET floor = 4, updated_at = now()
+    WHERE reader_id = 'M407' AND floor IS NULL;
+UPDATE readers SET floor = 4, updated_at = now()
+    WHERE reader_id = 'M408' AND floor IS NULL;
+UPDATE readers SET floor = 4, updated_at = now()
+    WHERE reader_id = 'M409' AND floor IS NULL;
+UPDATE readers SET floor = 4, updated_at = now()
+    WHERE reader_id = 'M410' AND floor IS NULL;
+UPDATE readers SET floor = 5, updated_at = now()
+    WHERE reader_id = 'M503' AND floor IS NULL;
+UPDATE readers SET floor = 5, updated_at = now()
+    WHERE reader_id = 'M504' AND floor IS NULL;
+UPDATE readers SET floor = 5, updated_at = now()
+    WHERE reader_id = 'M505' AND floor IS NULL;
+UPDATE readers SET floor = 5, updated_at = now()
+    WHERE reader_id = 'M506' AND floor IS NULL;
+UPDATE readers SET floor = 5, updated_at = now()
+    WHERE reader_id = 'M507' AND floor IS NULL;
+UPDATE readers SET floor = 5, updated_at = now()
+    WHERE reader_id = 'M508' AND floor IS NULL;
+
 -- 실물 하드웨어 리더의 위치(생성이 아니라 표시 정보 보정).
 INSERT INTO readers (reader_id, location_name, floor) VALUES
     ('M501', '중앙수술센터', 5)
