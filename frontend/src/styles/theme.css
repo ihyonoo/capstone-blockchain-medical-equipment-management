@@ -50,8 +50,8 @@
   --app-soft-panel-background: #f6f9fb;
   --app-soft-panel-border: #94a3b8;
   --app-soft-panel-highlight: none;
-  /* 흰 본문 위에서 영역을 나누는 패널(좌측 검색 사이드바)용 — soft panel보다 한 톤 진하다 */
-  --app-muted-panel-background: #e9eef4;
+  /* 흰 본문 위에서 영역을 나누는 패널(좌측 검색 사이드바)용 — 색조 없는 회색으로 아주 살짝만 누른다 */
+  --app-muted-panel-background: #f7f7f7;
   /* 상태 색: 네이비/틸 팔레트에 맞춘 톤다운 시맨틱 컬러 */
   --ok-fg: #0f766e;
   --ok-bg: #ecfdf9;
@@ -539,6 +539,29 @@
     font-size: 0.95rem;
   }
 
+  /* 로딩 중 자리를 대신 채우는 회색 블록. 위를 훑고 지나가는 광택으로 진행 중임을 알린다. */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--secondary);
+    border: 1px solid var(--border);
+  }
+
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgb(15 46 79 / 0.07), transparent);
+    animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-shimmer {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
   @keyframes fade-rise {
     from {
       opacity: 0;
@@ -625,13 +648,6 @@
   padding-inline: 0.05rem;
   font-size: 1.38rem;
   gap: 0;
-}
-
-/* 눌린 패널(좌측 검색 사이드바) 위에서는 순백 입력창이 혼자 튄다 — 패널보다 한 톤만 밝게 맞춘다.
-   레이어 밖 규칙이라 Tailwind 유틸리티(bg-input-background)를 덮어쓴다. */
-.surface-panel--muted [data-slot='input'],
-.surface-panel--muted [data-slot='select-trigger'] {
-  background: var(--app-soft-panel-background);
 }
 
 /* ── 인증 화면 split 레이아웃 ─────────────────────────────── */

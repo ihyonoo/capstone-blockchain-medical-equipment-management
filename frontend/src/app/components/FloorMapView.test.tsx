@@ -437,3 +437,49 @@ describe('FloorMapView', () => {
     expect(screen.getByTestId('floor-map-cluster-M101')).not.toHaveClass('animate-pulse');
   });
 });
+
+describe('FloorMapView real-hardware spotlight', () => {
+  beforeEach(() => {
+    mockContainerRect();
+  });
+
+  const TWO_ZONES: Record<string, ZonePoint[]> = {
+    M101: SQUARE_BOUNDS.M101,
+    M501: [
+      { x: 60, y: 50 },
+      { x: 70, y: 50 },
+      { x: 70, y: 60 },
+      { x: 60, y: 60 },
+    ],
+  };
+
+  it('draws no dimming overlay when no spotlight is requested', () => {
+    render(<FloorMapView floor={1} pins={[]} zoneBounds={TWO_ZONES} />);
+
+    expect(screen.queryByTestId('floor-map-spotlight')).not.toBeInTheDocument();
+  });
+
+  it('dims the floor and cuts a hole for each spotlit zone', () => {
+    render(<FloorMapView floor={1} pins={[]} zoneBounds={TWO_ZONES} spotlightReaderIds={['M501']} />);
+
+    const spotlight = screen.getByTestId('floor-map-spotlight');
+    expect(spotlight).toBeInTheDocument();
+    expect(within(spotlight).getByTestId('floor-map-spotlight-hole-M501')).toBeInTheDocument();
+    expect(within(spotlight).queryByTestId('floor-map-spotlight-hole-M101')).not.toBeInTheDocument();
+  });
+
+  it('still dims the floor when no zone on it has real hardware', () => {
+    render(<FloorMapView floor={2} pins={[]} zoneBounds={TWO_ZONES} spotlightReaderIds={[]} />);
+
+    const spotlight = screen.getByTestId('floor-map-spotlight');
+    expect(spotlight).toBeInTheDocument();
+    expect(within(spotlight).queryByTestId(/floor-map-spotlight-hole-/)).not.toBeInTheDocument();
+  });
+
+  it('ignores a spotlit reader that has no polygon on this floor', () => {
+    render(<FloorMapView floor={1} pins={[]} zoneBounds={TWO_ZONES} spotlightReaderIds={['M999']} />);
+
+    const spotlight = screen.getByTestId('floor-map-spotlight');
+    expect(within(spotlight).queryByTestId('floor-map-spotlight-hole-M999')).not.toBeInTheDocument();
+  });
+});

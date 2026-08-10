@@ -71,15 +71,15 @@ describe('NfcMapping pagination', () => {
     renderPage();
 
     await screen.findByText('장비 01');
-    expect(visibleEquipmentNames()).toHaveLength(20);
-    expect(screen.queryByText('장비 21')).not.toBeInTheDocument();
+    expect(visibleEquipmentNames()).toHaveLength(10);
+    expect(screen.queryByText('장비 11')).not.toBeInTheDocument();
   });
 
   it('shows the remaining equipment on the next page', async () => {
     renderPage();
 
     await screen.findByText('장비 01');
-    fireEvent.click(screen.getByRole('button', { name: '2페이지' }));
+    fireEvent.click(screen.getByRole('button', { name: '3페이지' }));
 
     expect(visibleEquipmentNames()).toHaveLength(5);
     expect(screen.getByText('장비 21')).toBeInTheDocument();
@@ -90,22 +90,21 @@ describe('NfcMapping pagination', () => {
 
     await screen.findByText('장비 01');
     fireEvent.click(screen.getByRole('combobox', { name: '페이지당 개수' }));
-    fireEvent.click(await screen.findByRole('option', { name: '10개씩' }));
+    fireEvent.click(await screen.findByRole('option', { name: '50개씩' }));
 
-    await waitFor(() => expect(visibleEquipmentNames()).toHaveLength(10));
+    await waitFor(() => expect(visibleEquipmentNames()).toHaveLength(25));
   });
 
   it('returns to the first page when the search query changes', async () => {
     renderPage();
 
     await screen.findByText('장비 01');
-    fireEvent.click(screen.getByRole('button', { name: '2페이지' }));
+    fireEvent.click(screen.getByRole('button', { name: '3페이지' }));
     expect(screen.queryByText('장비 01')).not.toBeInTheDocument();
 
-    fireEvent.change(
-      within(screen.getByTestId('nfc-mapping-sidebar')).getByPlaceholderText('장비명, 태그 ID, NFC 토큰, 위치 검색'),
-      { target: { value: '장비 0' } },
-    );
+    const sidebar = within(screen.getByTestId('nfc-mapping-sidebar'));
+    fireEvent.change(sidebar.getByLabelText('장비명'), { target: { value: '장비 0' } });
+    fireEvent.click(sidebar.getByRole('button', { name: '검색' }));
 
     await waitFor(() => expect(screen.getByText('장비 01')).toBeInTheDocument());
   });

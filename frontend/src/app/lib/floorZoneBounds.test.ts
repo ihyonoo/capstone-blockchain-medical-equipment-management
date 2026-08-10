@@ -24,4 +24,15 @@ describe('floorZoneBounds', () => {
     expect(ZONE_BOUNDS.M105).toBeUndefined();
     expect(ZONE_BOUNDS.M509).toBeUndefined();
   });
+
+  it('keys the two zones the real readers cover by those readers', () => {
+    // M501 중앙수술센터, M502 통원수술센터. 통원수술센터를 맡던 모의 리더 M508은 사라졌다.
+    expect(ZONE_BOUNDS.M501).toBeDefined();
+    expect(ZONE_BOUNDS.M502).toBeDefined();
+    expect(ZONE_BOUNDS.M508).toBeUndefined();
+  });
+
+  it('keeps the imaging centre zone under the simulated reader that took it over', () => {
+    expect(ZONE_BOUNDS.M106).toBeDefined();
+  });
 });

@@ -48,7 +48,7 @@ USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,49}$")
 # 이름은 병원 시설 안내도의 구역명을 따른다(simulation/demo_data.py의 REAL_READERS와 동일).
 READER_LOCATION = {
     "M501": "중앙수술센터",
-    "M502": "영상의학센터",
+    "M502": "통원수술센터",
 }
 
 HYST_DB = 8

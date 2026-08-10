@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { getFloorMapInfo, type FloorNumber } from '../lib/floorMaps';
 import {
   maxVisibleForPolygon,
@@ -55,6 +55,11 @@ type FloorMapViewProps = {
   onEquipmentClick?: (tagId: string) => void;
   zoneBounds: Record<string, ZonePoint[]>;
   highlightedZone?: FloorMapHighlight | null;
+  /**
+   * 값이 있으면 평면도 전체를 어둡게 덮고 여기 담긴 리더의 구역만 원래 밝기로 남긴다.
+   * 실제 하드웨어가 놓인 구역을 한눈에 구분시키는 용도. null이면 아무것도 덮지 않는다.
+   */
+  spotlightReaderIds?: string[] | null;
   // 목록에서 선택된 장비. 지도에서 어느 점인지 찾기 쉽도록 그 마커만 깜빡인다.
   spotlightTagId?: string | null;
 };
@@ -121,9 +126,15 @@ export default function FloorMapView({
   zoneBounds,
   highlightedZone = null,
   spotlightTagId = null,
+  spotlightReaderIds = null,
 }: FloorMapViewProps) {
   const [activeMarkerId, setActiveMarkerId] = useState<string | null>(null);
   const floorInfo = getFloorMapInfo(floor);
+  // 같은 화면에 지도가 여러 개 떠도 mask id가 겹치지 않게 한다.
+  const maskId = `floor-map-spotlight-mask-${useId()}`;
+  const spotlightPolygons = (spotlightReaderIds ?? [])
+    .map((readerId) => [readerId, zoneBounds[readerId]] as const)
+    .filter(([, polygon]) => polygon && polygon.length >= 3);
 
   const toggleMarker = (id: string) => {
     setActiveMarkerId((prev) => (prev === id ? null : id));
@@ -142,6 +153,32 @@ export default function FloorMapView({
       className="relative w-full select-none overflow-hidden rounded-lg border border-border bg-card"
     >
       <img src={floorInfo.imagePath} alt={`${floorInfo.label} 평면도`} className="block w-full" draggable={false} />
+
+      {spotlightReaderIds ? (
+        <svg
+          data-testid="floor-map-spotlight"
+          aria-hidden="true"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="pointer-events-none absolute inset-0 h-full w-full"
+        >
+          <defs>
+            <mask id={maskId}>
+              {/* 흰 영역만 어두워진다. 구역 폴리곤을 검게 칠해 구멍을 낸다. */}
+              <rect x="0" y="0" width="100" height="100" fill="white" />
+              {spotlightPolygons.map(([readerId, polygon]) => (
+                <polygon
+                  key={readerId}
+                  data-testid={`floor-map-spotlight-hole-${readerId}`}
+                  points={polygon.map((point) => `${point.x},${point.y}`).join(' ')}
+                  fill="black"
+                />
+              ))}
+            </mask>
+          </defs>
+          <rect x="0" y="0" width="100" height="100" fill="#0f2e4f" opacity="0.6" mask={`url(#${maskId})`} />
+        </svg>
+      ) : null}
 
       {pins.map((pin) => {
         const dots = [...(equipmentByReader.get(pin.reader_id) ?? [])].sort((a, b) => a.tag_id.localeCompare(b.tag_id));

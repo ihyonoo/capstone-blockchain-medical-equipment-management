@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { buildPageList, clampPage, getPageSlice, getTotalPages, PAGE_SIZE_OPTIONS } from './pagination';
+import {
+  buildPageList,
+  clampPage,
+  DEFAULT_PAGE_SIZE,
+  getPageSlice,
+  getTotalPages,
+  PAGE_SIZE_OPTIONS,
+} from './pagination';
 
 describe('getTotalPages', () => {
   it('counts a partial last page as its own page', () => {
@@ -56,5 +63,9 @@ describe('buildPageList', () => {
 describe('PAGE_SIZE_OPTIONS', () => {
   it('offers the sizes the admin lists use', () => {
     expect(PAGE_SIZE_OPTIONS).toEqual([10, 20, 50, 100]);
+  });
+
+  it('starts at the smallest size so the first screen stays short', () => {
+    expect(DEFAULT_PAGE_SIZE).toBe(10);
   });
 });

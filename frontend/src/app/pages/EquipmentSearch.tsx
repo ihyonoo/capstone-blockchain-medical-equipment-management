@@ -41,6 +41,8 @@ type LiveReaderItem = {
   is_online: boolean;
   last_seen: number | null;
   floor: number | null;
+  // 시뮬레이션 숨기기를 요청했을 때만 서버가 실어준다.
+  is_real_hardware?: boolean;
 };
 
 // "층별 구역 안내" 패널 한 줄. 리더가 있는 구역은 클릭 시 장비 목록도 필터링되지만,
@@ -114,6 +116,7 @@ export default function EquipmentSearch() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
   const [selectedFloor, setSelectedFloor] = useState<FloorNumber>(1);
   const [availableOnly, setAvailableOnly] = useState(false);
+  const [hideSimulated, setHideSimulated] = useState(false);
   const [highlightedZone, setHighlightedZone] = useState<FloorMapHighlight | null>(null);
   const isAuthorized = useAuthGuard(() => {
     try {
@@ -170,6 +173,30 @@ export default function EquipmentSearch() {
   );
 
   const readerFloorById = useMemo(() => new Map(readers.map((r) => [r.reader_id, r.floor])), [readers]);
+
+  // 시뮬레이션 숨기기를 켰을 때만 서버가 리더의 실물 여부를 함께 준다.
+  // 그 값으로 현재 층에서 실제 하드웨어가 놓인 구역만 밝게 남긴다(나머지는 지도에서 어두워짐).
+  const realReaderIdsOnFloor = useMemo(() => {
+    if (!hideSimulated) return null;
+    return readers.filter((r) => r.floor === selectedFloor && r.is_real_hardware === true).map((r) => r.reader_id);
+  }, [hideSimulated, readers, selectedFloor]);
+
+  const realHardwareFloors = useMemo(
+    () =>
+      Array.from(
+        new Set(readers.filter((r) => r.is_real_hardware === true && r.floor != null).map((r) => r.floor as number)),
+      ).sort((left, right) => left - right),
+    [readers],
+  );
+
+  // 실물 리더가 없는 층에 머물면 지도가 통째로 어두워지기만 한다 — 실제로 있는 층으로 옮겨준다.
+  useEffect(() => {
+    if (!hideSimulated) return;
+    if (realHardwareFloors.length === 0) return;
+    if (realHardwareFloors.includes(selectedFloor)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedFloor(realHardwareFloors[0] as FloorNumber);
+  }, [hideSimulated, realHardwareFloors, selectedFloor]);
 
   // 장비가 아직 하나도 위치하지 않은 활성 리더 구역도 필터·패널에 노출되도록 리더 로스터를 합친다.
   const locations = useMemo(() => {
@@ -284,7 +311,9 @@ export default function EquipmentSearch() {
           logout();
           return;
         }
-        const response = await fetch(`${API_BASE_URL}/rtls/live`, {
+        // 시뮬레이션 장비 제외는 서버가 처리한다 — 직원 응답에는 항목별 실물 여부가 실리지 않는다.
+        const query = hideSimulated ? '?hide_simulated=true' : '';
+        const response = await fetch(`${API_BASE_URL}/rtls/live${query}`, {
           method: 'GET',
           cache: 'no-store',
           headers: buildAuthHeaders(session.token),
@@ -324,7 +353,7 @@ export default function EquipmentSearch() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isAuthorized, logout]);
+  }, [isAuthorized, logout, hideSimulated]);
 
   useEffect(() => {
     if (!selectedEquipment) return;
@@ -445,6 +474,15 @@ export default function EquipmentSearch() {
                 사용 가능 장비만 보기
               </label>
 
+              <label className="flex items-center gap-2 text-base font-medium">
+                <input
+                  type="checkbox"
+                  checked={hideSimulated}
+                  onChange={(event) => setHideSimulated(event.target.checked)}
+                />
+                시뮬레이션 장비 숨기기
+              </label>
+
               {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
             </div>
 
@@ -535,6 +573,7 @@ export default function EquipmentSearch() {
                           zoneBounds={ZONE_BOUNDS}
                           highlightedZone={highlightedZone}
                           spotlightTagId={selectedEquipment}
+                          spotlightReaderIds={realReaderIdsOnFloor}
                         />
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1.5">

@@ -2,7 +2,7 @@
 // 페이지 전환은 슬라이스만 바꾸면 된다(재조회 없음).
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
-export const DEFAULT_PAGE_SIZE = 20;
+export const DEFAULT_PAGE_SIZE = 10;
 
 // 페이지 번호 줄이 한 줄을 넘지 않도록, 이 개수를 넘으면 앞뒤를 '…'로 접는다.
 const MAX_VISIBLE_PAGES = 7;

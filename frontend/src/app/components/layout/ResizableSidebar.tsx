@@ -58,7 +58,10 @@ export default function ResizableSidebar({ testId, children }: ResizableSidebarP
     >
       {!collapsed ? (
         <section className="flex h-full flex-col fade-rise pr-3">
-          <div className="surface-panel surface-panel--muted flex h-full min-h-0 flex-col p-5">{children}</div>
+          {/* border-t-0 — 패널 위쪽이 상단 바 아래 테두리와 맞닿아 그 줄만 2px로 진해 보인다. */}
+          <div className="surface-panel surface-panel--muted flex h-full min-h-0 flex-col border-t-0 p-5">
+            {children}
+          </div>
         </section>
       ) : null}
 

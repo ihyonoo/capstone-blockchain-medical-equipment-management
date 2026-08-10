@@ -23,6 +23,12 @@ describe('ResizableSidebar', () => {
     expect(sidebar.querySelector('.surface-panel')).toHaveClass('surface-panel--muted');
   });
 
+  it('drops its top border so it does not double up with the top bar border', () => {
+    const { sidebar } = renderSidebar();
+
+    expect(sidebar.querySelector('.surface-panel')).toHaveClass('border-t-0');
+  });
+
   it('pins itself to the viewport on wide screens so page scroll never cuts its bottom off', () => {
     const { sidebar } = renderSidebar();
 

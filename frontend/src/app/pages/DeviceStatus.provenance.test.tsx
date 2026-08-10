@@ -83,7 +83,7 @@ describe('DeviceStatus provenance visibility', () => {
     );
 
     await screen.findByText('모의 장비');
-    fireEvent.click(screen.getByRole('checkbox', { name: '모의 데이터 숨기기' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '시뮬레이션 데이터 숨기기' }));
 
     expect(screen.queryByText('모의 장비')).not.toBeInTheDocument();
     expect(screen.getByText('실물 장비')).toBeInTheDocument();
