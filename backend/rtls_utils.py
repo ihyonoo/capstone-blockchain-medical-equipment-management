@@ -372,7 +372,9 @@ def load_readers_with_status(now_epoch: int, offline_sec: int) -> list[dict]:
             cur.execute(sql)
             rows = cur.fetchall()
     except Exception:
-        return []
+        # 빈 배열로 삼키면 프론트에서 "배치된 구역이 없습니다"라는 정상 메시지로 둔갑해
+        # 장애가 안 보인다 — 이 파일의 다른 DB 조회와 같이 500으로 드러낸다.
+        raise HTTPException(500, "리더 목록 조회 중 데이터베이스 오류가 발생했습니다.")
 
     readers: list[dict] = []
     for reader_id, location, last_seen, floor, is_real_hardware in rows:

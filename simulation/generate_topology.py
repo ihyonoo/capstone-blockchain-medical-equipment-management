@@ -24,6 +24,20 @@ def build_reader_rows() -> list[str]:
     return rows
 
 
+def build_reader_floor_updates() -> list[str]:
+    # 이미 존재하는 리더 행에 floor를 채우는 보정 UPDATE. INSERT는 ON CONFLICT DO NOTHING이라
+    # 기존 행을 못 고치는데, /ingest의 upsert가 만든 행은 reader_id/location_name만 있고
+    # floor가 NULL이다 — 이게 비면 프론트가 그 구역을 지도에서 통째로 건너뛴다.
+    # floor IS NULL 조건이라 이미 채워진 행은 건드리지 않는다(멱등).
+    rows = []
+    for reader_id, floor, _location_name, _equipment in ROOMS:
+        rows.append(
+            f"UPDATE readers SET floor = {floor}, updated_at = now()\n"
+            f"    WHERE reader_id = '{reader_id}' AND floor IS NULL;"
+        )
+    return rows
+
+
 def build_real_reader_statements() -> list[str]:
     # 실물 리더는 /ingest가 자동 upsert하지만, 하드웨어가 꺼져 있어도 지도에 보이도록
     # 미리 만들어 둔다. is_real_hardware는 명시하지 않아 DB 기본값 TRUE가 적용된다.
@@ -94,6 +108,7 @@ def main() -> None:
     reader_rows = build_reader_rows()
     tag_rows = build_tag_rows()
     user_rows = build_user_rows()
+    floor_updates = build_reader_floor_updates()
     real_reader_statements = build_real_reader_statements()
 
     sql = f"""-- database/seed_demo_topology.sql
@@ -108,6 +123,10 @@ BEGIN;
 INSERT INTO readers (reader_id, location_name, floor, is_real_hardware) VALUES
 {",\n".join(reader_rows)}
 ON CONFLICT (reader_id) DO NOTHING;
+
+-- floor 없이 먼저 만들어진 행(/ingest upsert가 만든 행)에 층을 채운다. floor가 비면
+-- 프론트가 그 구역을 지도에서 건너뛴다.
+{"\n".join(floor_updates)}
 
 -- 실물 하드웨어 리더의 위치(생성이 아니라 표시 정보 보정).
 {"\n\n".join(real_reader_statements)}
