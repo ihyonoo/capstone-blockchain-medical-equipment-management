@@ -4,6 +4,7 @@ import AppShell from '../components/layout/AppShell';
 import { Button } from '../components/ui/button';
 import { buildAuthHeaders, getStoredAuthSession, getStoredAuthUser, withRedirectQuery, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
+import { formatIBeaconTag } from '../lib/iBeaconTag';
 import { API_BASE_URL } from '../lib/runtime';
 
 type NfcEquipmentItem = {
@@ -182,7 +183,7 @@ export default function NfcEquipment() {
           <div className="panel-header">
             <div>
               <div className="panel-title">{item?.equipment_name ?? '장비 정보'}</div>
-              {item ? <p className="panel-copy mt-2">tag ID: {item.tag_id}</p> : null}
+              {item ? <p className="panel-copy mt-2">{formatIBeaconTag(item.tag_id)}</p> : null}
             </div>
           </div>
 

@@ -943,7 +943,8 @@ def ingest(payload: Payload):
 
     insert_location_history(db_updates, known_tag_ids=registered_tag_ids)
     cache_location_updates(db_updates, reader_locations=reader_locations)
-    mark_tags_seen({obs.tag_id for obs in payload.observations}, now)
+    # 관측 원본이 아니라 걸러낸 집합을 쓴다 — 스쳐가는 외부 비콘의 last-seen 키가 쌓이지 않게.
+    mark_tags_seen(registered_tag_ids, now)
 
     if last_tag_id is not None and last_best is not None:
         print(f"[tag ID]\n{last_tag_id}")

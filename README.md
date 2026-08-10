@@ -21,7 +21,6 @@
 ## 목차
 
 - [주요 기능](#주요-기능)
-- [시스템 아키텍처](#시스템-아키텍처)
 - [기술 스택](#기술-스택)
 - [디렉토리 구조](#디렉토리-구조)
 - [Docker 구성](#docker-구성)
@@ -44,34 +43,6 @@
 - **역할 기반 접근**: 관리자(admin) / 의료진(staff) 권한 분리
 
 ---
-
-## 시스템 아키텍처
-
-네 개의 협력 구성요소로 이루어진다.
-
-```
-┌─────────────┐   RSSI 배치     ┌──────────────────────────┐
-│ RTLS 리더    │ ──POST /ingest─▶│  backend (FastAPI)       │
-│ (BLE 스캔)   │                 │                          │
-└─────────────┘                 │  ├─ 위치 산출/캐시        │
-                                │  ├─ 사용 이력 기록        │──▶ PostgreSQL (원본)
-┌─────────────┐  GET /rtls/live │  └─ 온체인 앵커링/검증    │──▶ Redis (위치 캐시)
-│ frontend    │ ◀──응답 JSON────│                          │──▶ Besu (무결성)
-│ (React SPA) │  GET /usage/... │                          │
-└─────────────┘                 └──────────┬───────────────┘
-                                           │ subprocess (Node 스크립트)
-                                           ▼
-                              ┌──────────────────────────────┐
-                              │ Hyperledger Besu (QBFT)       │
-                              │ 검증자 4 + RPC 노드 1          │
-                              │ UsageRecordRegistry.sol       │
-                              └──────────────────────────────┘
-```
-
-- **`backend/`** — FastAPI + PostgreSQL API (Python). 시스템의 핵심
-- **`frontend/`** — React 18 + Vite + TailwindCSS SPA
-- **`rtls/`** — BLE 태그 브로드캐스터 및 리더 엣지 스크립트 (Python)
-- **`blockchain/besu/`** — 프라이빗 Besu QBFT 네트워크 + Solidity `UsageRecordRegistry` 컨트랙트 + 백엔드가 호출하는 Node.js 스크립트
 
 ## 기술 스택
 
