@@ -86,7 +86,7 @@ class TestReturn:
 
         assert response.status_code == 409
 
-    def test_return_rejects_non_holder_non_admin(self, client, seed_tag, seed_user):
+    def test_return_by_other_staff_is_allowed(self, client, seed_tag, seed_user):
         seed_tag(nfc_tag_uid="NFC-012")
         _holder_id, holder_headers = seed_user(username="holder2")
         _other_id, other_headers = seed_user(username="bystander")
@@ -94,7 +94,7 @@ class TestReturn:
 
         response = _return(client, other_headers, "NFC-012")
 
-        assert response.status_code == 403
+        assert response.status_code == 200
 
     def test_return_by_admin_is_allowed_even_if_not_holder(self, client, seed_tag, seed_user):
         seed_tag(nfc_tag_uid="NFC-013")

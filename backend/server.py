@@ -1380,7 +1380,7 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
                 _serial_number,
                 nfc_uid,
                 asset_status,
-                current_holder_user_id,
+                _current_holder_user_id,
                 current_holder_name,
                 current_usage_id,
                 _is_active,
@@ -1392,8 +1392,6 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
 
             if asset_status != "checked_out" or not current_usage_id:
                 raise HTTPException(409, "현재 사용 중인 장비가 아닙니다.")
-            if actor["role"] != "admin" and current_holder_user_id != actor["user_id"]:
-                raise HTTPException(403, "현재 대여 중인 사용자만 반납할 수 있습니다.")
 
             cur.execute(
                 """
