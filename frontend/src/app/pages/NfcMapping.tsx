@@ -49,6 +49,14 @@ function getAssetStatusLabel(status: string) {
   }
 }
 
+/** tag_id는 `{공유 UUID}:{major}:{minor}` 형식. UUID는 모든 장비가 동일해 표시할 필요가 없다. */
+function formatTagIdentity(tagId: string) {
+  const parts = tagId.split(':');
+  if (parts.length < 3) return `tag ${tagId}`;
+  const [, major, minor] = parts;
+  return `major ${major} · minor ${minor}`;
+}
+
 function formatAgo(updatedAt: number | null) {
   if (!updatedAt) return '미수신';
   const now = Math.floor(Date.now() / 1000);
@@ -532,7 +540,7 @@ export default function NfcMapping() {
                               <Badge variant="outline">{item.equipment_type?.trim() || '미분류'}</Badge>
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              tag {item.tag_id}
+                              {formatTagIdentity(item.tag_id)}
                               {item.serial_number ? ` · serial ${item.serial_number}` : ''}
                             </div>
                             <div className="text-sm text-muted-foreground">
