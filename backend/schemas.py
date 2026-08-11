@@ -20,6 +20,10 @@ class LoginRequest(BaseModel):
     role: str
 
 
+class DemoLoginRequest(BaseModel):
+    role: str = "staff"
+
+
 class RegisterRequest(BaseModel):
     username: str
     display_name: str

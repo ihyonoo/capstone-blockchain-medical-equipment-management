@@ -62,3 +62,74 @@ describe('Login role picker', () => {
     });
   });
 });
+
+describe('Login demo buttons', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          token: 'demo-token',
+          expires_at: 9999999999,
+          user: { role: 'staff', is_demo: true },
+        }),
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function firstCall() {
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    return { url: String(url), body: JSON.parse((init as RequestInit).body as string) };
+  }
+
+  it('requests a staff demo session without credentials', async () => {
+    renderLogin();
+    fireEvent.click(screen.getByRole('button', { name: '의료진으로 둘러보기' }));
+
+    await waitFor(() => {
+      const { url, body } = firstCall();
+      expect(url).toContain('/auth/demo-login');
+      expect(body.role).toBe('staff');
+    });
+  });
+
+  it('requests an admin demo session', async () => {
+    renderLogin();
+    fireEvent.click(screen.getByRole('button', { name: '관리자로 둘러보기' }));
+
+    await waitFor(() => {
+      expect(firstCall().body.role).toBe('admin');
+    });
+  });
+
+  it('stores the issued demo session', async () => {
+    renderLogin();
+    fireEvent.click(screen.getByRole('button', { name: '의료진으로 둘러보기' }));
+
+    await waitFor(() => {
+      const stored = JSON.parse(sessionStorage.getItem('auth_session') ?? '{}');
+      expect(stored.token).toBe('demo-token');
+    });
+  });
+
+  it('shows an error when the demo session cannot be issued', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ detail: '데모 로그인이 비활성화되어 있습니다.' }),
+    } as Response);
+    renderLogin();
+    fireEvent.click(screen.getByRole('button', { name: '의료진으로 둘러보기' }));
+
+    expect(await screen.findByText('데모 로그인이 비활성화되어 있습니다.')).toBeInTheDocument();
+  });
+});

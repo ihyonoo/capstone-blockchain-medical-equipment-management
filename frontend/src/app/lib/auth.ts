@@ -7,6 +7,8 @@ export type AuthUser = {
   position?: string | null;
   email?: string | null;
   email_verified?: boolean;
+  // 가입 없이 둘러보는 공개 데모 계정. 계정 설정 변경은 백엔드에서도 403으로 막힌다.
+  is_demo?: boolean;
 };
 
 export type AuthSession = {

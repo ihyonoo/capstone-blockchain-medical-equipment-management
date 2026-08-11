@@ -68,6 +68,8 @@ type MappingFilters = {
   mappingState: 'all' | 'mapped' | 'unmapped';
 };
 
+const DEMO_NOTICE = '데모 체험 계정에서는 NFC 매핑을 변경할 수 없습니다.';
+
 const DEFAULT_MAPPING_FILTERS: MappingFilters = {
   equipmentName: '',
   tagId: '',
@@ -178,6 +180,14 @@ export default function NfcMapping() {
 
   const logout = useLogout();
 
+  // 데모 계정은 매핑을 바꿀 수 없다(백엔드도 403). 요청을 보내기 전에 안내만 띄운다.
+  const blockedForDemo = () => {
+    if (getStoredAuthSession()?.user?.is_demo !== true) return false;
+    setNotice('');
+    setError(DEMO_NOTICE);
+    return true;
+  };
+
   const fetchMappings = useCallback(async () => {
     setIsRefreshing(true);
     setError('');
@@ -267,6 +277,7 @@ export default function NfcMapping() {
   const pagedItems = getPageSlice(visibleItems, safePage, pageSize);
 
   const saveMapping = async (tagId: string) => {
+    if (blockedForDemo()) return;
     const token = (draftTokens[tagId] ?? '').trim();
     if (!token) {
       setError('저장할 NFC 토큰을 입력하세요.');
@@ -310,6 +321,7 @@ export default function NfcMapping() {
   };
 
   const removeMapping = async (tagId: string) => {
+    if (blockedForDemo()) return;
     setRemovingTagId(tagId);
     setError('');
     setNotice('');

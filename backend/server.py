@@ -48,6 +48,7 @@ try:
     from backend.schemas import (
         ChangeEmailRequest,
         ChangePasswordRequest,
+        DemoLoginRequest,
         FindIdRequest,
         ForgotPasswordRequest,
         GoogleCompleteRequest,
@@ -65,6 +66,7 @@ try:
     from backend.settings import (
         APP_PUBLIC_URL,
         DATABASE_URL,
+        DEMO_LOGIN_ENABLED,
         DWELL_SEC,
         EMAIL_VERIFY_TTL_SEC,
         HYST_DB,
@@ -127,6 +129,7 @@ except ModuleNotFoundError as exc:
     from schemas import (
         ChangeEmailRequest,
         ChangePasswordRequest,
+        DemoLoginRequest,
         FindIdRequest,
         ForgotPasswordRequest,
         GoogleCompleteRequest,
@@ -144,6 +147,7 @@ except ModuleNotFoundError as exc:
     from settings import (
         APP_PUBLIC_URL,
         DATABASE_URL,
+        DEMO_LOGIN_ENABLED,
         DWELL_SEC,
         EMAIL_VERIFY_TTL_SEC,
         HYST_DB,
@@ -415,11 +419,71 @@ def login(body: LoginRequest):
     }
 
 
+# 회원가입 없이 둘러보는 공개 데모 계정. 첫 요청 때 만들어지고 이후에는 재사용된다.
+DEMO_ACCOUNTS = {
+    "staff": {
+        "username": "demo-staff",
+        "display_name": "데모 의료진",
+        "department": "응급의학과",
+        "position": "간호사",
+    },
+    "admin": {
+        "username": "demo-admin",
+        "display_name": "데모 관리자",
+        "department": "의공학팀",
+        "position": None,
+    },
+}
+
+
+@app.post("/auth/demo-login")
+def demo_login(body: DemoLoginRequest):
+    if not DEMO_LOGIN_ENABLED:
+        raise HTTPException(404, "데모 로그인이 비활성화되어 있습니다.")
+    role = body.role.strip().lower()
+    account = DEMO_ACCOUNTS.get(role)
+    if account is None:
+        raise HTTPException(400, "role은 admin 또는 staff여야 합니다.")
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            # password_hash를 NULL로 둬서 아이디/비밀번호 폼으로는 데모 계정에 들어올 수 없게 한다.
+            cur.execute(
+                """
+                INSERT INTO users (username, display_name, role, department, position,
+                                   password_hash, is_active, email_verified, is_demo)
+                VALUES (%s, %s, %s, %s, %s, NULL, TRUE, TRUE, TRUE)
+                ON CONFLICT (username) DO NOTHING
+                RETURNING user_id
+                """,
+                (
+                    account["username"],
+                    account["display_name"],
+                    role,
+                    account["department"],
+                    account["position"],
+                ),
+            )
+            row = cur.fetchone()
+            if row is None:
+                cur.execute(
+                    "SELECT user_id FROM users WHERE username = %s AND is_demo",
+                    (account["username"],),
+                )
+                row = cur.fetchone()
+    except Exception:
+        raise HTTPException(500, "데모 로그인 처리 중 데이터베이스 오류가 발생했습니다.")
+
+    if row is None:
+        raise HTTPException(500, "데모 계정을 준비하지 못했습니다.")
+    return _issue_session_for_user(row[0])
+
+
 def _issue_session_for_user(user_id: int) -> dict:
     """user_id로 로그인 세션(bearer 토큰 + user)을 발급한다."""
     sql = """
     SELECT user_id, username, display_name, role, department, position,
-           email, email_verified, is_active, token_version
+           email, email_verified, is_active, token_version, is_demo
     FROM users
     WHERE user_id = %s
     """
@@ -438,7 +502,7 @@ def _issue_session_for_user(user_id: int) -> dict:
         "ok": True,
         "token": token,
         "expires_at": expires_at,
-        "user": build_user_payload(row),
+        "user": {**build_user_payload(row), "is_demo": bool(row[10])},
     }
 
 
@@ -541,6 +605,12 @@ def reset_password(body: ResetPasswordRequest):
 # ---------------------------------------------------------------------------
 # 마이페이지 / 계정 관리 (로그인 상태에서 본인 계정을 조회·변경)
 # ---------------------------------------------------------------------------
+def _reject_demo_account(user: dict) -> None:
+    """공개 데모 계정은 아무나 로그인하므로 계정과 설비 매핑을 바꾸지 못하게 막는다."""
+    if user.get("is_demo"):
+        raise HTTPException(403, "데모 계정에서는 사용할 수 없는 기능입니다.")
+
+
 def _verify_current_password(user_id: int, current_password: str) -> None:
     """본인 확인용으로 현재 비밀번호를 검증한다. 불일치 시 400."""
     try:
@@ -585,6 +655,7 @@ def change_password(
     authorization: str | None = Header(default=None),
 ):
     user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+    _reject_demo_account(user)
     _verify_current_password(user["user_id"], body.current_password)
     new_hash = pwd.hash(validate_password(body.new_password))
     try:
@@ -612,6 +683,7 @@ def change_email(
     authorization: str | None = Header(default=None),
 ):
     user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+    _reject_demo_account(user)
     _verify_current_password(user["user_id"], body.current_password)
     new_email = normalize_email(body.new_email)
     if new_email == (user.get("email") or "").strip().lower():
@@ -641,6 +713,7 @@ def change_email(
 @app.post("/auth/google/unlink")
 def google_unlink(authorization: str | None = Header(default=None)):
     user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+    _reject_demo_account(user)
     # 모든 계정은 비밀번호 로그인이 가능하므로 연동 해제로 로그인 수단을 잃지 않는다.
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
@@ -659,6 +732,7 @@ def withdraw_account(
     authorization: str | None = Header(default=None),
 ):
     user = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+    _reject_demo_account(user)
     _verify_current_password(user["user_id"], body.current_password)
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
@@ -1047,7 +1121,7 @@ def upsert_nfc_mapping(
     body: NfcMappingUpsertRequest,
     authorization: str | None = Header(default=None),
 ):
-    require_authenticated_user(authorization, allowed_roles={"admin"})
+    _reject_demo_account(require_authenticated_user(authorization, allowed_roles={"admin"}))
     tag_id = body.tag_id.strip()
     token = normalize_nfc_token(body.nfc_token)
     if not tag_id:
@@ -1086,7 +1160,7 @@ def upsert_nfc_mapping(
 
 @app.delete("/admin/nfc-mappings/{tag_id}")
 def remove_nfc_mapping(tag_id: str, authorization: str | None = Header(default=None)):
-    require_authenticated_user(authorization, allowed_roles={"admin"})
+    _reject_demo_account(require_authenticated_user(authorization, allowed_roles={"admin"}))
     clean_tag_id = tag_id.strip()
     if not clean_tag_id:
         raise HTTPException(400, "tag_id는 필수입니다.")

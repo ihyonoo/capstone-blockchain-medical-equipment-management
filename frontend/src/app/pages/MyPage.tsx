@@ -32,6 +32,10 @@ type UsageHistoryItem = {
 
 const ROLE_LABEL: Record<string, string> = { admin: '관리자', staff: '의료진' };
 
+const DEMO_NOTICE = '데모 체험 계정에서는 계정 설정을 변경할 수 없습니다.';
+
+type AccountAction = 'password' | 'email' | 'google' | 'withdraw';
+
 function formatDateTime(epoch: number | null | undefined) {
   if (!epoch) return '-';
   return new Date(epoch * 1000).toLocaleString('ko-KR', { hour12: false });
@@ -52,6 +56,15 @@ export default function MyPage() {
   const [history, setHistory] = useState<UsageHistoryItem[]>([]);
 
   const isStaff = (user?.role ?? '').toLowerCase() === 'staff';
+
+  // 데모 계정은 계정 설정을 바꿀 수 없다(백엔드도 403). 클릭한 섹션에 안내만 띄운다.
+  const [demoBlocked, setDemoBlocked] = useState<AccountAction | null>(null);
+
+  const blockedForDemo = (action: AccountAction) => {
+    if (user?.is_demo !== true) return false;
+    setDemoBlocked(action);
+    return true;
+  };
 
   const logout = () => {
     clearStoredAuthSession();
@@ -224,6 +237,7 @@ export default function MyPage() {
   const [googleBusy, setGoogleBusy] = useState(false);
 
   const unlinkGoogle = async () => {
+    if (blockedForDemo('google')) return;
     setGoogleMsg(null);
     setGoogleBusy(true);
     try {
@@ -242,6 +256,7 @@ export default function MyPage() {
   };
 
   const linkGoogle = () => {
+    if (blockedForDemo('google')) return;
     // 로그인 상태에서 동일 인증 이메일로 Google 로그인하면 콜백이 자동 연동한다.
     window.location.href = `${API_BASE_URL}/auth/google/start?mode=login`;
   };
@@ -333,6 +348,7 @@ export default function MyPage() {
                 <Button
                   variant="outline"
                   onClick={() => {
+                    if (blockedForDemo('password')) return;
                     setPwOpen((open) => {
                       if (open) resetPasswordForm();
                       return !open;
@@ -342,6 +358,7 @@ export default function MyPage() {
                   {pwOpen ? '닫기' : '변경'}
                 </Button>
               </div>
+              {demoBlocked === 'password' ? <div className="alert alert-error mt-4">{DEMO_NOTICE}</div> : null}
               {/* 패널은 넓어져도 입력 줄은 읽기 좋은 폭(max-w-2xl)으로 묶어 둔다 */}
               {pwOpen ? (
                 <form onSubmit={submitPassword} className="mt-4 max-w-2xl space-y-4">
@@ -403,6 +420,7 @@ export default function MyPage() {
                 <Button
                   variant="outline"
                   onClick={() => {
+                    if (blockedForDemo('email')) return;
                     setEmailOpen((open) => {
                       if (open) resetEmailForm();
                       return !open;
@@ -412,6 +430,7 @@ export default function MyPage() {
                   {emailOpen ? '닫기' : '변경'}
                 </Button>
               </div>
+              {demoBlocked === 'email' ? <div className="alert alert-error mt-4">{DEMO_NOTICE}</div> : null}
               {emailOpen ? (
                 <form onSubmit={submitEmail} className="mt-4 max-w-2xl space-y-4">
                   <div className="space-y-2">
@@ -467,6 +486,7 @@ export default function MyPage() {
                   {googleMsg.text}
                 </div>
               ) : null}
+              {demoBlocked === 'google' ? <div className="alert alert-error mb-4">{DEMO_NOTICE}</div> : null}
               {user.google_linked ? (
                 <Button variant="outline" onClick={unlinkGoogle} disabled={googleBusy}>
                   {googleBusy ? '해제 중...' : 'Google 연동 해제'}
@@ -535,8 +555,15 @@ export default function MyPage() {
             <section className="surface-panel p-6 fade-rise">
               <div className="panel-title mb-1 text-err">회원 탈퇴</div>
               <p className="panel-copy mb-4">탈퇴하면 계정이 비활성화되고 다시 로그인할 수 없습니다.</p>
+              {demoBlocked === 'withdraw' ? <div className="alert alert-error mb-4">{DEMO_NOTICE}</div> : null}
               {!withdrawOpen ? (
-                <Button variant="destructive" onClick={() => setWithdrawOpen(true)}>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    if (blockedForDemo('withdraw')) return;
+                    setWithdrawOpen(true);
+                  }}
+                >
                   회원 탈퇴
                 </Button>
               ) : (
