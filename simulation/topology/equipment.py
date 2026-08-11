@@ -128,6 +128,11 @@ PLACEMENTS: tuple[tuple[str, str], ...] = (
 )  # fmt: skip
 
 
+# 로컬 개발 DB에 실물 하드웨어 태그(수액펌프-001, nfc pump-001)가 이미 등록되어 있어
+# 그 이름을 침범하지 않도록 pump 슬러그의 시작 번호를 한 칸 밀어둔다.
+RESERVED_START_INDEX: dict[str, int] = {"pump": 2}
+
+
 @dataclass(frozen=True)
 class Equipment:
     tag_id: str
@@ -146,7 +151,8 @@ def _build_equipment() -> tuple[Equipment, ...]:
     for sequence, (slug, zone_id) in enumerate(PLACEMENTS, start=1):
         profile = TYPES[slug]
         floor = zones.ZONE_BY_ID[zone_id].floor
-        index = per_type_index[slug] = per_type_index.get(slug, 0) + 1
+        start = RESERVED_START_INDEX.get(slug, 1)
+        index = per_type_index[slug] = per_type_index.get(slug, start - 1) + 1
         built.append(
             Equipment(
                 tag_id=f"{HOSPITAL_BEACON_UUID}:{floor}:{sequence:04d}",
