@@ -168,6 +168,11 @@ ALTER TABLE users
     ADD COLUMN IF NOT EXISTS email TEXT,
     ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
 
+-- 회원가입 없이 둘러보는 공개 데모 계정 표시. 계정 설정 API(탈퇴·비밀번호/이메일 변경 등)를
+-- 이 플래그로 막아, 방문자가 데모 계정 자체를 망가뜨리지 못하게 한다.
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Google 전용 가입 계정은 비밀번호가 없을 수 있으므로 password_hash를 NULL 허용으로 완화한다.
 ALTER TABLE users
     ALTER COLUMN password_hash DROP NOT NULL;

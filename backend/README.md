@@ -55,6 +55,7 @@ pytest
 - `AUTH_TOKEN_SECRET`, `AUTH_TOKEN_TTL_SEC`
 - `SMTP_*` — 비워두면 이메일 발송 대신 `backend.log`에 링크 출력(dev 폴백)
 - `GOOGLE_CLIENT_*`, `APP_PUBLIC_URL` — 비워두면 Google OAuth 비활성
+- `DEMO_LOGIN_ENABLED` — 기본 켜짐. `false`로 두면 `/auth/demo-login`이 404가 된다(로그인 화면의 데모 체험 버튼 무력화)
 
 ## 관련 문서
 

@@ -17,6 +17,9 @@ BESU_DEPLOYMENT_PATH = BESU_DIR / "deployments" / "usage-registry.json"
 AUTH_TOKEN_SECRET = os.getenv("AUTH_TOKEN_SECRET", "dev-auth-secret")
 AUTH_TOKEN_TTL_SEC = max(300, int(os.getenv("AUTH_TOKEN_TTL_SEC", "43200")))
 
+# 회원가입 없이 둘러보는 데모 로그인 스위치. 끄면 /auth/demo-login이 404가 된다.
+DEMO_LOGIN_ENABLED = os.getenv("DEMO_LOGIN_ENABLED", "true").strip().lower() not in ("0", "false", "no")
+
 # 프론트엔드 공개 URL — 인증/재설정 메일 링크와 OAuth 콜백 이후 리다이렉트의 기준.
 APP_PUBLIC_URL = os.getenv("APP_PUBLIC_URL", "http://localhost:5173").rstrip("/")
 

@@ -158,7 +158,7 @@ def build_user_payload(row) -> dict:
 def fetch_user_by_id(user_id: int):
     sql = """
     SELECT user_id, username, display_name, role, department, position,
-           email, email_verified, is_active, token_version
+           email, email_verified, is_active, token_version, is_demo
     FROM users
     WHERE user_id = %s
     LIMIT 1
@@ -193,6 +193,8 @@ def require_authenticated_user(
         raise HTTPException(401, "인증 토큰이 더 이상 유효하지 않습니다. 다시 로그인해 주세요.")
 
     user = build_user_payload(row)
+    # row[10]=is_demo (fetch_user_by_id 컬럼 순서 기준) — 데모 계정 가드가 이 값을 본다.
+    user["is_demo"] = bool(row[10])
     role = str(user["role"]).lower()
     if allowed_roles and role not in allowed_roles:
         raise HTTPException(403, "이 작업을 수행할 권한이 없습니다.")

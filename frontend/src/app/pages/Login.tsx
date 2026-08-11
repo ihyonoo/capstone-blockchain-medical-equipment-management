@@ -87,6 +87,39 @@ export default function Login() {
     }
   };
 
+  // 가입 없이 둘러보는 공개 데모 세션. 자격증명 없이 권한만 보내면 백엔드가 데모 계정으로 발급한다.
+  const handleDemoLogin = async (demoRole: LoginRole) => {
+    setError('');
+    setUnverifiedEmail('');
+    setResendMsg('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/demo-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: demoRole }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok || !payload.user || typeof payload.token !== 'string') {
+        const detail = payload?.detail;
+        throw new Error(typeof detail === 'string' ? detail : '데모 체험을 시작하지 못했습니다.');
+      }
+
+      storeAuthSession({
+        token: payload.token,
+        expires_at: Number(payload.expires_at ?? 0),
+        user: payload.user,
+      });
+      navigate(redirectTarget ?? getHomePath(payload.user), { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '데모 체험 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleResendVerification = async () => {
     setResendMsg('');
     try {
@@ -195,6 +228,32 @@ export default function Login() {
         </div>
 
         <GoogleButton mode="login" />
+
+        <div className="space-y-2">
+          <p className="text-center text-[0.85rem] text-muted-foreground">
+            가입 없이 둘러보려면 데모 계정으로 체험해 보세요.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              onClick={() => handleDemoLogin('staff')}
+              disabled={isLoading}
+            >
+              의료진으로 둘러보기
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              onClick={() => handleDemoLogin('admin')}
+              disabled={isLoading}
+            >
+              관리자로 둘러보기
+            </Button>
+          </div>
+        </div>
       </form>
     </AuthSplitLayout>
   );
