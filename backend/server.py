@@ -1591,6 +1591,7 @@ def usage_history(
     limit: int = 200,
     offset: int = 0,
     hide_simulated: bool = False,
+    include_in_use: bool = True,
     include_blockchain: bool = False,
 ):
     require_authenticated_user(authorization, allowed_roles={"admin"})
@@ -1608,6 +1609,7 @@ def usage_history(
         max_limit=200 if include_blockchain else 1000,
         offset=offset,
         hide_simulated=hide_simulated,
+        include_in_use=include_in_use,
     )
 
     integrity_results = {}
@@ -1642,6 +1644,7 @@ def usage_history(
             "limit": safe_limit,
             "offset": safe_offset,
             "hide_simulated": hide_simulated,
+            "include_in_use": include_in_use,
             "include_blockchain": include_blockchain,
         },
         "integrity_summary": integrity_summary,

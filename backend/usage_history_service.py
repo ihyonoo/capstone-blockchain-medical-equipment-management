@@ -310,8 +310,8 @@ def build_default_integrity_result(*, usage_status: str, detail: str) -> dict:
     if usage_status != "returned":
         return {
             "verification_status": "not_eligible",
-            "verification_label": "검증 대상 아님",
-            "verification_method": "반납이 완료되지 않은 이력은 아직 온체인 검증 대상이 아닙니다.",
+            "verification_label": "사용 중",
+            "verification_method": "아직 반납되지 않아 사용 중인 이력이라 온체인 검증 대상이 아닙니다.",
             "detail": None,
             "eligible": False,
             "db_record": None,
@@ -463,6 +463,7 @@ def query_usage_history_rows(
     max_limit: int,
     offset: int = 0,
     hide_simulated: bool = False,
+    include_in_use: bool = True,
 ):
     """한 페이지 분량의 행과 조건에 맞는 전체 건수를 함께 돌려준다.
 
@@ -537,6 +538,9 @@ def query_usage_history_rows(
     if hide_simulated:
         # tags 행이 지워진 옛 이력(NULL)은 실물로 간주해 남긴다.
         where_clauses.append("t.is_real_hardware IS NOT FALSE")
+
+    if not include_in_use:
+        where_clauses.append("h.usage_status = 'returned'")
 
     where_sql = ""
     if where_clauses:

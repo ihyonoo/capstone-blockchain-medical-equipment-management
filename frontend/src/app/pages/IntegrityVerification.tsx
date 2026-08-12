@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { AlertTriangle, CheckCircle2, CircleMinus, HelpCircle, Loader2, User } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, HelpCircle, Loader2, User } from 'lucide-react';
 
 type UsageChainRecord = {
   usageId: string;
@@ -97,6 +97,7 @@ type HistoryQuery = {
   page: number;
   pageSize: number;
   hideSimulated: boolean;
+  includeInUse: boolean;
 };
 
 const SORT_FIELD_OPTIONS: Array<{ value: SortField; label: string }> = [
@@ -126,18 +127,21 @@ const DEFAULT_QUERY: HistoryQuery = {
   page: 1,
   pageSize: DEFAULT_PAGE_SIZE,
   hideSimulated: false,
+  // 반납 전 이력은 검증할 게 없어 기본은 감춘다.
+  includeInUse: false,
 };
 
 /** CSV는 검증 없이 전체를 훑으므로 페이지 크기를 크게 잡는다. 서버 상한과 같은 값. */
 const CSV_CHUNK_SIZE = 1000;
 
 function buildHistoryParams(query: HistoryQuery, { includeBlockchain }: { includeBlockchain: boolean }) {
-  const { filters, page, pageSize, hideSimulated } = query;
+  const { filters, page, pageSize, hideSimulated, includeInUse } = query;
   const params = new URLSearchParams({
     sort_by: filters.sortField,
     sort_order: filters.sortOrder,
     limit: String(pageSize),
     offset: String((page - 1) * pageSize),
+    include_in_use: String(includeInUse),
     include_blockchain: String(includeBlockchain),
   });
   if (hideSimulated) params.set('hide_simulated', 'true');
@@ -310,7 +314,7 @@ function getVerificationCardTone(status: string) {
 
 function VerificationStatusIcon({ status }: { status: string }) {
   if (status === 'verified') return <CheckCircle2 className="h-4 w-4" />;
-  if (status === 'not_eligible') return <CircleMinus className="h-4 w-4" />;
+  if (status === 'not_eligible') return <Clock className="h-4 w-4" />;
   if (status === 'chain_error' || status === 'not_configured') return <HelpCircle className="h-4 w-4" />;
   return <AlertTriangle className="h-4 w-4" />;
 }
@@ -387,9 +391,7 @@ function UsageHistoryRow({ item, onOpen }: { item: UsageHistoryItem; onOpen: () 
 
       <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span className="flex flex-wrap items-baseline gap-x-2.5">
-          <span className="text-[1.05rem] font-semibold tracking-[-0.03em] text-foreground">
-            {item.equipment.name}
-          </span>
+          <span className="text-[1.05rem] font-semibold tracking-[-0.03em] text-foreground">{item.equipment.name}</span>
           <span className="text-[0.88rem] text-muted-foreground">
             #{item.usage_id} · {formatIBeaconTag(item.equipment.tag_id)}
           </span>
@@ -918,6 +920,16 @@ export default function IntegrityVerification() {
                       }
                     />
                     시뮬레이션 데이터 숨기기
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={query.includeInUse}
+                      onChange={(event) =>
+                        setQuery((prev) => ({ ...prev, includeInUse: event.target.checked, page: 1 }))
+                      }
+                    />
+                    사용 중인 이력 포함
                   </label>
                   <Badge variant="outline">이 페이지 검증 완료 {pageVerifiedCount}건</Badge>
                   <Badge variant="outline">검증 실패 {pageIssueCount}건</Badge>

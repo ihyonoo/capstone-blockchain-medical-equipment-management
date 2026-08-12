@@ -15,6 +15,50 @@ def _seed_checkouts(client, seed_tag, seed_user, count: int, *, is_real_hardware
         client.post("/usage/checkout", json={"nfc_token": token}, headers=headers)
 
 
+def _seed_returns(client, seed_tag, seed_user, count: int, *, prefix: str = "DONE"):
+    """대여 후 반납까지 끝난 사용 이력을 count건 만든다."""
+    _, headers = seed_user(username=f"staff-{prefix}", role="staff")
+    for index in range(1, count + 1):
+        token = f"NFC-{prefix}-{index:03d}"
+        seed_tag(
+            tag_id=f"{prefix}-{index:04d}",
+            equipment_name=f"{prefix} 장비 {index:02d}",
+            nfc_tag_uid=token,
+        )
+        client.post("/usage/checkout", json={"nfc_token": token}, headers=headers)
+        client.post("/usage/return", json={"nfc_token": token}, headers=headers)
+
+
+class TestUsageHistoryIncludeInUse:
+    def test_excludes_in_use_records_from_both_the_page_and_the_total(self, client, seed_tag, seed_user):
+        _seed_returns(client, seed_tag, seed_user, 2)
+        _seed_checkouts(client, seed_tag, seed_user, 3, prefix="INUSE")
+        _, admin_headers = seed_user(username="admin1", role="admin", position=None)
+
+        body = client.get("/usage/history?include_in_use=false", headers=admin_headers).json()
+
+        assert body["total"] == 2
+        assert all(item["return"]["at"] is not None for item in body["items"])
+
+    def test_keeps_in_use_records_when_the_flag_is_on(self, client, seed_tag, seed_user):
+        _seed_returns(client, seed_tag, seed_user, 2)
+        _seed_checkouts(client, seed_tag, seed_user, 3, prefix="INUSE")
+        _, admin_headers = seed_user(username="admin1", role="admin", position=None)
+
+        body = client.get("/usage/history?include_in_use=true", headers=admin_headers).json()
+
+        assert body["total"] == 5
+
+    def test_keeps_in_use_records_by_default(self, client, seed_tag, seed_user):
+        _seed_returns(client, seed_tag, seed_user, 2)
+        _seed_checkouts(client, seed_tag, seed_user, 3, prefix="INUSE")
+        _, admin_headers = seed_user(username="admin1", role="admin", position=None)
+
+        body = client.get("/usage/history", headers=admin_headers).json()
+
+        assert body["total"] == 5
+
+
 class TestUsageHistoryPaging:
     def test_reports_the_total_so_the_client_can_count_pages(self, client, seed_tag, seed_user):
         _seed_checkouts(client, seed_tag, seed_user, 5)
