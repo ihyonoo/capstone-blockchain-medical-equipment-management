@@ -19,7 +19,6 @@ function makeItem(tagId: string, name: string, isRealHardware: boolean) {
     tag_id: tagId,
     equipment_name: name,
     equipment_type: '수액펌프',
-    serial_number: null,
     nfc_token: null,
     asset_status: 'available',
     is_active: true,

@@ -20,7 +20,6 @@ function makeItem(index: number) {
     tag_id: `EQ-00${label}`,
     equipment_name: `장비 ${label}`,
     equipment_type: '수액펌프',
-    serial_number: `BME-2024-000${label}`,
     nfc_token: null,
     asset_status: 'available',
     is_active: true,

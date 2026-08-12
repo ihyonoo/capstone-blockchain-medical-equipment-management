@@ -23,7 +23,6 @@ type LiveLocationItem = {
   tag_id: string;
   equipment_name: string | null;
   equipment_type: string | null;
-  serial_number: string | null;
   asset_status: string;
   current_holder_user_id: number | null;
   current_holder_name: string | null;

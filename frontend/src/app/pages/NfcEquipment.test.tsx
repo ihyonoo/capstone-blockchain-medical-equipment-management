@@ -22,7 +22,6 @@ const NFC_PAYLOAD = {
     tag_id: TAG_ID,
     equipment_name: '수액펌프',
     equipment_type: '인퓨전펌프',
-    serial_number: null,
     nfc_token: 'pump-002',
     asset_status: 'available',
     current_holder_user_id: null,

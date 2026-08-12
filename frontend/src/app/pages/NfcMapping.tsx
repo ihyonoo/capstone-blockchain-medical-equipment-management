@@ -26,7 +26,6 @@ type MappingItem = {
   tag_id: string;
   equipment_name: string;
   equipment_type: string | null;
-  serial_number: string | null;
   nfc_token: string | null;
   asset_status: string;
   is_active: boolean;
@@ -539,10 +538,7 @@ export default function NfcMapping() {
                               <Badge variant="outline">{getAssetStatusLabel(item.asset_status)}</Badge>
                               <Badge variant="outline">{item.equipment_type?.trim() || '미분류'}</Badge>
                             </div>
-                            <div className="text-sm text-muted-foreground">
-                              {formatTagIdentity(item.tag_id)}
-                              {item.serial_number ? ` · serial ${item.serial_number}` : ''}
-                            </div>
+                            <div className="text-sm text-muted-foreground">{formatTagIdentity(item.tag_id)}</div>
                             <div className="text-sm text-muted-foreground">
                               현재 위치: {item.location ?? '미수신'} · 최근 수신: {formatAgo(item.updated_at)}
                             </div>

@@ -19,7 +19,6 @@ function makeTag(tagId: string, name: string, readerId = 'M101') {
     tag_id: tagId,
     equipment_name: name,
     equipment_type: '수액펌프',
-    serial_number: null,
     asset_status: 'available',
     current_holder_user_id: null,
     current_holder_name: null,
