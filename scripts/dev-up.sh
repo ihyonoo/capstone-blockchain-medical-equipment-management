@@ -35,6 +35,10 @@ psql "${DATABASE_URL:-postgresql://mediledger:mediledger@localhost:5432/mediledg
   -q -f database/schema.sql
 # 재시드하면 떠 있는 시뮬레이터의 월드 상태가 DB와 반드시 어긋나므로, 6단계가 새로 띄우도록 먼저 내린다.
 pkill -f 'simulation\.simulator' 2>/dev/null || true
+# 백엔드도 같이 내린다 — 위치 판정 상태(tag_state)가 프로세스 메모리에 있어서,
+# apply_seed가 Redis를 비워도 백엔드는 "이미 그 리더에 있다"며 캐시를 다시 쓰지 않는다.
+# 그러면 지도에 태그가 몇 개만 남는다(실측: 50개 중 5개).
+pkill -f 'uvicorn backend.server' 2>/dev/null || true
 "$ROOT/.venv/bin/python" -m simulation.apply_seed
 
 # 3) backend — uvicorn --reload
