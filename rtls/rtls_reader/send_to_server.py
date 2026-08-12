@@ -14,11 +14,11 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 SERVER_URL = os.getenv("RTLS_SERVER_URL", "http://127.0.0.1:8000/ingest")  # Server IP
-READER_ID = os.getenv("RTLS_READER_ID", "M501")                             # Reader의 논리적 ID
+READER_ID = os.getenv("RTLS_READER_ID", "M501")  # Reader의 논리적 ID
 
 # 윈도우를 사용하는 이유: RSSI의 튐 현상, 노이즈 감소를 위해
-WINDOW_SEC = 2.0                                    # 수집 윈도우(최근 2초 동안의 RSSI를 수집)
-SEND_EVERY_SEC = 1.0                                # 전송 주기(1초마다 서버로 전송)
+WINDOW_SEC = 2.0  # 수집 윈도우(최근 2초 동안의 RSSI를 수집)
+SEND_EVERY_SEC = 1.0  # 전송 주기(1초마다 서버로 전송)
 
 
 # 태그별 RSSI 임시 저장 버퍼
@@ -35,19 +35,20 @@ def bytes_to_uuid(b: bytes) -> str:
 # iBeacon인지 검증하고 시스템에서 쓰는 tag_id 형식으로 변환
 def parse_ibeacon_tag_id(adv) -> str | None:
     md = adv.manufacturer_data  # 제조사의 ID를 가져옴
-    if 0x004C not in md:    # 0x004c는 Apple Company ID
+    if 0x004C not in md:  # 0x004c는 Apple Company ID
         return None
 
     data = md[0x004C]
 
-    if len(data) < 22 or data[0] != 0x02 or data[1] != 0x15:    # iBeacon prefix: 02 15
+    if len(data) < 22 or data[0] != 0x02 or data[1] != 0x15:  # iBeacon prefix: 02 15
         return None
 
     uuid = bytes_to_uuid(data[2:18]).lower()
     major = int.from_bytes(data[18:20], "big")
     minor = int.from_bytes(data[20:22], "big")
 
-    return f"{uuid}:{major}:{minor}"
+    # minor는 3자리로 고정한다 — 시뮬레이션 태그(major 2)와 같은 표기를 쓰기 위해서다.
+    return f"{uuid}:{major}:{minor:03d}"
 
 
 # 스캔 콜백은 태그 판별과 버퍼 적재만 담당하고, 서버 전송은 별도 루프에서 수행한다.
@@ -56,8 +57,8 @@ def on_scan(device, adv):
     if tag_id is None:
         return
 
-    ts = int(time.time())   # 수신 시각
-    rssi = int(adv.rssi)    # RSSI 값
+    ts = int(time.time())  # 수신 시각
+    rssi = int(adv.rssi)  # RSSI 값
 
     # 해당 태그의 버퍼에 (수신 시각, RSSI 값) 추가
     tag_samples.setdefault(tag_id, []).append((ts, rssi))
@@ -66,39 +67,39 @@ def on_scan(device, adv):
 # 가공 후 서버로 전송 루프
 async def sender_loop():
     while True:
-        now = int(time.time())          # 현재 시간 계산
+        now = int(time.time())  # 현재 시간 계산
         cutoff = now - int(WINDOW_SEC)  # Window만큼 자르기
 
-        observations = []   # 서버로 보낼 태그별 요약값 리스트
-        for tag_id, samples in list(tag_samples.items()):   # 현재 버퍼의 모든 태그에 대해 처리
-
-            samples = [(t, r) for (t, r) in samples if t >= cutoff]    # 윈도우 밖 데이터 제거
-            tag_samples[tag_id] = samples                               # 버퍼 갱신
+        observations = []  # 서버로 보낼 태그별 요약값 리스트
+        for tag_id, samples in list(tag_samples.items()):  # 현재 버퍼의 모든 태그에 대해 처리
+            samples = [(t, r) for (t, r) in samples if t >= cutoff]  # 윈도우 밖 데이터 제거
+            tag_samples[tag_id] = samples  # 버퍼 갱신
 
             # 샘플이 없는 태그는 전송 대상에서 제외
             if not samples:
                 continue
 
-            rssis = [r for (_, r) in samples]           # RSSI 값만 추출
-            rssi_med = int(statistics.median(rssis))    # 중앙값 계산
-            last_seen = max(t for (t, _) in samples)    # window 내에서 가장 최근 수신 시각
+            rssis = [r for (_, r) in samples]  # RSSI 값만 추출
+            rssi_med = int(statistics.median(rssis))  # 중앙값 계산
+            last_seen = max(t for (t, _) in samples)  # window 내에서 가장 최근 수신 시각
 
             # 서버로 보낼 데이터 구성
-            observations.append({
-                "tag_id": tag_id,       # tag_id
-                "rssi": rssi_med,       # RSSI의 중앙값
-                "count": len(rssis),    # window 내 샘플 개수(신뢰도)
-                "last_seen": last_seen  # 마지막 수신 시간
-            })
+            observations.append(
+                {
+                    "tag_id": tag_id,  # tag_id
+                    "rssi": rssi_med,  # RSSI의 중앙값
+                    "count": len(rssis),  # window 내 샘플 개수(신뢰도)
+                    "last_seen": last_seen,  # 마지막 수신 시간
+                }
+            )
 
         # HTTP 전송
-        if observations:    # 전송할 데이터가 있다면
-
+        if observations:  # 전송할 데이터가 있다면
             # 서버로 보낼 전체 페이로드 구성
             payload = {
-                "reader_id": READER_ID,         # 리더기 ID
-                "ts": now,                      # 전송 시각
-                "observations": observations    # 태그별 요약 리스트
+                "reader_id": READER_ID,  # 리더기 ID
+                "ts": now,  # 전송 시각
+                "observations": observations,  # 태그별 요약 리스트
             }
 
             # 서버 전송 예외 처리
@@ -115,13 +116,13 @@ async def sender_loop():
 
 # Scan 가동, 서버로 전송
 async def main():
-    scanner = BleakScanner(on_scan) # 콜백 등록(스캐너 생성)
-    await scanner.start()           # 스캔 시작(백그라운드)
+    scanner = BleakScanner(on_scan)  # 콜백 등록(스캐너 생성)
+    await scanner.start()  # 스캔 시작(백그라운드)
     try:
-        await sender_loop()         # 전송 루프 실행
+        await sender_loop()  # 전송 루프 실행
     finally:
-        await scanner.stop()        # 종료 시 스캔 정리
+        await scanner.stop()  # 종료 시 스캔 정리
 
 
 if __name__ == "__main__":
-    asyncio.run(main())             # 이벤트 루프 시작
+    asyncio.run(main())  # 이벤트 루프 시작

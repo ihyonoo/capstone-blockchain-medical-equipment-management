@@ -66,16 +66,19 @@ class TestNamingConvention:
         tokens = [item.nfc_token for item in equipment.EQUIPMENT]
         assert len(tokens) == len(set(tokens))
 
-    def test_tag_ids_are_ibeacon_uuid_major_minor_with_the_floor_as_major(self):
+    def test_tag_ids_are_ibeacon_uuid_major_minor_with_simulation_as_major(self):
         for item in equipment.EQUIPMENT:
             uuid, major, minor = item.tag_id.split(":")
             assert uuid == equipment.HOSPITAL_BEACON_UUID
-            assert int(major) == item.floor
-            assert re.fullmatch(r"\d{4}", minor)
+            assert int(major) == equipment.SIMULATION_BEACON_MAJOR
+            assert re.fullmatch(r"\d{3}", minor)
 
-    def test_tag_ids_and_serial_numbers_are_unique(self):
+    def test_minors_run_from_one_without_gaps(self):
+        minors = sorted(int(item.tag_id.split(":")[2]) for item in equipment.EQUIPMENT)
+        assert minors == list(range(1, 51))
+
+    def test_tag_ids_are_unique(self):
         assert len({i.tag_id for i in equipment.EQUIPMENT}) == 50
-        assert len({i.serial_number for i in equipment.EQUIPMENT}) == 50
 
 
 class TestTypeProfiles:
