@@ -12,7 +12,6 @@ COPY simulation/requirements.txt simulation/requirements.txt
 RUN pip install --no-cache-dir -r simulation/requirements.txt
 
 COPY simulation/ simulation/
-COPY database/seed_demo_topology.sql database/seed_demo_topology.sql
 
 # BACKEND_BASE_URL/DATABASE_URL/SIM_STAFF_PASSWORD 등은 docker-compose의
 # env_file/environment로 런타임에 주입된다(simulation/.env는 이미지에 없음).

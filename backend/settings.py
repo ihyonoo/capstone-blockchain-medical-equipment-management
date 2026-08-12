@@ -48,7 +48,7 @@ REDIS_RETRY_COOLDOWN_SEC = 5
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,49}$")
 
 # 실물 리더가 담당하는 구역. DB readers.location_name이 비어 있을 때만 쓰이는 폴백이며,
-# 이름은 병원 시설 안내도의 구역명을 따른다(simulation/demo_data.py의 REAL_READERS와 동일).
+# 이름은 병원 시설 안내도의 구역명을 따른다(simulation/topology/zones.py의 REAL_READER_IDS와 동일).
 READER_LOCATION = {
     "M501": "중앙수술센터",
     "M502": "통원수술센터",
