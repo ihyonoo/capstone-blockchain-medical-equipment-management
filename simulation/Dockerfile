@@ -12,6 +12,9 @@ COPY simulation/requirements.txt simulation/requirements.txt
 RUN pip install --no-cache-dir -r simulation/requirements.txt
 
 COPY simulation/ simulation/
+# 상시 가동 루프(simulator.py)는 DB에 안 붙지만, 같은 이미지로 재시드(apply_seed)도
+# 돌리므로 시드 SQL이 필요하다 — 안 넣으면 database/ 없이 apply_seed가 FileNotFoundError.
+COPY database/ database/
 
 # BACKEND_BASE_URL/DATABASE_URL/SIM_STAFF_PASSWORD 등은 docker-compose의
 # env_file/environment로 런타임에 주입된다(simulation/.env는 이미지에 없음).
