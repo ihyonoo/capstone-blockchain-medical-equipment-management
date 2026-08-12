@@ -67,7 +67,11 @@ class TestTagTxOffset:
 class TestSlowFading:
     def test_starts_at_zero_for_an_unseen_pair(self):
         fading = radio.SlowFading()
-        assert fading.value(("t1", "M101"), 0.2, random.Random(1)) != 0.0 or True
+        key = ("t1", "M101")
+        assert key not in fading._state  # 아직 한 번도 안 본 쌍은 내부 상태가 없다 = 0에서 출발
+        value = fading.value(key, 0.2, random.Random(1))
+        # 0에서 출발해 dt=0.2s만 흐른 첫 샘플이므로 정상상태 표준편차 이내로 작아야 한다.
+        assert abs(value) < 3 * radio.SLOW_NOISE_SIGMA_DB
 
     def test_stays_bounded_over_a_long_run(self):
         fading = radio.SlowFading()

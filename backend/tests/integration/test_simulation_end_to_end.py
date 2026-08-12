@@ -89,6 +89,29 @@ class TestSeed:
             cur.execute("SELECT count(*) FROM readers WHERE is_real_hardware = FALSE AND floor IS NULL")
             assert cur.fetchone()[0] == 0
 
+    def test_seed_can_be_reapplied_after_ingest_created_a_reader_row(self, client, db_conn):
+        """/ingest가 시드보다 먼저 리더 행(floor NULL, is_real_hardware TRUE 기본값)을 만들어 둬도
+        재시드가 UniqueViolation 없이 그 행을 정본 값으로 되돌려야 한다."""
+        reader_id = next(iter(zones.SIM_ZONE_IDS))
+        response = client.post("/ingest", json={"reader_id": reader_id, "ts": 1000, "observations": []})
+        assert response.status_code == 200
+
+        with db_conn.cursor() as cur:
+            cur.execute("SELECT floor, is_real_hardware FROM readers WHERE reader_id = %s", (reader_id,))
+            floor, is_real_hardware = cur.fetchone()
+        assert floor is None
+        assert is_real_hardware is True
+
+        with db_conn.cursor() as cur:
+            cur.execute(render_seed_sql())
+        db_conn.commit()
+
+        with db_conn.cursor() as cur:
+            cur.execute("SELECT floor, is_real_hardware FROM readers WHERE reader_id = %s", (reader_id,))
+            floor, is_real_hardware = cur.fetchone()
+        assert floor is not None
+        assert is_real_hardware is False
+
 
 class TestIngestContract:
     def test_backend_accepts_every_payload_the_simulator_produces(self, client, seeded_hospital):

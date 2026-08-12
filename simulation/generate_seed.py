@@ -46,8 +46,14 @@ def _render_readers() -> list[str]:
     rows = [f"    ({_quote(zone.reader_id)}, {_quote(zone.name)}, {zone.floor}, FALSE)" for zone in zones.SIM_ZONES]
     return [
         "-- 모의 리더 42개. 실물 M501·M502는 이 목록에 없다.",
+        "-- /ingest가 리더를 미리 upsert해 floor NULL·is_real_hardware TRUE인 행을 만들어 둘 수 있으므로",
+        "-- 재시드가 그 행을 정본 값으로 덮어쓴다(DELETE는 is_real_hardware = FALSE만 지워 이 행은 살아남는다).",
         "INSERT INTO readers (reader_id, location_name, floor, is_real_hardware) VALUES",
-        ",\n".join(rows) + ";",
+        ",\n".join(rows),
+        "ON CONFLICT (reader_id) DO UPDATE SET",
+        "  location_name = EXCLUDED.location_name,",
+        "  floor = EXCLUDED.floor,",
+        "  is_real_hardware = EXCLUDED.is_real_hardware;",
         "",
     ]
 

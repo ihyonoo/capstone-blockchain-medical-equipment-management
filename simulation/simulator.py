@@ -83,6 +83,10 @@ async def _do_checkout(state: world.World, api: ApiClient, command: world.Checko
         return
     if response.status_code == 200:
         state.confirm_checkout(command.tag_id, time.time())
+    elif response.status_code == 409:
+        # DB엔 이미 이 태그가 대여 중이다 — 월드가 모르는 사용 이력이므로 되돌리지 말고 흡수해 반납으로 정리한다.
+        print(f"[simulator] checkout {command.nfc_token} already taken (409) — adopted for return")
+        state.adopt_checked_out(command.tag_id, time.time())
     else:
         print(f"[simulator] checkout {command.nfc_token} rejected: {response.status_code}")
         state.reject_checkout(command.tag_id, time.time())
@@ -98,6 +102,10 @@ async def run_return_worker(state: world.World, api: ApiClient, return_queue: as
             response = await api.return_equipment(token, command.nfc_token)
             if response.status_code == 200:
                 state.confirm_return(command.tag_id, time.time())
+            elif response.status_code == 409:
+                # DB엔 이미 반납 처리돼 있다 — 월드-DB 상태 불일치이지 실패가 아니므로 재시도하지 않고 확정한다.
+                state.confirm_return(command.tag_id, time.time())
+                print(f"[simulator] return {command.nfc_token} already settled (409) — reconciled")
             else:
                 print(f"[simulator] return {command.nfc_token} rejected: {response.status_code}")
                 state.retry_return(command.tag_id, time.time())

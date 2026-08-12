@@ -78,18 +78,22 @@ class TestCandidates:
     def test_universal_positions_get_a_smaller_weight(self):
         item = next(i for i in equipment.EQUIPMENT if i.profile.slug == "hd")
         weights = {member.position: weight for member, weight in roster.candidates_for(item, WEEKDAY_9AM)}
-        if "의공기사" in weights and "투석실간호사" in weights:
-            assert weights["의공기사"] < weights["투석실간호사"]
+        assert "의공기사" in weights and "투석실간호사" in weights
+        assert weights["의공기사"] < weights["투석실간호사"]
 
-    def test_outpatient_only_equipment_has_no_candidates_at_night(self):
+    def test_outpatient_only_equipment_has_no_primary_role_candidates_at_night(self):
+        # 온콜 의공기사(전층 공통)는 새벽에도 후보일 수 있다 — 주 사용자(물리치료사·작업치료사)만 없어야 한다.
         item = next(i for i in equipment.EQUIPMENT if i.profile.slug == "estim")
-        assert roster.candidates_for(item, WEEKDAY_3AM) == ()
+        positions = {member.position for member, _ in roster.candidates_for(item, WEEKDAY_3AM)}
+        assert not positions & set(item.profile.roles)
 
 
 class TestPickBorrower:
-    def test_returns_none_when_nobody_qualifies(self):
+    def test_falls_back_to_the_on_call_engineer_when_nobody_else_qualifies(self):
         item = next(i for i in equipment.EQUIPMENT if i.profile.slug == "estim")
-        assert roster.pick_borrower(item, WEEKDAY_3AM, random.Random(1)) is None
+        borrower = roster.pick_borrower(item, WEEKDAY_3AM, random.Random(1))
+        assert borrower is not None
+        assert borrower.position in staff.UNIVERSAL_POSITIONS
 
     def test_returns_a_qualified_person_during_the_day(self):
         item = next(i for i in equipment.EQUIPMENT if i.profile.slug == "estim")
@@ -123,11 +127,16 @@ class TestPickReturner:
         )
         assert other / 500 > 0.70
 
-    def test_falls_back_to_the_borrower_when_nobody_else_is_around(self):
+    def test_falls_back_to_the_on_call_engineer_when_no_colleague_is_around(self):
+        # 같은 직종 동료가 없는 새벽에는 온콜 의공기사가 대신 반납한다(M9로 되살아난 폴백).
         item = next(i for i in equipment.EQUIPMENT if i.profile.slug == "estim")
         borrower = next(m for m in staff.ROSTER if m.position == "물리치료사")
-        returned = roster.pick_returner(item, borrower, WEEKDAY_3AM, random.Random(6))
-        assert returned.username == borrower.username
+        rng = random.Random(6)
+        engineer_picks = sum(
+            roster.pick_returner(item, borrower, WEEKDAY_3AM, rng).position in staff.UNIVERSAL_POSITIONS
+            for _ in range(200)
+        )
+        assert engineer_picks / 200 > 0.70
 
     def test_the_proxy_returner_is_on_duty(self):
         item = next(i for i in equipment.EQUIPMENT if i.profile.slug == "pump")

@@ -39,8 +39,12 @@ def _in_window(hour: int, window: tuple[int, int]) -> bool:
 
 
 def _is_call_duty(member: StaffMember) -> bool:
-    """온콜 직종 중 실제로 호출 대기를 서는 소수. username에서 결정론적으로 정한다."""
-    return sum(ord(char) for char in member.username) % 6 == 0
+    """온콜 직종 중 실제로 호출 대기를 서는 소수. username에서 결정론적으로 정한다.
+
+    % 6은 현재 로스터의 의공기사 4명 전원을 걸러내 "동료 없으면 의공기사" 폴백이
+    야간에 절대 발동하지 않았다 — % 8로 바꿔 최소 1명은 걸리게 한다.
+    """
+    return sum(ord(char) for char in member.username) % 8 == 0
 
 
 def is_on_duty(member: StaffMember, moment: dt.datetime) -> bool:

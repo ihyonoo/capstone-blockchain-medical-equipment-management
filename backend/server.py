@@ -933,9 +933,6 @@ def ingest(payload: Payload):
     upsert_readers_from_ingest({reader_id})
     db_updates: dict[str, tuple[str, int | None, int]] = {}
 
-    last_tag_id = None
-    last_best = None
-
     # 등록되지 않은 태그는 여기서 끊는다. 통과시키면 메모리 상태·Redis 캐시·실시간 화면까지
     # 전부 오염되고, 스쳐가는 외부 비콘만큼 tag_obs가 무한정 커진다.
     registered_tag_ids = filter_registered_tag_ids({o.tag_id for o in payload.observations})
@@ -944,7 +941,6 @@ def ingest(payload: Payload):
         tag_id = observation.tag_id
         if tag_id not in registered_tag_ids:
             continue
-        last_tag_id = tag_id
 
         tag_obs.setdefault(tag_id, {})
         tag_obs[tag_id][reader_id] = {
@@ -955,7 +951,6 @@ def ingest(payload: Payload):
         }
 
         best = pick_best_reader(tag_id, now)
-        last_best = best
         if best is None:
             continue
 
@@ -1019,13 +1014,6 @@ def ingest(payload: Payload):
     cache_location_updates(db_updates, reader_locations=reader_locations)
     # 관측 원본이 아니라 걸러낸 집합을 쓴다 — 스쳐가는 외부 비콘의 last-seen 키가 쌓이지 않게.
     mark_tags_seen(registered_tag_ids, now)
-
-    if last_tag_id is not None and last_best is not None:
-        print(f"[tag ID]\n{last_tag_id}")
-        print("\n[readers]")
-        for current_reader_id, observation in tag_obs.get(last_tag_id, {}).items():
-            print(f"{current_reader_id}: rssi = {observation['rssi']}")
-        print("\n[best]\n", last_best[0], ": ", last_best[1])
 
     return {"ok": True}
 
@@ -1380,7 +1368,7 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
                 _serial_number,
                 nfc_uid,
                 asset_status,
-                _current_holder_user_id,
+                current_holder_user_id,
                 current_holder_name,
                 current_usage_id,
                 _is_active,
@@ -1392,6 +1380,10 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
 
             if asset_status != "checked_out" or not current_usage_id:
                 raise HTTPException(409, "현재 사용 중인 장비가 아닙니다.")
+            # 공개 데모 계정은 본인 대여만 반납할 수 있다 — 대리 반납까지 열어두면
+            # 방문자가 실물 장비를 포함해 아무 대여나 마음대로 종료시킬 수 있다.
+            if actor.get("is_demo") and current_holder_user_id != actor["user_id"]:
+                _reject_demo_account(actor)
 
             cur.execute(
                 """

@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from simulation import behavior, demand, movement, radio, roster
 from simulation.behavior import AssetState, Assignment
 from simulation.reader import ReaderWindow
-from simulation.topology import equipment, geometry, graph, zones
+from simulation.topology import equipment, geometry, graph, staff, zones
 from simulation.topology.equipment import Equipment
 from simulation.topology.geometry import Point
 
@@ -146,7 +146,8 @@ class World:
     # --- 행동 -------------------------------------------------------------
 
     def tick_behavior(self, moment: dt.datetime, now: float) -> list[CheckoutCommand]:
-        interval = max(0.0, now - self._last_behavior_at)
+        # 절전 등으로 벽시계가 건너뛰면 interval이 치솟아 전 장비가 한 틱에 대여될 수 있다 — 상한을 둔다.
+        interval = min(max(0.0, now - self._last_behavior_at), BEHAVIOR_TICK_SEC * 3)
         self._last_behavior_at = now
         self._advance_usage(now)
         return self._roll_checkouts(moment, now, interval or BEHAVIOR_TICK_SEC)
@@ -220,6 +221,26 @@ class World:
         tag.pending = False
         tag.state = AssetState.AVAILABLE
         self._planned.pop(tag_id, None)
+
+    def adopt_checked_out(self, tag_id: str, now: float) -> None:
+        """백엔드에 우리가 모르는 열린 대여가 있을 때 그 태그를 반납 대상으로 흡수한다.
+
+        시뮬레이터 재시작이나 재시드로 월드와 DB가 어긋나면 열린 usage_history 행이
+        영영 닫히지 않는다 — 409를 만나면 되돌리지 말고 반납해서 정리한다.
+        """
+        tag = self.tags[tag_id]
+        tag.pending = False
+        self._planned.pop(tag_id, None)
+        tag.journey = None
+        tag.stop_index = 0
+        if tag.assignment is None:
+            moment = dt.datetime.fromtimestamp(now, tz=dt.UTC)
+            borrower = roster.pick_borrower(tag.item, moment, self._rng) or staff.ROSTER[0]
+            tag.assignment = Assignment(
+                borrower=borrower, stops=(), dwell_sec=(0.0,), return_zone=tag.zone, mistap=False
+            )
+        tag.state = AssetState.RETURNING
+        tag.return_ready_at = now
 
     def due_returns(self, moment: dt.datetime, now: float) -> list[ReturnCommand]:
         """반납자는 보통 대여자 본인이지만, 대여자가 퇴근했으면 거의 항상 동료가 대신한다."""

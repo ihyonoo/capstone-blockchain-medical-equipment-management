@@ -127,17 +127,18 @@ def seed_user(db_conn):
         position: str | None = "간호사",
         password: str | None = None,
         email: str | None = None,
+        is_demo: bool = False,
     ):
         password_hash = pwd.hash(password) if password else "x"
         with db_conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO users (username, display_name, role, position, password_hash,
-                                    is_active, email_verified, token_version, email)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s)
+                                    is_active, email_verified, token_version, email, is_demo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, %s)
                 RETURNING user_id
                 """,
-                (username, username, role, position, password_hash, is_active, email_verified, email),
+                (username, username, role, position, password_hash, is_active, email_verified, email, is_demo),
             )
             user_id = cur.fetchone()[0]
         db_conn.commit()

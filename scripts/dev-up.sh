@@ -33,6 +33,8 @@ done
 echo "[3/6] schema + seed: database/schema.sql, simulation.apply_seed"
 psql "${DATABASE_URL:-postgresql://mediledger:mediledger@localhost:5432/mediledger_db}" \
   -q -f database/schema.sql
+# 재시드하면 떠 있는 시뮬레이터의 월드 상태가 DB와 반드시 어긋나므로, 6단계가 새로 띄우도록 먼저 내린다.
+pkill -f 'simulation\.simulator' 2>/dev/null || true
 "$ROOT/.venv/bin/python" -m simulation.apply_seed
 
 # 3) backend — uvicorn --reload

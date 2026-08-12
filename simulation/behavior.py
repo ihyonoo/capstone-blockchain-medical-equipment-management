@@ -58,7 +58,7 @@ def reachable_zones(item: Equipment, current_zone: str) -> tuple[str, ...]:
     """이동 성향이 허용하는 구역. 현재 위치는 언제나 포함한다(떠돈 뒤에도 갇히지 않도록)."""
     profile = item.profile
     if profile.mobility is Mobility.FIXED:
-        allowed = set(profile.fixed_zones)
+        allowed = {zone_id for zone_id in profile.fixed_zones if zones.ZONE_BY_ID[zone_id].floor == item.floor}
     elif profile.mobility is Mobility.FLOOR:
         allowed = {zone.reader_id for zone in zones.SIM_ZONES if zone.floor == item.floor}
     else:

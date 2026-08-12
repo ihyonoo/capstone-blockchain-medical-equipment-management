@@ -19,6 +19,8 @@ DELETE FROM readers WHERE is_real_hardware = FALSE;
 DELETE FROM users WHERE is_real_hardware = FALSE;
 
 -- 모의 리더 42개. 실물 M501·M502는 이 목록에 없다.
+-- /ingest가 리더를 미리 upsert해 floor NULL·is_real_hardware TRUE인 행을 만들어 둘 수 있으므로
+-- 재시드가 그 행을 정본 값으로 덮어쓴다(DELETE는 is_real_hardware = FALSE만 지워 이 행은 살아남는다).
 INSERT INTO readers (reader_id, location_name, floor, is_real_hardware) VALUES
     ('M101', '소아전문응급의료센터', 1, FALSE),
     ('M106', '영상의학센터', 1, FALSE),
@@ -61,7 +63,11 @@ INSERT INTO readers (reader_id, location_name, floor, is_real_hardware) VALUES
     ('M505', '내과계중환자실 MICU', 5, FALSE),
     ('M507', '마취통증의학과', 5, FALSE),
     ('M503', '외과계중환자실', 5, FALSE),
-    ('M506', '충남권역심뇌혈관질환센터', 5, FALSE);
+    ('M506', '충남권역심뇌혈관질환센터', 5, FALSE)
+ON CONFLICT (reader_id) DO UPDATE SET
+  location_name = EXCLUDED.location_name,
+  floor = EXCLUDED.floor,
+  is_real_hardware = EXCLUDED.is_real_hardware;
 
 -- 태그 50개. 시뮬레이션 시작 시점에는 전부 사용 가능 상태다.
 INSERT INTO tags (tag_id, equipment_name, equipment_type, serial_number, nfc_tag_uid,

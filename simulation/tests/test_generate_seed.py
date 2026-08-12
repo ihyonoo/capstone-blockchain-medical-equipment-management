@@ -13,6 +13,17 @@ class TestSeedSql:
         assert len(readers) == 42
         assert set(readers) == zones.SIM_ZONE_IDS
 
+    def test_reader_insert_upserts_on_conflict(self):
+        """/ingest가 미리 만들어 둔 리더 행(floor NULL, is_real_hardware TRUE)을 재시드가 덮어써야 한다."""
+        sql = generate_seed.render_seed_sql()
+        insert_start = sql.index("INSERT INTO readers")
+        insert_end = sql.index(";", insert_start)
+        statement = sql[insert_start : insert_end + 1]
+        assert "ON CONFLICT (reader_id) DO UPDATE SET" in statement
+        assert "location_name = EXCLUDED.location_name" in statement
+        assert "floor = EXCLUDED.floor" in statement
+        assert "is_real_hardware = EXCLUDED.is_real_hardware" in statement
+
     def test_never_touches_real_hardware_rows(self):
         sql = generate_seed.render_seed_sql()
         for statement in re.findall(r"DELETE FROM [^;]+;", sql):

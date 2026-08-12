@@ -2,7 +2,7 @@ import datetime as dt
 import random
 
 from simulation import behavior, demand, world
-from simulation.topology import equipment, graph, zones
+from simulation.topology import equipment, graph, staff, zones
 
 WEEKDAY_10AM = dt.datetime(2026, 8, 12, 10, 0, tzinfo=demand.KST)
 
@@ -129,13 +129,22 @@ class TestMovementIntegration:
                 previous = current
 
     def test_a_tag_never_leaves_its_floor(self):
+        # 정지 상태만 보면 층간 엣지가 없다는 이유로 항상 통과하는 공허한 테스트가 된다.
+        # 실제로 대여해 움직이는 장비를 섞어야 이동 경로가 층을 넘지 않는 걸 검증한다.
         instance = _fresh_world(seed=5)
-        item = equipment.EQUIPMENT[0]
-        now = 1000.0
+        command = _first_checkout(instance)
+        instance.confirm_checkout(command.tag_id, 1100.0)
+        item = equipment.EQUIPMENT_BY_TAG[command.tag_id]
+        start_zone = instance.zone_of(command.tag_id)
+        moved = False
+        now = 1100.0
         for _ in range(2_000):
             now += 1.0
             instance.tick_physics(now, 1.0)
-            assert zones.ZONE_BY_ID[instance.zone_of(item.tag_id)].floor == item.floor
+            if instance.zone_of(command.tag_id) != start_zone:
+                moved = True
+            assert zones.ZONE_BY_ID[instance.zone_of(command.tag_id)].floor == item.floor
+        assert moved, "대여한 장비가 움직이지 않았다"
 
 
 class TestReturnLifecycle:
@@ -203,6 +212,36 @@ class TestReturnLifecycle:
             now += 1.0
             instance.tick_physics(now, 1.0)
         assert instance.zone_of(item.tag_id) == start
+
+
+class TestAdoptCheckedOut:
+    def test_a_tag_with_no_assignment_becomes_returning_without_crashing(self):
+        """재시작 시나리오: 방금 태어난 태그에 assignment가 아직 없다."""
+        instance = _fresh_world(seed=9)
+        item = equipment.EQUIPMENT[0]
+        instance.adopt_checked_out(item.tag_id, 1000.0)
+        assert instance.state_of(item.tag_id) is behavior.AssetState.RETURNING
+
+    def test_produces_a_due_return_with_a_valid_username(self):
+        instance = _fresh_world(seed=9)
+        item = equipment.EQUIPMENT[0]
+        instance.adopt_checked_out(item.tag_id, 1000.0)
+        due = instance.due_returns(WEEKDAY_10AM, 1000.0)
+        command = next((r for r in due if r.tag_id == item.tag_id), None)
+        assert command is not None
+        assert command.username in staff.STAFF_BY_USERNAME
+
+    def test_a_tag_with_an_existing_assignment_keeps_its_borrower(self):
+        """월드-DB 어긋남 시나리오: 이미 이동 중이던 태그를 반납 대상으로 흡수한다."""
+        instance = _fresh_world(seed=9)
+        command = _first_checkout(instance)
+        instance.confirm_checkout(command.tag_id, 1100.0)
+        tag = instance.tags[command.tag_id]
+        original_borrower = tag.assignment.borrower
+        instance.adopt_checked_out(command.tag_id, 1200.0)
+        assert tag.assignment.borrower == original_borrower
+        assert instance.state_of(command.tag_id) is behavior.AssetState.RETURNING
+        assert not instance.tags[command.tag_id].pending
 
 
 def _first_checkout(instance: world.World) -> world.CheckoutCommand:
