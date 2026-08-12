@@ -17,6 +17,7 @@ import datetime as dt
 import random
 import signal
 import time
+import traceback
 
 import httpx
 
@@ -25,12 +26,23 @@ from simulation.api_client import ApiClient
 from simulation.reader import SEND_EVERY_SEC
 
 
-async def _tick_forever(interval: float, step) -> None:
-    """드리프트를 보정하며 고정 주기로 step을 부른다."""
+async def _tick_forever(name: str, interval: float, step) -> None:
+    """드리프트를 보정하며 고정 주기로 step을 부른다.
+
+    루프가 조용히 죽으면 나머지 루프만 계속 돌아 겉보기엔 정상으로 보인다 —
+    어느 루프가 왜 죽었는지 반드시 남기고 예외를 그대로 올려보낸다.
+    """
     next_at = time.monotonic()
     while True:
         next_at += interval
-        await step()
+        try:
+            await step()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            print(f"[simulator] {name} loop crashed:")
+            traceback.print_exc()
+            raise
         await asyncio.sleep(max(0.0, next_at - time.monotonic()))
 
 
@@ -38,7 +50,7 @@ async def run_physics_loop(state: world.World) -> None:
     async def step() -> None:
         state.tick_physics(time.time(), world.PHYSICS_TICK_SEC)
 
-    await _tick_forever(world.PHYSICS_TICK_SEC, step)
+    await _tick_forever("physics", world.PHYSICS_TICK_SEC, step)
 
 
 async def run_reader_loop(state: world.World, api: ApiClient) -> None:
@@ -46,7 +58,7 @@ async def run_reader_loop(state: world.World, api: ApiClient) -> None:
         payloads = state.collect_payloads(time.time())
         await asyncio.gather(*(api.ingest(payload) for payload in payloads))
 
-    await _tick_forever(SEND_EVERY_SEC, step)
+    await _tick_forever("reader", SEND_EVERY_SEC, step)
 
 
 async def run_behavior_loop(state: world.World, api: ApiClient, return_queue: asyncio.Queue) -> None:
@@ -58,7 +70,7 @@ async def run_behavior_loop(state: world.World, api: ApiClient, return_queue: as
         for command in state.due_returns(moment, now):
             await return_queue.put(command)
 
-    await _tick_forever(world.BEHAVIOR_TICK_SEC, step)
+    await _tick_forever("behavior", world.BEHAVIOR_TICK_SEC, step)
 
 
 async def _do_checkout(state: world.World, api: ApiClient, command: world.CheckoutCommand) -> None:
@@ -92,6 +104,11 @@ async def run_return_worker(state: world.World, api: ApiClient, return_queue: as
         except httpx.HTTPError as error:
             print(f"[simulator] return {command.nfc_token} failed: {error}")
             state.retry_return(command.tag_id, time.time())
+        except Exception:
+            print(f"[simulator] return worker crashed on {command.nfc_token}:")
+            traceback.print_exc()
+            state.retry_return(command.tag_id, time.time())
+            raise
         finally:
             return_queue.task_done()
 
@@ -120,7 +137,11 @@ async def run() -> None:
         loop.add_signal_handler(sig, stop_event.set)
 
     print("[simulator] running")
-    await stop_event.wait()
+    stop_task = asyncio.create_task(stop_event.wait())
+    # 정지 신호와 루프들을 함께 기다린다 — 루프가 죽으면 데몬이 반쯤 살아있는 채로
+    # 남지 않고 즉시 내려간다.
+    await asyncio.wait([stop_task, *tasks], return_when=asyncio.FIRST_COMPLETED)
+    stop_task.cancel()
 
     print("[simulator] stopping...")
     for task in tasks:
