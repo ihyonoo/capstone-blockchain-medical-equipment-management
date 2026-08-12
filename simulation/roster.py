@@ -86,9 +86,8 @@ def pick_borrower(item: Equipment, moment: dt.datetime, rng: random.Random) -> S
 
 def pick_returner(item: Equipment, borrower: StaffMember, moment: dt.datetime, rng: random.Random) -> StaffMember:
     """보통은 대여자 본인이 반납한다. 대여자가 퇴근했으면 거의 항상 다른 사람이 대신한다."""
-    borrower_available = is_on_duty(borrower, moment)
-    proxy_rate = PROXY_RETURN_RATE if borrower_available else PROXY_RETURN_RATE_OFF_DUTY
-    if borrower_available and rng.random() >= proxy_rate:
+    proxy_rate = PROXY_RETURN_RATE if is_on_duty(borrower, moment) else PROXY_RETURN_RATE_OFF_DUTY
+    if rng.random() >= proxy_rate:
         return borrower
 
     others = tuple((m, w) for m, w in candidates_for(item, moment) if m.username != borrower.username)
@@ -97,12 +96,10 @@ def pick_returner(item: Equipment, borrower: StaffMember, moment: dt.datetime, r
         same_position = tuple((m, w) for m, w in others if m.position == borrower.position)
         return _weighted_choice(same_position or others, rng)
 
-    if not borrower_available and rng.random() < proxy_rate:
-        engineers = tuple(
-            (m, PRIMARY_WEIGHT)
-            for m in staff.ROSTER
-            if m.position in staff.UNIVERSAL_POSITIONS and is_on_duty(m, moment)
-        )
-        if engineers:
-            return _weighted_choice(engineers, rng)
+    # others가 없으면(당직자도 없는 드문 경우) 의공기사 폴백을 시도한다.
+    engineers = tuple(
+        (m, PRIMARY_WEIGHT) for m in staff.ROSTER if m.position in staff.UNIVERSAL_POSITIONS and is_on_duty(m, moment)
+    )
+    if engineers:
+        return _weighted_choice(engineers, rng)
     return borrower
