@@ -141,13 +141,24 @@ class TestPositionTracking:
     def test_equipment_never_appears_on_another_floor(self, client, seeded_hospital, monkeypatch):
         instance = world.World(rng=random.Random(5), now=1000.0)
         now = _pump_ingest(instance, client, monkeypatch, start=1000.0, seconds=8.0)
-        for _ in range(2):
-            now = _pump_ingest(instance, client, monkeypatch, start=now, seconds=10.0)
+
+        # 정지 상태만 보면 층간 엣지가 없다는 이유로 항상 통과하는 공허한 테스트가 된다.
+        # 실제로 대여해 움직이는 장비를 섞어야 이동 경로가 층을 넘지 않는 걸 검증한다.
+        command = _drive_first_checkout(instance, client, seeded_hospital, now)
+        instance.confirm_checkout(command.tag_id, now)
+        moved = equipment.EQUIPMENT_BY_TAG[command.tag_id]
+        start_zone = instance.zone_of(command.tag_id)
+
+        for _ in range(6):
+            now = _pump_ingest(instance, client, monkeypatch, start=now, seconds=10.0, only_tag=command.tag_id)
+        assert instance.zone_of(command.tag_id) != start_zone, "대여한 장비가 움직이지 않았다"
+
         headers = _any_staff_headers(seeded_hospital)
         for item in equipment.EQUIPMENT:
             reader_id = client.get(f"/where/{item.tag_id}", headers=headers).json().get("reader_id")
             if reader_id:
                 assert zones.ZONE_BY_ID[reader_id].floor == item.floor, item.equipment_name
+        assert zones.ZONE_BY_ID[instance.zone_of(command.tag_id)].floor == moved.floor
 
 
 class TestUsageLifecycle:
