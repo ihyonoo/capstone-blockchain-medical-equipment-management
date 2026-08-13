@@ -608,7 +608,9 @@ export default function EquipmentSearch() {
           // 얹고 결과 목록은 다이얼로그로 뗀다 — 세로로 쌓이는 박스 하나가 더 늘어나는 느낌을 피한다.
           // bleed 레이아웃이라 페이지 기본 좌우 여백이 없다 — 지도 쪽과 같은 clamp로 직접 줬었는데,
           // 모바일 루트 폰트(14px)와 좁은 vw에서 clamp 하한(14px)에 붙어 거의 안 보여서 고정값으로 바꿨다.
-          <div className="space-y-3 pl-5 pr-3">
+          // 이 행 전체는 사이드바 sticky 정렬을 위해 -mt-4로 상단 패딩이 이미 상쇄돼 있어
+          // (아래 지도 섹션이 pt-4로 되돌리는 것과 동일하게) 여기서도 직접 되돌려야 한다.
+          <div className="space-y-3 pt-6 pl-5 pr-3 sm:pt-5">
             <div className="flex items-center justify-between gap-2">
               <div className="panel-title">장비 위치 검색</div>
               <Badge variant="outline">추적 중 {equipment.length}개</Badge>
@@ -668,7 +670,9 @@ export default function EquipmentSearch() {
           </div>
         )}
 
-        <div className="flex w-full min-w-0 flex-1 justify-center pt-4 pb-14 pr-[clamp(1rem,2.5vw,2rem)] sm:pt-5">
+        {/* 모바일에서는 이 섹션이 사이드바 없이 단독으로 좌측 벽에 붙어 있었다 — xl 미만에서만
+            좌우 여백을 직접 주고, xl 이상(사이드바와 나란히 배치)에서는 기존 그대로 되돌린다. */}
+        <div className="flex w-full min-w-0 flex-1 justify-center pt-4 pb-14 pl-5 pr-3 sm:pt-5 xl:pl-0 xl:pr-[clamp(1rem,2.5vw,2rem)]">
           <div className="grid w-full max-w-[1360px] grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <section className="space-y-4 fade-rise-delay">
               <div className="surface-panel p-5">

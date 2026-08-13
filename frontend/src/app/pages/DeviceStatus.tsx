@@ -118,7 +118,7 @@ export default function DeviceStatus() {
   if (!isAuthorized) return null;
 
   return (
-    <AppShell wide actions={<AdminNav active="devices" />} contentClassName="pt-4 sm:pt-5">
+    <AppShell wide actions={<AdminNav active="devices" />} contentClassName="pt-6 sm:pt-5">
       <div className="space-y-4">
         <section className="surface-panel p-5 fade-rise">
           <div className="panel-header">

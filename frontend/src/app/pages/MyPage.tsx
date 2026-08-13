@@ -295,7 +295,7 @@ export default function MyPage() {
     <AppShell
       wide
       actions={sessionRole === 'admin' ? <AdminNav active="mypage" /> : <StaffNav active="mypage" />}
-      contentClassName="pt-4 sm:pt-5"
+      contentClassName="pt-6 sm:pt-5"
     >
       {/* 다른 관리 화면과 같은 본문 폭 */}
       <div className="mx-auto w-full max-w-[1360px] space-y-4">
