@@ -13,6 +13,7 @@ import { formatIBeaconTag } from '../lib/iBeaconTag';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
+import { useMediaQuery } from '../lib/useMediaQuery';
 import {
   Dialog,
   DialogBody,
@@ -21,7 +22,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { AlertTriangle, CheckCircle2, Clock, HelpCircle, Loader2, User } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock, HelpCircle, Loader2, User } from 'lucide-react';
+
+// 사이드바가 결과 옆에 나란히 붙는 시점(xl) — 그 미만에서는 사이드바 대신
+// "상세검색" 토글로 접고 펼치는 폼을 쓴다.
+const DESKTOP_QUERY = '(min-width: 1280px)';
 
 type UsageChainRecord = {
   usageId: string;
@@ -534,6 +539,8 @@ export default function IntegrityVerification() {
   const [error, setError] = useState('');
   const [detailUsageId, setDetailUsageId] = useState<number | null>(null);
   const [locationOptions, setLocationOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
 
   const logout = useLogout();
 
@@ -743,6 +750,131 @@ export default function IntegrityVerification() {
     return status !== 'verified' && status !== 'not_eligible';
   }).length;
 
+  // 검색 조건 필드 + 액션 버튼 — 데스크탑 사이드바와 모바일 "상세검색" 펼침 영역에서 함께 쓴다.
+  const renderSearchFields = () => (
+    <>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">사용자</label>
+        <Input
+          type="text"
+          value={filters.user}
+          onChange={(e) => updateFilter('user', e.target.value)}
+          placeholder="이름, 사용자 ID"
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">장비</label>
+        <Input
+          type="text"
+          value={filters.equipment}
+          onChange={(e) => updateFilter('equipment', e.target.value)}
+          placeholder="장비명 또는 태그 ID"
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">대여 위치</label>
+        <Select
+          value={filters.checkoutLocation || 'all'}
+          onValueChange={(value) => updateFilter('checkoutLocation', value === 'all' ? '' : value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="대여 위치 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 위치</SelectItem>
+            {locationOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">반납 위치</label>
+        <Select
+          value={filters.returnLocation || 'all'}
+          onValueChange={(value) => updateFilter('returnLocation', value === 'all' ? '' : value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="반납 위치 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 위치</SelectItem>
+            {locationOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">조회 시작일</label>
+        <Input
+          type="date"
+          value={filters.startDate}
+          max={filters.endDate || undefined}
+          onChange={(e) => updateStartDate(e.target.value)}
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">조회 종료일</label>
+        <Input
+          type="date"
+          value={filters.endDate}
+          min={filters.startDate || undefined}
+          onChange={(e) => updateEndDate(e.target.value)}
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">정렬 기준</label>
+        <Select value={filters.sortField} onValueChange={(value) => updateFilter('sortField', value as SortField)}>
+          <SelectTrigger>
+            <SelectValue placeholder="정렬 기준 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            {SORT_FIELD_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">정렬 방향</label>
+        <Select value={filters.sortOrder} onValueChange={(value) => updateFilter('sortOrder', value as SortOrder)}>
+          <SelectTrigger>
+            <SelectValue placeholder="정렬 방향 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            {SORT_ORDER_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 pt-4">
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? '조회 중...' : '조회'}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => void fetchHistory(query)} disabled={isLoading}>
+          새로고침
+        </Button>
+        <Button type="button" variant="outline" onClick={onReset}>
+          초기화
+        </Button>
+        <Button type="button" variant="outline" onClick={() => void downloadCsv()} disabled={isLoading || total === 0}>
+          CSV 다운로드
+        </Button>
+      </div>
+    </>
+  );
+
   if (!isAuthorized) {
     return null;
   }
@@ -754,156 +886,52 @@ export default function IntegrityVerification() {
           나머지(이력 목록) 쪽에만 그 패딩을 되돌려준다. */}
       {/* xl:items-start — 자식이 stretch로 늘어나면 사이드바의 sticky가 동작하지 않는다 */}
       <div className="-mt-4 -mb-14 flex w-full flex-col gap-4 sm:-mt-5 xl:flex-row xl:items-start">
-        <ResizableSidebar testId="verification-sidebar">
-          <>
-            <div className="panel-header shrink-0">
-              <div>
-                <div className="panel-title">검색 조건</div>
-              </div>
-            </div>
-
-            {/* 조건이 많아 사이드바를 넘치므로 필드는 스크롤시키되, 버튼 줄은 패널 하단에 고정하지 않고
-                마지막 필드 바로 아래에 이어 붙인다. */}
-            <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">사용자</label>
-                  <Input
-                    type="text"
-                    value={filters.user}
-                    onChange={(e) => updateFilter('user', e.target.value)}
-                    placeholder="이름, 사용자 ID"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">장비</label>
-                  <Input
-                    type="text"
-                    value={filters.equipment}
-                    onChange={(e) => updateFilter('equipment', e.target.value)}
-                    placeholder="장비명 또는 태그 ID"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">대여 위치</label>
-                  <Select
-                    value={filters.checkoutLocation || 'all'}
-                    onValueChange={(value) => updateFilter('checkoutLocation', value === 'all' ? '' : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="대여 위치 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">전체 위치</SelectItem>
-                      {locationOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">반납 위치</label>
-                  <Select
-                    value={filters.returnLocation || 'all'}
-                    onValueChange={(value) => updateFilter('returnLocation', value === 'all' ? '' : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="반납 위치 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">전체 위치</SelectItem>
-                      {locationOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">조회 시작일</label>
-                  <Input
-                    type="date"
-                    value={filters.startDate}
-                    max={filters.endDate || undefined}
-                    onChange={(e) => updateStartDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">조회 종료일</label>
-                  <Input
-                    type="date"
-                    value={filters.endDate}
-                    min={filters.startDate || undefined}
-                    onChange={(e) => updateEndDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">정렬 기준</label>
-                  <Select
-                    value={filters.sortField}
-                    onValueChange={(value) => updateFilter('sortField', value as SortField)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="정렬 기준 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SORT_FIELD_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">정렬 방향</label>
-                  <Select
-                    value={filters.sortOrder}
-                    onValueChange={(value) => updateFilter('sortOrder', value as SortOrder)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="정렬 방향 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SORT_ORDER_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 pt-4">
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading ? '조회 중...' : '조회'}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => void fetchHistory(query)} disabled={isLoading}>
-                    새로고침
-                  </Button>
-                  <Button type="button" variant="outline" onClick={onReset}>
-                    초기화
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void downloadCsv()}
-                    disabled={isLoading || total === 0}
-                  >
-                    CSV 다운로드
-                  </Button>
+        {isDesktop ? (
+          <ResizableSidebar testId="verification-sidebar">
+            <>
+              <div className="panel-header shrink-0">
+                <div>
+                  <div className="panel-title">검색 조건</div>
                 </div>
               </div>
-            </form>
 
-            {error ? <div className="alert alert-error mt-4 shrink-0">{error}</div> : null}
-          </>
-        </ResizableSidebar>
+              {/* 조건이 많아 사이드바를 넘치므로 필드는 스크롤시키되, 버튼 줄은 패널 하단에 고정하지 않고
+                  마지막 필드 바로 아래에 이어 붙인다. */}
+              <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">{renderSearchFields()}</div>
+              </form>
 
-        <div className="flex w-full min-w-0 flex-1 justify-center pt-4 pb-14 pr-[clamp(1rem,2.5vw,2rem)] sm:pt-5">
+              {error ? <div className="alert alert-error mt-4 shrink-0">{error}</div> : null}
+            </>
+          </ResizableSidebar>
+        ) : (
+          // 좁은 화면에서는 사이드바 박스 대신, 결과 목록 위에 "상세검색" 토글로 접힌 폼을 둔다.
+          <div className="space-y-3 pt-6 pl-5 pr-3 sm:pt-5">
+            <div className="panel-title">검색 조건</div>
+
+            <button
+              type="button"
+              aria-expanded={advancedSearchOpen}
+              onClick={() => setAdvancedSearchOpen((prev) => !prev)}
+              className="flex items-center gap-1 text-sm font-medium text-muted-foreground"
+            >
+              상세검색
+              {advancedSearchOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+
+            {advancedSearchOpen ? (
+              <form onSubmit={onSubmit} className="space-y-3">
+                {renderSearchFields()}
+              </form>
+            ) : null}
+
+            {error ? <div className="alert alert-error">{error}</div> : null}
+          </div>
+        )}
+
+        {/* 모바일에서는 이 섹션이 사이드바 없이 단독으로 좌측 벽에 붙어 있었다 — xl 미만에서만
+            좌우 여백을 직접 주고, xl 이상(사이드바와 나란히 배치)에서는 기존 그대로 되돌린다. */}
+        <div className="flex w-full min-w-0 flex-1 justify-center pt-4 pb-14 pl-5 pr-3 sm:pt-5 xl:pl-0 xl:pr-[clamp(1rem,2.5vw,2rem)]">
           <div className="w-full max-w-[1360px]">
             <section className="surface-panel p-5 fade-rise-delay">
               <div className="panel-header">

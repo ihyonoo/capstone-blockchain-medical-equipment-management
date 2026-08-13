@@ -9,9 +9,10 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
+import { useMediaQuery } from '../lib/useMediaQuery';
 import { API_BASE_URL, PUBLIC_APP_URL } from '../lib/runtime';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { BookOpen, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronUp, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogBody,
@@ -21,6 +22,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../components/ui/dialog';
+
+// 사이드바가 목록 옆에 나란히 붙는 시점(xl) — 그 미만에서는 사이드바 대신
+// "상세검색" 토글로 접고 펼치는 폼을 쓴다.
+const DESKTOP_QUERY = '(min-width: 1280px)';
 
 type MappingItem = {
   tag_id: string;
@@ -254,6 +259,8 @@ export default function NfcMapping() {
   const [removingTagId, setRemovingTagId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
 
   const logout = useLogout();
 
@@ -432,6 +439,157 @@ export default function NfcMapping() {
     }
   };
 
+  // 검색 조건 필드 — 데스크탑 사이드바와 모바일 "상세검색" 펼침 영역에서 함께 쓴다.
+  const renderSearchFields = () => (
+    <>
+      <div className="space-y-2">
+        <label htmlFor="filter-equipment-name" className="block text-sm font-medium">
+          장비명
+        </label>
+        <Input
+          id="filter-equipment-name"
+          value={draftFilters.equipmentName}
+          onChange={(e) => updateDraftFilter('equipmentName', e.target.value)}
+          placeholder="예: 수액펌프"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="filter-tag-id" className="block text-sm font-medium">
+          태그
+        </label>
+        <Input
+          id="filter-tag-id"
+          value={draftFilters.tagId}
+          onChange={(e) => updateDraftFilter('tagId', e.target.value)}
+          placeholder="major 또는 minor (예: 0007)"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="filter-nfc-token" className="block text-sm font-medium">
+          NFC 토큰
+        </label>
+        <Input
+          id="filter-nfc-token"
+          value={draftFilters.nfcToken}
+          onChange={(e) => updateDraftFilter('nfcToken', e.target.value)}
+          placeholder="예: defib-001"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">장비 유형</label>
+        <Select value={draftFilters.equipmentType} onValueChange={(value) => updateDraftFilter('equipmentType', value)}>
+          <SelectTrigger aria-label="장비 유형">
+            <SelectValue placeholder="유형 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 유형</SelectItem>
+            {typeOptions.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">매핑 상태</label>
+        <Select
+          value={draftFilters.mappingState}
+          onValueChange={(value) => updateDraftFilter('mappingState', value as MappingFilters['mappingState'])}
+        >
+          <SelectTrigger aria-label="매핑 상태">
+            <SelectValue placeholder="매핑 상태 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            {MAPPING_STATE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* 정렬은 검색 조건이 아니라 보기 설정이라 검색 버튼과 무관하게 즉시 반영한다. */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">major 정렬</label>
+        <Select
+          value={sort.major}
+          onValueChange={(value) => {
+            // major/minor를 건드리면 단독 모드인 등록 시각 정렬은 물러난다.
+            setSort((prev) => ({ ...prev, major: value as SortDirection, createdAt: 'off' }));
+            setPage(1);
+          }}
+        >
+          <SelectTrigger aria-label="major 정렬">
+            <SelectValue placeholder="major 정렬 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            {DIRECTION_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">minor 정렬</label>
+        <Select
+          value={sort.minor}
+          onValueChange={(value) => {
+            setSort((prev) => ({ ...prev, minor: value as SortDirection, createdAt: 'off' }));
+            setPage(1);
+          }}
+        >
+          <SelectTrigger aria-label="minor 정렬">
+            <SelectValue placeholder="minor 정렬 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            {DIRECTION_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          major와 함께 켜면 major가 먼저 적용되고 그 안에서 minor로 나뉩니다.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">등록 시각 정렬</label>
+        <Select
+          value={sort.createdAt}
+          onValueChange={(value) => {
+            // 단독 모드 — 켜는 순간 major/minor 정렬을 해제한다.
+            const next = value as MappingSort['createdAt'];
+            setSort(next === 'off' ? DEFAULT_MAPPING_SORT : { major: 'off', minor: 'off', createdAt: next });
+            setPage(1);
+          }}
+        >
+          <SelectTrigger aria-label="등록 시각 정렬">
+            <SelectValue placeholder="등록 시각 정렬 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            {CREATED_AT_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">고르면 major·minor 정렬은 해제됩니다.</p>
+      </div>
+    </>
+  );
+
   if (!isAuthorized) {
     return null;
   }
@@ -443,191 +601,76 @@ export default function NfcMapping() {
           나머지(매핑 목록) 쪽에만 그 패딩을 되돌려준다. */}
       {/* xl:items-start — 자식이 stretch로 늘어나면 사이드바의 sticky가 동작하지 않는다 */}
       <div className="-mt-4 -mb-14 flex w-full flex-col gap-4 sm:-mt-5 xl:flex-row xl:items-start">
-        <ResizableSidebar testId="nfc-mapping-sidebar">
-          <>
-            <div className="panel-header shrink-0">
-              <div>
-                <div className="panel-title">매핑 검색</div>
-              </div>
-            </div>
-
-            {/* 조건을 항목별로 나눠 무엇으로 좁힐 수 있는지 한눈에 보이게 한다.
-                버튼은 마지막 필드 바로 아래에 붙인다 — 패널 바닥으로 내리면 필드와 멀어져 따로 논다. */}
-            <form onSubmit={onSearch} className="flex min-h-0 shrink flex-col">
-              <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
-                <div className="space-y-2">
-                  <label htmlFor="filter-equipment-name" className="block text-sm font-medium">
-                    장비명
-                  </label>
-                  <Input
-                    id="filter-equipment-name"
-                    value={draftFilters.equipmentName}
-                    onChange={(e) => updateDraftFilter('equipmentName', e.target.value)}
-                    placeholder="예: 수액펌프"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="filter-tag-id" className="block text-sm font-medium">
-                    태그
-                  </label>
-                  <Input
-                    id="filter-tag-id"
-                    value={draftFilters.tagId}
-                    onChange={(e) => updateDraftFilter('tagId', e.target.value)}
-                    placeholder="major 또는 minor (예: 0007)"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="filter-nfc-token" className="block text-sm font-medium">
-                    NFC 토큰
-                  </label>
-                  <Input
-                    id="filter-nfc-token"
-                    value={draftFilters.nfcToken}
-                    onChange={(e) => updateDraftFilter('nfcToken', e.target.value)}
-                    placeholder="예: defib-001"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">장비 유형</label>
-                  <Select
-                    value={draftFilters.equipmentType}
-                    onValueChange={(value) => updateDraftFilter('equipmentType', value)}
-                  >
-                    <SelectTrigger aria-label="장비 유형">
-                      <SelectValue placeholder="유형 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">전체 유형</SelectItem>
-                      {typeOptions.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">매핑 상태</label>
-                  <Select
-                    value={draftFilters.mappingState}
-                    onValueChange={(value) =>
-                      updateDraftFilter('mappingState', value as MappingFilters['mappingState'])
-                    }
-                  >
-                    <SelectTrigger aria-label="매핑 상태">
-                      <SelectValue placeholder="매핑 상태 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MAPPING_STATE_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* 정렬은 검색 조건이 아니라 보기 설정이라 검색 버튼과 무관하게 즉시 반영한다. */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">major 정렬</label>
-                  <Select
-                    value={sort.major}
-                    onValueChange={(value) => {
-                      // major/minor를 건드리면 단독 모드인 등록 시각 정렬은 물러난다.
-                      setSort((prev) => ({ ...prev, major: value as SortDirection, createdAt: 'off' }));
-                      setPage(1);
-                    }}
-                  >
-                    <SelectTrigger aria-label="major 정렬">
-                      <SelectValue placeholder="major 정렬 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DIRECTION_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">minor 정렬</label>
-                  <Select
-                    value={sort.minor}
-                    onValueChange={(value) => {
-                      setSort((prev) => ({ ...prev, minor: value as SortDirection, createdAt: 'off' }));
-                      setPage(1);
-                    }}
-                  >
-                    <SelectTrigger aria-label="minor 정렬">
-                      <SelectValue placeholder="minor 정렬 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DIRECTION_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    major와 함께 켜면 major가 먼저 적용되고 그 안에서 minor로 나뉩니다.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">등록 시각 정렬</label>
-                  <Select
-                    value={sort.createdAt}
-                    onValueChange={(value) => {
-                      // 단독 모드 — 켜는 순간 major/minor 정렬을 해제한다.
-                      const next = value as MappingSort['createdAt'];
-                      setSort(next === 'off' ? DEFAULT_MAPPING_SORT : { major: 'off', minor: 'off', createdAt: next });
-                      setPage(1);
-                    }}
-                  >
-                    <SelectTrigger aria-label="등록 시각 정렬">
-                      <SelectValue placeholder="등록 시각 정렬 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CREATED_AT_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">고르면 major·minor 정렬은 해제됩니다.</p>
+        {isDesktop ? (
+          <ResizableSidebar testId="nfc-mapping-sidebar">
+            <>
+              <div className="panel-header shrink-0">
+                <div>
+                  <div className="panel-title">매핑 검색</div>
                 </div>
               </div>
 
-              <div className="mt-4 flex shrink-0 gap-2">
-                <Button type="submit" className="flex-1">
-                  <Search className="h-4 w-4" />
-                  검색
-                </Button>
-                <Button type="button" variant="outline" onClick={onResetFilters}>
-                  초기화
-                </Button>
+              {/* 조건을 항목별로 나눠 무엇으로 좁힐 수 있는지 한눈에 보이게 한다.
+                  버튼은 마지막 필드 바로 아래에 붙인다 — 패널 바닥으로 내리면 필드와 멀어져 따로 논다. */}
+              <form onSubmit={onSearch} className="flex min-h-0 shrink flex-col">
+                <div className="min-h-0 space-y-3 overflow-y-auto pr-1">{renderSearchFields()}</div>
+
+                <div className="mt-4 flex shrink-0 gap-2">
+                  <Button type="submit" className="flex-1">
+                    <Search className="h-4 w-4" />
+                    검색
+                  </Button>
+                  <Button type="button" variant="outline" onClick={onResetFilters}>
+                    초기화
+                  </Button>
+                </div>
+              </form>
+
+              {/* 남는 세로 공간은 여기서 흡수해, 가이드 버튼만 패널 바닥에 남는다. */}
+              <div className="min-h-4 flex-1" />
+
+              <div className="shrink-0 border-t border-border/70 pt-4">
+                <MappingGuideDialog />
               </div>
-            </form>
+            </>
+          </ResizableSidebar>
+        ) : (
+          // 좁은 화면에서는 사이드바 박스 대신, 목록 위에 "상세검색" 토글로 접힌 폼을 둔다.
+          <div className="space-y-3 pt-6 pl-5 pr-3 sm:pt-5">
+            <div className="panel-title">매핑 검색</div>
 
-            {/* 남는 세로 공간은 여기서 흡수해, 가이드 버튼만 패널 바닥에 남는다. */}
-            <div className="min-h-4 flex-1" />
+            <button
+              type="button"
+              aria-expanded={advancedSearchOpen}
+              onClick={() => setAdvancedSearchOpen((prev) => !prev)}
+              className="flex items-center gap-1 text-sm font-medium text-muted-foreground"
+            >
+              상세검색
+              {advancedSearchOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
 
-            <div className="shrink-0 border-t border-border/70 pt-4">
-              <MappingGuideDialog />
-            </div>
-          </>
-        </ResizableSidebar>
+            {advancedSearchOpen ? (
+              <form onSubmit={onSearch} className="space-y-3">
+                {renderSearchFields()}
+                <div className="flex gap-2">
+                  <Button type="submit" className="flex-1">
+                    <Search className="h-4 w-4" />
+                    검색
+                  </Button>
+                  <Button type="button" variant="outline" onClick={onResetFilters}>
+                    초기화
+                  </Button>
+                </div>
+              </form>
+            ) : null}
 
-        <div className="flex w-full min-w-0 flex-1 justify-center pt-4 pb-14 pr-[clamp(1rem,2.5vw,2rem)] sm:pt-5">
+            <MappingGuideDialog />
+          </div>
+        )}
+
+        {/* 모바일에서는 이 섹션이 사이드바 없이 단독으로 좌측 벽에 붙어 있었다 — xl 미만에서만
+            좌우 여백을 직접 주고, xl 이상(사이드바와 나란히 배치)에서는 기존 그대로 되돌린다. */}
+        <div className="flex w-full min-w-0 flex-1 justify-center pt-4 pb-14 pl-5 pr-3 sm:pt-5 xl:pl-0 xl:pr-[clamp(1rem,2.5vw,2rem)]">
           <div className="w-full max-w-[1360px]">
             <section className="surface-panel p-5 fade-rise-delay">
               <div className="panel-header">
