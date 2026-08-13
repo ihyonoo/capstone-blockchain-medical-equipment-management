@@ -85,5 +85,18 @@ describe('StaffNav', () => {
       expect(screen.queryByRole('button', { name: '마이페이지' })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: '메뉴 열기' })).toBeInTheDocument();
     });
+
+    it('keeps the dropdown labels on one line instead of wrapping per character', () => {
+      render(
+        <MemoryRouter initialEntries={['/equipment']}>
+          <StaffNav active="equipment" />
+        </MemoryRouter>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: '메뉴 열기' }));
+
+      expect(screen.getByRole('button', { name: '마이페이지' })).toHaveClass('app-nav-tab--menu');
+      expect(screen.getByRole('button', { name: '로그아웃' })).toHaveClass('app-nav-tab--menu');
+    });
   });
 });

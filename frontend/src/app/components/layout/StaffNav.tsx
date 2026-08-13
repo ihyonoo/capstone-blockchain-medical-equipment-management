@@ -27,13 +27,13 @@ export default function StaffNav({ active }: StaffNavProps) {
     navigate(LOGIN_PATH, { replace: true });
   };
 
-  const renderTabs = (onNavigate: (path: string) => void) => (
+  const renderTabs = (onNavigate: (path: string) => void, inMenu: boolean) => (
     <>
       {TABS.map((tab) => (
         <button
           key={tab.key}
           type="button"
-          className={cn('app-nav-tab', active === tab.key && 'app-nav-tab--active')}
+          className={cn('app-nav-tab', active === tab.key && 'app-nav-tab--active', inMenu && 'app-nav-tab--menu')}
           onClick={() => onNavigate(tab.path)}
         >
           {tab.label}
@@ -41,7 +41,7 @@ export default function StaffNav({ active }: StaffNavProps) {
       ))}
       <button
         type="button"
-        className="app-nav-tab app-nav-tab--logout"
+        className={cn('app-nav-tab app-nav-tab--logout', inMenu && 'app-nav-tab--menu')}
         onClick={() => {
           setMenuOpen(false);
           logout();
@@ -53,7 +53,7 @@ export default function StaffNav({ active }: StaffNavProps) {
   );
 
   if (isWide) {
-    return renderTabs(navigate);
+    return renderTabs(navigate, false);
   }
 
   return (
@@ -68,11 +68,11 @@ export default function StaffNav({ active }: StaffNavProps) {
         {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
       </button>
       {menuOpen ? (
-        <div className="absolute right-0 top-full z-30 flex flex-col items-end gap-1 rounded-md border border-border bg-card p-3 shadow-lg">
+        <div className="absolute right-0 top-full z-30 flex w-max flex-col items-end gap-1 rounded-md border border-border bg-card p-3 shadow-lg">
           {renderTabs((path) => {
             setMenuOpen(false);
             navigate(path);
-          })}
+          }, true)}
         </div>
       ) : null}
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -129,6 +130,7 @@ export default function EquipmentSearch() {
   const [highlightedZone, setHighlightedZone] = useState<FloorMapHighlight | null>(null);
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [resultsOpen, setResultsOpen] = useState(false);
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const isAuthorized = useAuthGuard(() => {
     try {
       const session = getStoredAuthSession();
@@ -604,8 +606,9 @@ export default function EquipmentSearch() {
         ) : (
           // 좁은 화면에서는 사이드바 박스 대신, 지도 바로 위에 검색바 + 가로 스크롤 필터를
           // 얹고 결과 목록은 다이얼로그로 뗀다 — 세로로 쌓이는 박스 하나가 더 늘어나는 느낌을 피한다.
-          // bleed 레이아웃이라 페이지 기본 좌우 여백이 없다 — 지도 쪽과 같은 clamp로 직접 준다.
-          <div className="space-y-3 pl-[clamp(1rem,2.5vw,2rem)] pr-[clamp(0.75rem,2vw,1.25rem)]">
+          // bleed 레이아웃이라 페이지 기본 좌우 여백이 없다 — 지도 쪽과 같은 clamp로 직접 줬었는데,
+          // 모바일 루트 폰트(14px)와 좁은 vw에서 clamp 하한(14px)에 붙어 거의 안 보여서 고정값으로 바꿨다.
+          <div className="space-y-3 pl-5 pr-3">
             <div className="flex items-center justify-between gap-2">
               <div className="panel-title">장비 위치 검색</div>
               <Badge variant="outline">추적 중 {equipment.length}개</Badge>
@@ -617,13 +620,27 @@ export default function EquipmentSearch() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
 
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {typeFilterField(true)}
-              {floorFilterField(true)}
-              {locationFilterField(true)}
-            </div>
+            <button
+              type="button"
+              aria-expanded={advancedSearchOpen}
+              onClick={() => setAdvancedSearchOpen((prev) => !prev)}
+              className="flex items-center gap-1 text-sm font-medium text-muted-foreground"
+            >
+              상세검색
+              {advancedSearchOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
 
-            {toggleFilters()}
+            {advancedSearchOpen ? (
+              <>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {typeFilterField(true)}
+                  {floorFilterField(true)}
+                  {locationFilterField(true)}
+                </div>
+
+                {toggleFilters()}
+              </>
+            ) : null}
 
             {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
 

@@ -31,13 +31,13 @@ export default function AdminNav({ active }: AdminNavProps) {
     navigate(LOGIN_PATH, { replace: true });
   };
 
-  const renderTabs = (onNavigate: (path: string) => void) => (
+  const renderTabs = (onNavigate: (path: string) => void, inMenu: boolean) => (
     <>
       {TABS.map((tab) => (
         <button
           key={tab.key}
           type="button"
-          className={cn('app-nav-tab', active === tab.key && 'app-nav-tab--active')}
+          className={cn('app-nav-tab', active === tab.key && 'app-nav-tab--active', inMenu && 'app-nav-tab--menu')}
           onClick={() => onNavigate(tab.path)}
         >
           {tab.label}
@@ -45,7 +45,7 @@ export default function AdminNav({ active }: AdminNavProps) {
       ))}
       <button
         type="button"
-        className="app-nav-tab app-nav-tab--logout"
+        className={cn('app-nav-tab app-nav-tab--logout', inMenu && 'app-nav-tab--menu')}
         onClick={() => {
           setMenuOpen(false);
           logout();
@@ -57,7 +57,7 @@ export default function AdminNav({ active }: AdminNavProps) {
   );
 
   if (isWide) {
-    return renderTabs(navigate);
+    return renderTabs(navigate, false);
   }
 
   return (
@@ -72,11 +72,13 @@ export default function AdminNav({ active }: AdminNavProps) {
         {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
       </button>
       {menuOpen ? (
-        <div className="absolute right-0 top-full z-30 flex flex-col items-end gap-1 rounded-md border border-border bg-card p-3 shadow-lg">
+        // w-max — 조상 flex 컨테이너가 좁아져도(브랜드 로고가 길어지는 등) 드롭다운이
+        // 같이 눌려서 글자가 한 글자씩 세로로 줄바꿈되는 일이 없도록 폭을 내용 기준으로 고정한다.
+        <div className="absolute right-0 top-full z-30 flex w-max flex-col items-end gap-1 rounded-md border border-border bg-card p-3 shadow-lg">
           {renderTabs((path) => {
             setMenuOpen(false);
             navigate(path);
-          })}
+          }, true)}
         </div>
       ) : null}
     </div>
