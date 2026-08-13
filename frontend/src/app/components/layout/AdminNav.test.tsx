@@ -1,7 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router';
 import AdminNav from './AdminNav';
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: width });
+  window.dispatchEvent(new Event('resize'));
+}
 
 function LocationProbe() {
   return <div data-testid="location">{useLocation().pathname}</div>;
@@ -39,5 +44,47 @@ describe('AdminNav', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'NFC 매핑' }));
     expect(screen.getByTestId('location')).toHaveTextContent('/admin/nfc-mapping');
+  });
+
+  describe('on a narrow (mobile) viewport', () => {
+    beforeEach(() => setViewportWidth(375));
+    afterEach(() => setViewportWidth(1440));
+
+    it('hides the tab buttons behind a menu toggle', () => {
+      render(
+        <MemoryRouter initialEntries={['/admin/devices']}>
+          <AdminNav active="devices" />
+        </MemoryRouter>,
+      );
+
+      expect(screen.queryByRole('button', { name: 'NFC 매핑' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '메뉴 열기' })).toBeInTheDocument();
+    });
+
+    it('reveals the tabs when the toggle is opened, and navigates + closes on tab click', () => {
+      render(
+        <MemoryRouter initialEntries={['/admin/devices']}>
+          <Routes>
+            <Route
+              path="*"
+              element={
+                <>
+                  <AdminNav active="devices" />
+                  <LocationProbe />
+                </>
+              }
+            />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: '메뉴 열기' }));
+      expect(screen.getByRole('button', { name: 'NFC 매핑' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'NFC 매핑' }));
+      expect(screen.getByTestId('location')).toHaveTextContent('/admin/nfc-mapping');
+      expect(screen.queryByRole('button', { name: 'NFC 매핑' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '메뉴 열기' })).toBeInTheDocument();
+    });
   });
 });

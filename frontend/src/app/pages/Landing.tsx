@@ -116,14 +116,14 @@ export default function Landing() {
           <div className="landing__container landing__hero-inner">
             <h1 className="landing__headline">
               장비의 위치부터 사용 이력까지,
-              <br />
+              <br className="landing__headline-break" />
               <em>위변조 없이</em> 증명합니다
             </h1>
             <p className="landing__subcopy">
               MediLedger EquipTrace는 BLE 기반 실시간 위치 추적과
-              <br />
+              <br className="landing__subcopy-break" />
               프라이빗 블록체인 앵커링으로 의료 장비의 대여·반납 이력을
-              <br />
+              <br className="landing__subcopy-break" />
               자동으로 기록하고 사후 검증까지 지원합니다.
             </p>
             <div className="landing__badges">

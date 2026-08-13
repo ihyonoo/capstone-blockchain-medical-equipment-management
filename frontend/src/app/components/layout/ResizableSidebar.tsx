@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { clampSidebarWidth } from '../../lib/sidebarResize';
+import { useMediaQuery } from '../../lib/useMediaQuery';
+
+// 사용하는 화면들이 xl(1280px) 미만에서 flex-col로 세로 배치하므로, 그 아래에서는
+// 드래그 리사이즈가 의미 없다 — 폭을 고정하지 않고 w-full에 맡긴다.
+const DESKTOP_QUERY = '(min-width: 1280px)';
 
 // 접힌 사이드바는 접기 토글 버튼이 들어갈 만큼만 남기고 좁힌다.
 const SIDEBAR_COLLAPSED_WIDTH = 32;
@@ -18,6 +23,7 @@ type ResizableSidebarProps = {
  * 패널 안에 무엇이 들어가는지는 알지 않는다.
  */
 export default function ResizableSidebar({ testId, children }: ResizableSidebarProps) {
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [collapsed, setCollapsed] = useState(false);
   const [width, setWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
@@ -55,7 +61,7 @@ export default function ResizableSidebar({ testId, children }: ResizableSidebarP
       // 넓은 화면에서는 sticky로 상단바 바로 아래에 붙여, 오른쪽 본문을 스크롤해도 사이드바가
       // 따라 밀려 하단이 잘리지 않게 한다(좁은 화면은 위아래로 쌓이므로 제외).
       className="relative max-h-[calc(100vh-4.8rem-1px)] w-full max-w-full shrink-0 overflow-hidden xl:sticky xl:top-[calc(4.8rem+1px)] xl:h-[calc(100vh-4.8rem-1px)]"
-      style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : width }}
+      style={collapsed ? { width: SIDEBAR_COLLAPSED_WIDTH } : isDesktop ? { width } : undefined}
     >
       {!collapsed ? (
         <section className="flex h-full flex-col fade-rise pr-3">
@@ -70,7 +76,7 @@ export default function ResizableSidebar({ testId, children }: ResizableSidebarP
         type="button"
         data-testid="sidebar-resize-handle"
         aria-label={collapsed ? '검색 패널 펼치기' : '검색 패널 크기 조절 — 더블클릭하면 접힙니다'}
-        onMouseDown={collapsed ? undefined : handleResizeStart}
+        onMouseDown={collapsed || !isDesktop ? undefined : handleResizeStart}
         onDoubleClick={() => setCollapsed((prev) => !prev)}
         onClick={collapsed ? () => setCollapsed(false) : undefined}
         className={`group absolute -right-1 top-0 z-10 flex h-full w-3 items-center justify-center border-0 bg-transparent p-0 ${
