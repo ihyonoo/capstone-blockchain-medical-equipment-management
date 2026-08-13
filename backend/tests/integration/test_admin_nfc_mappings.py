@@ -20,3 +20,14 @@ class TestListNfcMappings:
         items = {item["tag_id"]: item for item in response.json()["items"]}
         assert items["EQ-REAL-0001"]["is_real_hardware"] is True
         assert items["EQ-SIM-0001"]["is_real_hardware"] is False
+
+    def test_reports_when_each_tag_was_registered_so_the_admin_can_sort_by_it(self, client, seed_tag, seed_user):
+        seed_tag(tag_id="EQ-0001", equipment_name="장비 1")
+        _, headers = seed_user(username="admin1", role="admin", position=None)
+
+        response = client.get("/admin/nfc-mappings", headers=headers)
+
+        assert response.status_code == 200
+        item = response.json()["items"][0]
+        assert isinstance(item["created_at"], int)
+        assert item["created_at"] > 0

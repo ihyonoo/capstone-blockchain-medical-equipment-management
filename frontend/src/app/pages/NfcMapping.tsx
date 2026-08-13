@@ -34,6 +34,8 @@ type MappingItem = {
   reader_id: string | null;
   location: string | null;
   updated_at: number | null;
+  // 장비 등록 시각. 예전 응답에는 없을 수 있어 optional.
+  created_at?: number | null;
   is_stale: boolean;
 };
 
@@ -56,6 +58,15 @@ function formatTagIdentity(tagId: string) {
   return `major ${major} · minor ${minor}`;
 }
 
+/** 등록 시각은 상대 시간이 의미 없어(대부분 오래 전) 날짜로 보여준다. */
+function formatRegisteredAt(createdAt: number | null | undefined) {
+  if (!createdAt) return '알 수 없음';
+  const date = new Date(createdAt * 1000);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 function formatAgo(updatedAt: number | null) {
   if (!updatedAt) return '미수신';
   const now = Math.floor(Date.now() / 1000);
@@ -74,6 +85,64 @@ type MappingFilters = {
   equipmentType: string;
   mappingState: 'all' | 'mapped' | 'unmapped';
 };
+
+/** 'off'는 그 키로 정렬하지 않는다는 뜻. major와 minor는 각자 방향을 따로 가진다. */
+type SortDirection = 'off' | 'asc' | 'desc';
+
+type MappingSort = {
+  major: SortDirection;
+  minor: SortDirection;
+  /** 등록 시각 기준. 켜면 major/minor 정렬은 해제된다(단독 모드). */
+  createdAt: 'off' | 'newest' | 'oldest';
+};
+
+const DEFAULT_MAPPING_SORT: MappingSort = { major: 'off', minor: 'off', createdAt: 'off' };
+
+const DIRECTION_OPTIONS: Array<{ value: SortDirection; label: string }> = [
+  { value: 'off', label: '정렬 안 함' },
+  { value: 'asc', label: '오름차순' },
+  { value: 'desc', label: '내림차순' },
+];
+
+const CREATED_AT_OPTIONS: Array<{ value: MappingSort['createdAt']; label: string }> = [
+  { value: 'off', label: '정렬 안 함' },
+  { value: 'newest', label: '최신순' },
+  { value: 'oldest', label: '오래된순' },
+];
+
+/** tag_id의 major/minor를 숫자로 뽑는다. 형식이 어긋나면 정렬 뒤로 밀리도록 Infinity를 준다. */
+function getTagNumbers(tagId: string): { major: number; minor: number } {
+  const parts = tagId.split(':');
+  if (parts.length < 3) return { major: Infinity, minor: Infinity };
+  const major = Number(parts[1]);
+  const minor = Number(parts[2]);
+  return {
+    major: Number.isFinite(major) ? major : Infinity,
+    minor: Number.isFinite(minor) ? minor : Infinity,
+  };
+}
+
+/** 지정된 키를 우선순위(major → minor) 순으로 적용한다. createdAt이 켜져 있으면 그것만 쓴다. */
+function sortMappingItems(items: MappingItem[], sort: MappingSort): MappingItem[] {
+  const sorted = [...items];
+  if (sort.createdAt !== 'off') {
+    const factor = sort.createdAt === 'newest' ? -1 : 1;
+    return sorted.sort((a, b) => factor * ((a.created_at ?? 0) - (b.created_at ?? 0)));
+  }
+  if (sort.major === 'off' && sort.minor === 'off') return sorted;
+
+  return sorted.sort((a, b) => {
+    const left = getTagNumbers(a.tag_id);
+    const right = getTagNumbers(b.tag_id);
+    if (sort.major !== 'off' && left.major !== right.major) {
+      return sort.major === 'asc' ? left.major - right.major : right.major - left.major;
+    }
+    if (sort.minor !== 'off' && left.minor !== right.minor) {
+      return sort.minor === 'asc' ? left.minor - right.minor : right.minor - left.minor;
+    }
+    return 0;
+  });
+}
 
 const DEMO_NOTICE = '데모 체험 계정에서는 NFC 매핑을 변경할 수 없습니다.';
 
@@ -178,6 +247,7 @@ export default function NfcMapping() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [hideSimulated, setHideSimulated] = useState(false);
+  const [sort, setSort] = useState<MappingSort>(DEFAULT_MAPPING_SORT);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [savingTagId, setSavingTagId] = useState<string | null>(null);
@@ -277,7 +347,8 @@ export default function NfcMapping() {
   };
 
   // 검색 조건이 아니라 보기 설정이라, 검색 버튼과 무관하게 즉시 반영한다.
-  const visibleItems = hideSimulated ? filteredItems.filter((item) => item.is_real_hardware !== false) : filteredItems;
+  const shownItems = hideSimulated ? filteredItems.filter((item) => item.is_real_hardware !== false) : filteredItems;
+  const visibleItems = useMemo(() => sortMappingItems(shownItems, sort), [shownItems, sort]);
 
   // 결과가 줄어 현재 페이지가 사라진 경우에도 빈 화면이 되지 않도록 렌더 시점에 페이지를 좁힌다.
   const safePage = clampPage(page, getTotalPages(visibleItems.length, pageSize));
@@ -460,6 +531,80 @@ export default function NfcMapping() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* 정렬은 검색 조건이 아니라 보기 설정이라 검색 버튼과 무관하게 즉시 반영한다. */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">major 정렬</label>
+                  <Select
+                    value={sort.major}
+                    onValueChange={(value) => {
+                      // major/minor를 건드리면 단독 모드인 등록 시각 정렬은 물러난다.
+                      setSort((prev) => ({ ...prev, major: value as SortDirection, createdAt: 'off' }));
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger aria-label="major 정렬">
+                      <SelectValue placeholder="major 정렬 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DIRECTION_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">minor 정렬</label>
+                  <Select
+                    value={sort.minor}
+                    onValueChange={(value) => {
+                      setSort((prev) => ({ ...prev, minor: value as SortDirection, createdAt: 'off' }));
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger aria-label="minor 정렬">
+                      <SelectValue placeholder="minor 정렬 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DIRECTION_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    major와 함께 켜면 major가 먼저 적용되고 그 안에서 minor로 나뉩니다.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">등록 시각 정렬</label>
+                  <Select
+                    value={sort.createdAt}
+                    onValueChange={(value) => {
+                      // 단독 모드 — 켜는 순간 major/minor 정렬을 해제한다.
+                      const next = value as MappingSort['createdAt'];
+                      setSort(next === 'off' ? DEFAULT_MAPPING_SORT : { major: 'off', minor: 'off', createdAt: next });
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger aria-label="등록 시각 정렬">
+                      <SelectValue placeholder="등록 시각 정렬 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CREATED_AT_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">고르면 major·minor 정렬은 해제됩니다.</p>
+                </div>
               </div>
 
               <div className="mt-4 flex shrink-0 gap-2">
@@ -540,7 +685,8 @@ export default function NfcMapping() {
                             </div>
                             <div className="text-sm text-muted-foreground">{formatTagIdentity(item.tag_id)}</div>
                             <div className="text-sm text-muted-foreground">
-                              현재 위치: {item.location ?? '미수신'} · 최근 수신: {formatAgo(item.updated_at)}
+                              현재 위치: {item.location ?? '미수신'} · 최근 수신: {formatAgo(item.updated_at)} · 등록:{' '}
+                              {formatRegisteredAt(item.created_at)}
                             </div>
                           </div>
 

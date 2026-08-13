@@ -1060,7 +1060,8 @@ def list_nfc_mappings(authorization: str | None = Header(default=None)):
       t.nfc_tag_uid,
       t.asset_status,
       t.is_active,
-      t.is_real_hardware
+      t.is_real_hardware,
+      EXTRACT(EPOCH FROM t.created_at)::BIGINT AS created_at_epoch
     FROM tags t
     WHERE t.is_active = TRUE
     ORDER BY t.equipment_name ASC, t.tag_id ASC
@@ -1087,6 +1088,8 @@ def list_nfc_mappings(authorization: str | None = Header(default=None)):
                 "is_active": row[5],
                 # 관리자 화면에서 모의 데이터를 숨길 수 있게 실물 여부를 함께 내려준다.
                 "is_real_hardware": row[6],
+                # 등록 시각. 매핑 화면의 "최신순" 정렬 기준이다.
+                "created_at": row[7],
                 "reader_id": location_snapshot["reader_id"] if location_snapshot else None,
                 "location": location_snapshot["location"] if location_snapshot else None,
                 "updated_at": location_snapshot["updated_at"] if location_snapshot else None,
