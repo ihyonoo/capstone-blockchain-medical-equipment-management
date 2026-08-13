@@ -345,8 +345,8 @@ export default function EquipmentSearch() {
   // 검색/필터 필드들 — 데스크탑 사이드바(세로 목록)와 모바일 가로 스크롤 바에서 함께 쓴다.
   // compact=true면 라벨을 없애고 스크롤 바 안에서 줄어들지 않는 폭을 준다.
   const typeFilterField = (compact: boolean) => (
-    <div className={compact ? 'w-36 shrink-0' : 'space-y-2'}>
-      {compact ? null : <label className="text-base font-medium">장비 유형</label>}
+    <div className={compact ? 'w-36 shrink-0 space-y-1' : 'space-y-2'}>
+      <label className={compact ? 'text-xs text-muted-foreground' : 'text-base font-medium'}>장비 유형</label>
       <Select value={selectedType} onValueChange={setSelectedType}>
         <SelectTrigger>
           <SelectValue placeholder="유형 선택" />
@@ -363,8 +363,8 @@ export default function EquipmentSearch() {
   );
 
   const floorFilterField = (compact: boolean) => (
-    <div className={compact ? 'w-28 shrink-0' : 'space-y-2'}>
-      {compact ? null : <label className="text-base font-medium">층</label>}
+    <div className={compact ? 'w-28 shrink-0 space-y-1' : 'space-y-2'}>
+      <label className={compact ? 'text-xs text-muted-foreground' : 'text-base font-medium'}>층</label>
       <Select
         value={String(selectedListFloor)}
         onValueChange={(value) => setSelectedListFloor(value === '전체' ? '전체' : (Number(value) as FloorNumber))}
@@ -385,8 +385,8 @@ export default function EquipmentSearch() {
   );
 
   const locationFilterField = (compact: boolean) => (
-    <div className={compact ? 'w-36 shrink-0' : 'space-y-2'}>
-      {compact ? null : <label className="text-base font-medium">위치 필터</label>}
+    <div className={compact ? 'w-36 shrink-0 space-y-1' : 'space-y-2'}>
+      <label className={compact ? 'text-xs text-muted-foreground' : 'text-base font-medium'}>위치 필터</label>
       <Select value={selectedLocation} onValueChange={setSelectedLocation}>
         <SelectTrigger aria-label="위치">
           <SelectValue placeholder="위치 선택" />
@@ -402,29 +402,15 @@ export default function EquipmentSearch() {
     </div>
   );
 
-  const toggleFilters = (compact: boolean) => (
-    <div
-      data-testid="equipment-filter-toggles"
-      className={compact ? 'flex shrink-0 items-center gap-4' : 'flex flex-wrap items-center gap-x-5 gap-y-2'}
-    >
-      <label
-        className={
-          compact
-            ? 'flex items-center gap-2 whitespace-nowrap text-base font-medium'
-            : 'flex items-center gap-2 text-base font-medium'
-        }
-      >
+  // 두 토글은 짝이라 한 줄에 둔다 — 폭이 좁으면 자동으로 줄바꿈된다.
+  const toggleFilters = () => (
+    <div data-testid="equipment-filter-toggles" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+      <label className="flex items-center gap-2 text-base font-medium">
         <input type="checkbox" checked={availableOnly} onChange={(event) => setAvailableOnly(event.target.checked)} />
         사용 가능 장비만 보기
       </label>
 
-      <label
-        className={
-          compact
-            ? 'flex items-center gap-2 whitespace-nowrap text-base font-medium'
-            : 'flex items-center gap-2 text-base font-medium'
-        }
-      >
+      <label className="flex items-center gap-2 text-base font-medium">
         <input type="checkbox" checked={hideSimulated} onChange={(event) => setHideSimulated(event.target.checked)} />
         시뮬레이션 장비 숨기기
       </label>
@@ -598,8 +584,7 @@ export default function EquipmentSearch() {
                 {typeFilterField(false)}
                 {floorFilterField(false)}
                 {locationFilterField(false)}
-                {/* 두 토글은 짝이라 한 줄에 둔다 — 사이드바를 좁히면 자동으로 줄바꿈된다. */}
-                {toggleFilters(false)}
+                {toggleFilters()}
 
                 {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
               </div>
@@ -619,7 +604,8 @@ export default function EquipmentSearch() {
         ) : (
           // 좁은 화면에서는 사이드바 박스 대신, 지도 바로 위에 검색바 + 가로 스크롤 필터를
           // 얹고 결과 목록은 다이얼로그로 뗀다 — 세로로 쌓이는 박스 하나가 더 늘어나는 느낌을 피한다.
-          <div className="space-y-3">
+          // bleed 레이아웃이라 페이지 기본 좌우 여백이 없다 — 지도 쪽과 같은 clamp로 직접 준다.
+          <div className="space-y-3 pl-[clamp(1rem,2.5vw,2rem)] pr-[clamp(0.75rem,2vw,1.25rem)]">
             <div className="flex items-center justify-between gap-2">
               <div className="panel-title">장비 위치 검색</div>
               <Badge variant="outline">추적 중 {equipment.length}개</Badge>
@@ -631,12 +617,13 @@ export default function EquipmentSearch() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
 
-            <div className="-mx-[clamp(1rem,2.5vw,2rem)] flex gap-2 overflow-x-auto px-[clamp(1rem,2.5vw,2rem)] pb-1">
+            <div className="flex gap-2 overflow-x-auto pb-1">
               {typeFilterField(true)}
               {floorFilterField(true)}
               {locationFilterField(true)}
-              {toggleFilters(true)}
             </div>
+
+            {toggleFilters()}
 
             {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
 

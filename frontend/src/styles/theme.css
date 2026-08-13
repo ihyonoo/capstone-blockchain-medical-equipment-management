@@ -609,17 +609,19 @@
       min-height: 3.5rem;
     }
 
-    .app-shell__actions {
-      width: 100%;
-      justify-content: flex-end;
-    }
-
     .app-shell__hero {
       padding-top: 1.5rem;
     }
 
     .brand-copy span {
       display: none;
+    }
+
+    /* AdminNav/StaffNav가 이 폭에서는 햄버거 아이콘 하나로 접혀 있어, 로고 옆에 나란히
+       한 줄로 들어간다 — width:100%로 액션 영역을 강제로 새 줄로 밀던 예전 규칙(탭 6개가
+       나열되던 시절 것)은 이제 아이콘 하나를 불필요하게 줄바꿈시키기만 해서 제거한다. */
+    .brand-copy strong {
+      font-size: 1rem;
     }
   }
 }
