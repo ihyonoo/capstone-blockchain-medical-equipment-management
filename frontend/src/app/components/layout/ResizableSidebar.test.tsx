@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ResizableSidebar from './ResizableSidebar';
 import { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from '../../lib/sidebarResize';
@@ -108,5 +108,38 @@ describe('ResizableSidebar', () => {
     fireEvent.mouseMove(window, { clientX: 600 });
 
     expect(sidebar.style.width).toBe('540px');
+  });
+
+  describe('on a narrow (mobile) viewport', () => {
+    function setViewportWidth(width: number) {
+      Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: width });
+      window.dispatchEvent(new Event('resize'));
+    }
+
+    beforeEach(() => setViewportWidth(375));
+    afterEach(() => setViewportWidth(1440));
+
+    it('does not force a fixed pixel width, so w-full can take over', () => {
+      const { sidebar } = renderSidebar();
+
+      expect(sidebar.style.width).toBe('');
+    });
+
+    it('ignores drag-resize attempts on the handle', () => {
+      const { sidebar, handle } = renderSidebar();
+
+      fireEvent.mouseDown(handle, { clientX: 500 });
+      fireEvent.mouseMove(window, { clientX: 560 });
+      fireEvent.mouseUp(window);
+
+      expect(sidebar.style.width).toBe('');
+    });
+
+    it('still collapses to the fixed collapsed width from the toggle button', () => {
+      const { sidebar } = renderSidebar();
+
+      fireEvent.click(screen.getByTestId('sidebar-collapse-toggle'));
+      expect(sidebar.style.width).toBe('32px');
+    });
   });
 });

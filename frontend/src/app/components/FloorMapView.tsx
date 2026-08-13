@@ -48,6 +48,10 @@ const DOT_SIZE = 14;
 const SPOTLIGHT_DOT_SIZE = 22;
 const SPOTLIGHT_RING_SIZE = 40;
 
+// 점 자체는 그대로 두되(밀집 구역에서 서로 겹치지 않도록), 탭하는 버튼의 히트 영역만
+// 넓힌다 — 점 크기(14px)는 터치 타겟 권장치보다 한참 작다.
+const MIN_TOUCH_HIT_SIZE = 28;
+
 type FloorMapViewProps = {
   floor: FloorNumber;
   pins: FloorMapPin[];
@@ -76,6 +80,7 @@ function renderEquipmentMarker(
   const isActive = activeMarkerId === dot.tag_id;
   const isSpotlighted = spotlightTagId === dot.tag_id;
   const dotSize = isSpotlighted ? SPOTLIGHT_DOT_SIZE : DOT_SIZE;
+  const hitSize = Math.max(dotSize, MIN_TOUCH_HIT_SIZE);
   return (
     <div key={dot.tag_id}>
       <button
@@ -83,8 +88,8 @@ function renderEquipmentMarker(
         data-testid={`floor-map-equipment-${dot.tag_id}`}
         title={`${dot.label} · ${status.label}`}
         aria-label={`${dot.label} · ${status.label}`}
-        className={`absolute -translate-x-1/2 -translate-y-1/2${isSpotlighted ? ' z-10' : ''}`}
-        style={{ left: `${position.x}%`, top: `${position.y}%` }}
+        className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center${isSpotlighted ? ' z-10' : ''}`}
+        style={{ left: `${position.x}%`, top: `${position.y}%`, width: hitSize, height: hitSize }}
         onClick={() => {
           toggleMarker(dot.tag_id);
           onEquipmentClick?.(dot.tag_id);

@@ -116,6 +116,15 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* 앱 전체(Tailwind 유틸리티 포함)가 rem 단위를 쓰므로, 좁은 화면에서는 루트 폰트 크기
+   자체를 낮춰 개별 컴포넌트를 일일이 건드리지 않고도 폰트·여백·아이콘 등을 함께 줄인다.
+   데스크탑(641px 이상)은 --font-size 기본값(16px) 그대로다. */
+@media (max-width: 640px) {
+  :root {
+    --font-size: 14px;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
