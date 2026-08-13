@@ -183,18 +183,37 @@ describe('EquipmentSearch on a narrow (mobile) viewport', () => {
     await screen.findByRole('button', { name: /검색 결과 1건 보기/ });
   });
 
-  it('labels each filter select so "전체" is not ambiguous', async () => {
+  it('hides the filter fields behind an 상세검색 toggle by default', async () => {
     renderPage();
     await screen.findByTestId('floor-map-container');
+
+    expect(screen.queryByText('장비 유형')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('equipment-filter-toggles')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '상세검색' })).toBeInTheDocument();
+  });
+
+  it('reveals the filter selects and toggles when 상세검색 is opened, and hides them again on a second click', async () => {
+    renderPage();
+    await screen.findByTestId('floor-map-container');
+
+    fireEvent.click(screen.getByRole('button', { name: '상세검색' }));
 
     expect(screen.getByText('장비 유형')).toBeInTheDocument();
     expect(screen.getByText('층')).toBeInTheDocument();
     expect(screen.getByText('위치 필터')).toBeInTheDocument();
+    expect(screen.getByTestId('equipment-filter-toggles')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '상세검색' }));
+
+    expect(screen.queryByText('장비 유형')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('equipment-filter-toggles')).not.toBeInTheDocument();
   });
 
-  it('keeps the two toggles out of the horizontally scrolling filter row', async () => {
+  it('keeps the two toggles out of the horizontally scrolling filter row once opened', async () => {
     renderPage();
     await screen.findByTestId('floor-map-container');
+
+    fireEvent.click(screen.getByRole('button', { name: '상세검색' }));
 
     const toggles = screen.getByTestId('equipment-filter-toggles');
     expect(toggles.closest('.overflow-x-auto')).toBeNull();
