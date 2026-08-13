@@ -345,6 +345,19 @@ class TestVerifyUsageHistoryIntegrity:
         assert len(calls) == 1  # not_eligible 이어도 스크립트 자체는 한 번 호출된다
 
 
+class TestBuildDefaultIntegrityResult:
+    def test_labels_unreturned_records_as_in_use(self):
+        result = svc.build_default_integrity_result(usage_status="checked_out", detail="무시됨")
+
+        assert result["verification_status"] == "not_eligible"
+        assert result["verification_label"] == "사용 중"
+
+    def test_returned_records_keep_the_chain_label(self):
+        result = svc.build_default_integrity_result(usage_status="returned", detail="이유")
+
+        assert result["verification_label"] == "체인 미설정"
+
+
 class TestBuildUsageHistoryVerificationRequest:
     def test_expected_is_none_when_not_returned(self):
         row = (1, "checked_out") + (None,) * 23

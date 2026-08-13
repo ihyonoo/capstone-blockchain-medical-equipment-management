@@ -10,8 +10,12 @@ from enum import StrEnum
 
 from simulation.topology import zones
 
-# 병원 전체가 공유하는 iBeacon UUID. major에 층 번호, minor에 전역 연번을 쓴다.
+# 병원 전체가 공유하는 iBeacon UUID.
 HOSPITAL_BEACON_UUID = "a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44"
+
+# major는 장비 출처 구분자다: 1 = 실물 IoT 장비, 2 = 시뮬레이션 장비.
+# minor는 그 분류 안에서 1부터 올라가는 3자리 연번이다.
+SIMULATION_BEACON_MAJOR = 2
 
 
 class Mobility(StrEnum):
@@ -139,7 +143,6 @@ class Equipment:
     equipment_name: str
     equipment_type: str
     nfc_token: str
-    serial_number: str
     home_zone: str
     floor: int
     profile: EquipmentType = field(compare=False)
@@ -155,11 +158,10 @@ def _build_equipment() -> tuple[Equipment, ...]:
         index = per_type_index[slug] = per_type_index.get(slug, start - 1) + 1
         built.append(
             Equipment(
-                tag_id=f"{HOSPITAL_BEACON_UUID}:{floor}:{sequence:04d}",
+                tag_id=f"{HOSPITAL_BEACON_UUID}:{SIMULATION_BEACON_MAJOR}:{sequence:03d}",
                 equipment_name=f"{profile.name}-{index:03d}",
                 equipment_type=profile.name,
                 nfc_token=f"{slug}-{index:03d}",
-                serial_number=f"BME-{2020 + sequence % 5}-{sequence:05d}",
                 home_zone=zone_id,
                 floor=floor,
                 profile=profile,

@@ -63,11 +63,11 @@ def _render_tags() -> list[str]:
     for item in equipment.EQUIPMENT:
         rows.append(
             f"    ({_quote(item.tag_id)}, {_quote(item.equipment_name)}, {_quote(item.equipment_type)}, "
-            f"{_quote(item.serial_number)}, {_quote(item.nfc_token)}, 'available', TRUE, FALSE)"
+            f"{_quote(item.nfc_token)}, 'available', TRUE, FALSE)"
         )
     return [
         "-- 태그 50개. 시뮬레이션 시작 시점에는 전부 사용 가능 상태다.",
-        "INSERT INTO tags (tag_id, equipment_name, equipment_type, serial_number, nfc_tag_uid,",
+        "INSERT INTO tags (tag_id, equipment_name, equipment_type, nfc_tag_uid,",
         "                  asset_status, is_active, is_real_hardware) VALUES",
         ",\n".join(rows) + ";",
         "",

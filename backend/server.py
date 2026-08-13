@@ -212,7 +212,6 @@ def fetch_tag_by_nfc_token(cur, token: str):
       t.tag_id,
       t.equipment_name,
       t.equipment_type,
-      t.serial_number,
       t.nfc_tag_uid,
       t.asset_status,
       t.current_holder_user_id,
@@ -1058,11 +1057,11 @@ def list_nfc_mappings(authorization: str | None = Header(default=None)):
       t.tag_id,
       t.equipment_name,
       t.equipment_type,
-      t.serial_number,
       t.nfc_tag_uid,
       t.asset_status,
       t.is_active,
-      t.is_real_hardware
+      t.is_real_hardware,
+      EXTRACT(EPOCH FROM t.created_at)::BIGINT AS created_at_epoch
     FROM tags t
     WHERE t.is_active = TRUE
     ORDER BY t.equipment_name ASC, t.tag_id ASC
@@ -1084,12 +1083,13 @@ def list_nfc_mappings(authorization: str | None = Header(default=None)):
                 "tag_id": row[0],
                 "equipment_name": row[1],
                 "equipment_type": row[2],
-                "serial_number": row[3],
-                "nfc_token": row[4],
-                "asset_status": row[5],
-                "is_active": row[6],
+                "nfc_token": row[3],
+                "asset_status": row[4],
+                "is_active": row[5],
                 # 관리자 화면에서 모의 데이터를 숨길 수 있게 실물 여부를 함께 내려준다.
-                "is_real_hardware": row[7],
+                "is_real_hardware": row[6],
+                # 등록 시각. 매핑 화면의 "최신순" 정렬 기준이다.
+                "created_at": row[7],
                 "reader_id": location_snapshot["reader_id"] if location_snapshot else None,
                 "location": location_snapshot["location"] if location_snapshot else None,
                 "updated_at": location_snapshot["updated_at"] if location_snapshot else None,
@@ -1119,7 +1119,7 @@ def upsert_nfc_mapping(
     UPDATE tags
     SET nfc_tag_uid = %s, updated_at = now()
     WHERE tag_id = %s
-    RETURNING tag_id, equipment_name, equipment_type, serial_number, nfc_tag_uid, asset_status
+    RETURNING tag_id, equipment_name, equipment_type, nfc_tag_uid, asset_status
     """
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
@@ -1139,9 +1139,8 @@ def upsert_nfc_mapping(
             "tag_id": row[0],
             "equipment_name": row[1],
             "equipment_type": row[2],
-            "serial_number": row[3],
-            "nfc_token": row[4],
-            "asset_status": row[5],
+            "nfc_token": row[3],
+            "asset_status": row[4],
         },
     }
 
@@ -1185,7 +1184,6 @@ def get_nfc_equipment(token: str, authorization: str | None = Header(default=Non
       t.tag_id,
       t.equipment_name,
       t.equipment_type,
-      t.serial_number,
       t.nfc_tag_uid,
       t.asset_status,
       t.current_holder_user_id,
@@ -1214,12 +1212,11 @@ def get_nfc_equipment(token: str, authorization: str | None = Header(default=Non
             "tag_id": row[0],
             "equipment_name": row[1],
             "equipment_type": row[2],
-            "serial_number": row[3],
-            "nfc_token": row[4],
-            "asset_status": row[5],
-            "current_holder_user_id": row[6],
-            "current_holder_name": row[7],
-            "current_usage_id": row[8],
+            "nfc_token": row[3],
+            "asset_status": row[4],
+            "current_holder_user_id": row[5],
+            "current_holder_name": row[6],
+            "current_usage_id": row[7],
             "reader_id": location_snapshot["reader_id"] if location_snapshot else None,
             "location": location_snapshot["location"] if location_snapshot else None,
             "updated_at": location_snapshot["updated_at"] if location_snapshot else None,
@@ -1237,14 +1234,13 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
             tag_row = fetch_tag_by_nfc_token(cur, token)
-            if not tag_row or not tag_row[9]:
+            if not tag_row or not tag_row[8]:
                 raise HTTPException(404, "매핑된 장비를 찾을 수 없습니다.")
 
             (
                 tag_id,
                 equipment_name,
                 equipment_type,
-                serial_number,
                 nfc_uid,
                 asset_status,
                 current_holder_user_id,
@@ -1274,7 +1270,6 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
                   tag_id,
                   equipment_name,
                   equipment_type,
-                  equipment_serial_number,
                   equipment_nfc_uid,
                   checkout_method,
                   checkout_reader_id,
@@ -1283,7 +1278,7 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
                   created_at,
                   updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                 RETURNING usage_id
                 """,
                 (
@@ -1295,7 +1290,6 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
                     tag_id,
                     equipment_name,
                     equipment_type,
-                    serial_number,
                     nfc_uid,
                     "nfc",
                     reader_id,
@@ -1358,14 +1352,13 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
             tag_row = fetch_tag_by_nfc_token(cur, token)
-            if not tag_row or not tag_row[9]:
+            if not tag_row or not tag_row[8]:
                 raise HTTPException(404, "매핑된 장비를 찾을 수 없습니다.")
 
             (
                 tag_id,
                 _equipment_name,
                 _equipment_type,
-                _serial_number,
                 nfc_uid,
                 asset_status,
                 current_holder_user_id,
@@ -1523,7 +1516,6 @@ def rtls_live(authorization: str | None = Header(default=None), hide_simulated: 
             "tag_id": tag_id,
             "equipment_name": metadata.get("equipment_name"),
             "equipment_type": metadata.get("equipment_type"),
-            "serial_number": metadata.get("serial_number"),
             "asset_status": metadata.get("asset_status") or "available",
             "current_holder_user_id": metadata.get("current_holder_user_id"),
             "current_holder_name": metadata.get("current_holder_name"),
@@ -1591,6 +1583,7 @@ def usage_history(
     limit: int = 200,
     offset: int = 0,
     hide_simulated: bool = False,
+    include_in_use: bool = True,
     include_blockchain: bool = False,
 ):
     require_authenticated_user(authorization, allowed_roles={"admin"})
@@ -1608,6 +1601,7 @@ def usage_history(
         max_limit=200 if include_blockchain else 1000,
         offset=offset,
         hide_simulated=hide_simulated,
+        include_in_use=include_in_use,
     )
 
     integrity_results = {}
@@ -1642,6 +1636,7 @@ def usage_history(
             "limit": safe_limit,
             "offset": safe_offset,
             "hide_simulated": hide_simulated,
+            "include_in_use": include_in_use,
             "include_blockchain": include_blockchain,
         },
         "integrity_summary": integrity_summary,

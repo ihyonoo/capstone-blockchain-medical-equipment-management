@@ -449,7 +449,6 @@ def load_tag_metadata(tag_ids: set[str]) -> dict[str, dict]:
       t.tag_id,
       t.equipment_name,
       t.equipment_type,
-      t.serial_number,
       t.asset_status,
       t.current_holder_user_id,
       COALESCE(u.display_name, u.username) AS current_holder_name,
@@ -469,11 +468,10 @@ def load_tag_metadata(tag_ids: set[str]) -> dict[str, dict]:
         row[0]: {
             "equipment_name": row[1],
             "equipment_type": row[2],
-            "serial_number": row[3],
-            "asset_status": row[4],
-            "current_holder_user_id": row[5],
-            "current_holder_name": row[6],
-            "is_real_hardware": row[7],
+            "asset_status": row[3],
+            "current_holder_user_id": row[4],
+            "current_holder_name": row[5],
+            "is_real_hardware": row[6],
         }
         for row in rows
     }

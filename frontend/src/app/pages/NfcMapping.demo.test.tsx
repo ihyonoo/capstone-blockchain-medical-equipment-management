@@ -23,7 +23,6 @@ const MAPPING_PAYLOAD = {
       tag_id: 'EQ-0001',
       equipment_name: '제세동기-001',
       equipment_type: '제세동기',
-      serial_number: null,
       nfc_token: 'defib-001',
       asset_status: 'available',
       is_active: true,

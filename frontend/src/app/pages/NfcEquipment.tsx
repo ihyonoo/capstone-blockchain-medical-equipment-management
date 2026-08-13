@@ -11,7 +11,6 @@ type NfcEquipmentItem = {
   tag_id: string;
   equipment_name: string;
   equipment_type: string | null;
-  serial_number: string | null;
   nfc_token: string;
   asset_status: string;
   current_holder_user_id: number | null;

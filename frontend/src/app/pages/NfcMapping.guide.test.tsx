@@ -21,7 +21,6 @@ const MAPPING_PAYLOAD = {
       tag_id: 'a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:1:0007',
       equipment_name: '검체이송 카트 7호',
       equipment_type: '카트',
-      serial_number: 'BME-2024-00007',
       nfc_token: null,
       asset_status: 'available',
       is_active: true,

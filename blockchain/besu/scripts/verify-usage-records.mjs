@@ -1,36 +1,36 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import solc from "solc";
-import { ethers } from "ethers";
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import solc from 'solc';
+import { ethers } from 'ethers';
 
-const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const CONTRACT_PATH = path.join(ROOT_DIR, "contracts", "UsageRecordRegistry.sol");
-const DEPLOYMENT_PATH = path.join(ROOT_DIR, "deployments", "usage-registry.json");
-const RPC_URL = process.env.BESU_RPC_URL ?? "http://127.0.0.1:8549";
-const CHAIN_ID = Number(process.env.BESU_CHAIN_ID ?? "1337");
-const EMPTY_TRIE_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
+const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const CONTRACT_PATH = path.join(ROOT_DIR, 'contracts', 'UsageRecordRegistry.sol');
+const DEPLOYMENT_PATH = path.join(ROOT_DIR, 'deployments', 'usage-registry.json');
+const RPC_URL = process.env.BESU_RPC_URL ?? 'http://127.0.0.1:8549';
+const CHAIN_ID = Number(process.env.BESU_CHAIN_ID ?? '1337');
+const EMPTY_TRIE_ROOT = '0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421';
 
 function compileContract() {
   // 검증 스크립트도 계약 ABI가 필요하므로 소스에서 직접 ABI를 만든다.
-  const source = fs.readFileSync(CONTRACT_PATH, "utf8");
+  const source = fs.readFileSync(CONTRACT_PATH, 'utf8');
   const input = {
-    language: "Solidity",
+    language: 'Solidity',
     sources: {
-      "UsageRecordRegistry.sol": {
+      'UsageRecordRegistry.sol': {
         content: source,
       },
     },
     settings: {
-      evmVersion: "berlin",
+      evmVersion: 'berlin',
       optimizer: {
         enabled: true,
         runs: 200,
       },
       viaIR: true,
       outputSelection: {
-        "*": {
-          "*": ["abi"],
+        '*': {
+          '*': ['abi'],
         },
       },
     },
@@ -38,25 +38,25 @@ function compileContract() {
 
   const output = JSON.parse(solc.compile(JSON.stringify(input)));
   const errors = output.errors ?? [];
-  const fatalErrors = errors.filter((item) => item.severity === "error");
+  const fatalErrors = errors.filter((item) => item.severity === 'error');
 
   if (fatalErrors.length > 0) {
-    throw new Error(fatalErrors.map((item) => item.formattedMessage).join("\n"));
+    throw new Error(fatalErrors.map((item) => item.formattedMessage).join('\n'));
   }
 
-  return output.contracts["UsageRecordRegistry.sol"].UsageRecordRegistry.abi;
+  return output.contracts['UsageRecordRegistry.sol'].UsageRecordRegistry.abi;
 }
 
 function normalizeString(value) {
-  return typeof value === "string" ? value : "";
+  return typeof value === 'string' ? value : '';
 }
 
 function normalizeNullableString(value) {
-  return typeof value === "string" && value.length > 0 ? value : null;
+  return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 function normalizeInteger(value) {
-  if (value === null || value === undefined || value === "") {
+  if (value === null || value === undefined || value === '') {
     return null;
   }
   const parsed = Number(value);
@@ -84,7 +84,7 @@ function decodeOnchainRecord(usageId, record) {
 }
 
 function normalizeExpectedRecord(value, usageId) {
-  if (!value || typeof value !== "object") {
+  if (!value || typeof value !== 'object') {
     return null;
   }
   return {
@@ -100,7 +100,7 @@ function normalizeExpectedRecord(value, usageId) {
 }
 
 function normalizeAnchor(value) {
-  if (!value || typeof value !== "object") {
+  if (!value || typeof value !== 'object') {
     return null;
   }
   return {
@@ -114,14 +114,14 @@ function normalizeAnchor(value) {
 
 function compareUsageRecord(left, right) {
   const comparableKeys = [
-    "usageId",
-    "checkoutUserId",
-    "returnUserId",
-    "tagId",
-    "checkoutLocation",
-    "checkoutAt",
-    "returnLocation",
-    "returnedAt",
+    'usageId',
+    'checkoutUserId',
+    'returnUserId',
+    'tagId',
+    'checkoutLocation',
+    'checkoutAt',
+    'returnLocation',
+    'returnedAt',
   ];
   const mismatchFields = comparableKeys.filter((key) => left?.[key] !== right?.[key]);
   return {
@@ -132,82 +132,82 @@ function compareUsageRecord(left, right) {
 
 function formatStatus(status, detail = null) {
   switch (status) {
-    case "verified":
+    case 'verified':
       return {
         verification_status: status,
-        verification_label: "무결성 검증 성공",
+        verification_label: '무결성 검증 성공',
         verification_method:
-          "DB 원문과 온체인 원문이 일치하고, 해당 트랜잭션이 포함된 블록의 transactionsRoot 재계산값도 일치합니다.",
+          'DB 원문과 온체인 원문이 일치하고, 해당 트랜잭션이 포함된 블록의 transactionsRoot 재계산값도 일치합니다.',
         detail,
       };
-    case "not_eligible":
+    case 'not_eligible':
       return {
         verification_status: status,
-        verification_label: "검증 대상 아님",
-        verification_method: detail ?? "반납이 완료되지 않은 이력은 아직 온체인 검증 대상이 아닙니다.",
+        verification_label: '사용 중',
+        verification_method: detail ?? '아직 반납되지 않아 사용 중인 이력이라 온체인 검증 대상이 아닙니다.',
         detail,
       };
-    case "not_configured":
+    case 'not_configured':
       return {
         verification_status: status,
-        verification_label: "체인 미설정",
-        verification_method: detail ?? "온체인 검증 환경이 아직 준비되지 않았습니다.",
+        verification_label: '체인 미설정',
+        verification_method: detail ?? '온체인 검증 환경이 아직 준비되지 않았습니다.',
         detail,
       };
-    case "onchain_missing":
+    case 'onchain_missing':
       return {
         verification_status: status,
-        verification_label: "온체인 미기록",
-        verification_method: detail ?? "DB에 있는 반납 이력을 온체인에서 찾지 못했습니다.",
+        verification_label: '온체인 미기록',
+        verification_method: detail ?? 'DB에 있는 반납 이력을 온체인에서 찾지 못했습니다.',
         detail,
       };
-    case "db_mismatch":
+    case 'db_mismatch':
       return {
         verification_status: status,
-        verification_label: "DB/온체인 원문 불일치",
-        verification_method: detail ?? "DB 원문과 온체인 원문이 다릅니다.",
+        verification_label: 'DB/온체인 원문 불일치',
+        verification_method: detail ?? 'DB 원문과 온체인 원문이 다릅니다.',
         detail,
       };
-    case "tx_input_mismatch":
+    case 'tx_input_mismatch':
       return {
         verification_status: status,
-        verification_label: "트랜잭션 입력값 불일치",
-        verification_method: detail ?? "앵커 트랜잭션의 입력값이 DB 원문과 일치하지 않습니다.",
+        verification_label: '트랜잭션 입력값 불일치',
+        verification_method: detail ?? '앵커 트랜잭션의 입력값이 DB 원문과 일치하지 않습니다.',
         detail,
       };
-    case "anchor_unresolved":
+    case 'anchor_unresolved':
       return {
         verification_status: status,
-        verification_label: "앵커 트랜잭션 미확인",
-        verification_method: detail ?? "해당 이력에 대응되는 트랜잭션 해시를 찾지 못했습니다.",
+        verification_label: '앵커 트랜잭션 미확인',
+        verification_method: detail ?? '해당 이력에 대응되는 트랜잭션 해시를 찾지 못했습니다.',
         detail,
       };
-    case "transaction_missing":
+    case 'transaction_missing':
       return {
         verification_status: status,
-        verification_label: "트랜잭션 조회 실패",
-        verification_method: detail ?? "앵커 트랜잭션 또는 영수증을 체인에서 조회하지 못했습니다.",
+        verification_label: '트랜잭션 조회 실패',
+        verification_method: detail ?? '앵커 트랜잭션 또는 영수증을 체인에서 조회하지 못했습니다.',
         detail,
       };
-    case "tx_not_in_block":
+    case 'tx_not_in_block':
       return {
         verification_status: status,
-        verification_label: "블록 내 트랜잭션 불일치",
-        verification_method: detail ?? "저장된 트랜잭션 해시가 지정된 블록/인덱스와 일치하지 않습니다.",
+        verification_label: '블록 내 트랜잭션 불일치',
+        verification_method: detail ?? '저장된 트랜잭션 해시가 지정된 블록/인덱스와 일치하지 않습니다.',
         detail,
       };
-    case "transactions_root_mismatch":
+    case 'transactions_root_mismatch':
       return {
         verification_status: status,
-        verification_label: "블록 머클 검증 실패",
-        verification_method: detail ?? "블록의 transactionsRoot와 재계산한 값이 일치하지 않습니다.",
+        verification_label: '블록 머클 검증 실패',
+        verification_method: detail ?? '블록의 transactionsRoot와 재계산한 값이 일치하지 않습니다.',
         detail,
       };
     default:
       return {
-        verification_status: "chain_error",
-        verification_label: "검증 중 오류",
-        verification_method: detail ?? "온체인 검증 중 예기치 못한 오류가 발생했습니다.",
+        verification_status: 'chain_error',
+        verification_label: '검증 중 오류',
+        verification_method: detail ?? '온체인 검증 중 예기치 못한 오류가 발생했습니다.',
         detail,
       };
   }
@@ -216,7 +216,7 @@ function formatStatus(status, detail = null) {
 function bigintToMinimalHex(value) {
   const normalized = BigInt(value);
   if (normalized === 0n) {
-    return "0x";
+    return '0x';
   }
   let hex = normalized.toString(16);
   if (hex.length % 2 !== 0) {
@@ -317,7 +317,7 @@ function normalizeRawTransaction(tx) {
 function buildTrieNode(entries) {
   if (entries.length === 1) {
     return {
-      type: "leaf",
+      type: 'leaf',
       key: entries[0].key,
       value: entries[0].value,
     };
@@ -326,7 +326,7 @@ function buildTrieNode(entries) {
   const prefixLength = sharedPrefixLength(entries.map((entry) => entry.key));
   if (prefixLength > 0) {
     return {
-      type: "extension",
+      type: 'extension',
       key: entries[0].key.slice(0, prefixLength),
       child: buildTrieNode(
         entries.map((entry) => ({
@@ -338,7 +338,7 @@ function buildTrieNode(entries) {
   }
 
   const groups = Array.from({ length: 16 }, () => []);
-  let value = "0x";
+  let value = '0x';
   for (const entry of entries) {
     if (entry.key.length === 0) {
       value = entry.value;
@@ -351,7 +351,7 @@ function buildTrieNode(entries) {
   }
 
   return {
-    type: "branch",
+    type: 'branch',
     children: groups.map((group) => (group.length > 0 ? buildTrieNode(group) : null)),
     value,
   };
@@ -360,16 +360,16 @@ function buildTrieNode(entries) {
 function encodeTrieNode(node) {
   const childReference = (childNode) => {
     if (!childNode) {
-      return "0x";
+      return '0x';
     }
     const encoded = encodeTrieNode(childNode);
     return ethers.getBytes(encoded).length < 32 ? encoded : ethers.keccak256(encoded);
   };
 
-  if (node.type === "leaf") {
+  if (node.type === 'leaf') {
     return ethers.encodeRlp([compactEncode(node.key, true), node.value]);
   }
-  if (node.type === "extension") {
+  if (node.type === 'extension') {
     return ethers.encodeRlp([compactEncode(node.key, false), childReference(node.child)]);
   }
   return ethers.encodeRlp([...node.children.map(childReference), node.value]);
@@ -390,7 +390,7 @@ function calculateTransactionsRoot(transactions) {
 function decodeUsageRecordInput(iface, tx) {
   try {
     const parsed = iface.parseTransaction({ data: tx.input, value: tx.value });
-    if (!parsed || parsed.name !== "recordUsageRecord") {
+    if (!parsed || parsed.name !== 'recordUsageRecord') {
       return null;
     }
     return {
@@ -427,16 +427,16 @@ async function main() {
     throw new Error("usage: node scripts/verify-usage-records.mjs '<json-payload>'");
   }
   if (!fs.existsSync(DEPLOYMENT_PATH)) {
-    throw new Error("deployment file not found. run deploy-usage-registry.mjs first");
+    throw new Error('deployment file not found. run deploy-usage-registry.mjs first');
   }
 
   const parsedInput = JSON.parse(rawInput);
   const inputItems = Array.isArray(parsedInput?.items) ? parsedInput.items : [];
-  const deployment = JSON.parse(fs.readFileSync(DEPLOYMENT_PATH, "utf8"));
+  const deployment = JSON.parse(fs.readFileSync(DEPLOYMENT_PATH, 'utf8'));
   const abi = compileContract();
   const iface = new ethers.Interface(abi);
   const provider = new ethers.JsonRpcProvider(RPC_URL, {
-    name: "besu-qbft",
+    name: 'besu-qbft',
     chainId: CHAIN_ID,
   });
   const contract = new ethers.Contract(deployment.address, abi, provider);
@@ -444,7 +444,7 @@ async function main() {
   const eventsByUsageId = new Map();
   // DB에 txHash가 없는 오래된 이력만 이벤트 로그를 보조 수단으로 스캔한다.
   const needsEventLookup = inputItems.some((item) => {
-    const expectedRecord = normalizeExpectedRecord(item?.expected, item?.usageId ?? "");
+    const expectedRecord = normalizeExpectedRecord(item?.expected, item?.usageId ?? '');
     const anchor = normalizeAnchor(item?.anchor);
     return Boolean(expectedRecord && !anchor?.txHash);
   });
@@ -456,7 +456,7 @@ async function main() {
       const end = Math.min(start + chunkSize - 1, latestBlockNumber);
       const logs = await contract.queryFilter(contract.filters.UsageRecordStored(), start, end);
       for (const log of logs) {
-        const usageId = String(log.args?.usageId ?? "");
+        const usageId = String(log.args?.usageId ?? '');
         if (!usageId) {
           continue;
         }
@@ -475,10 +475,10 @@ async function main() {
               usageId,
               checkoutUserId: Number(log.args?.checkoutUserId ?? 0),
               returnUserId: Number(log.args?.returnUserId ?? 0),
-              tagId: String(log.args?.tagId ?? ""),
-              checkoutLocation: String(log.args?.checkoutLocation ?? ""),
+              tagId: String(log.args?.tagId ?? ''),
+              checkoutLocation: String(log.args?.checkoutLocation ?? ''),
               checkoutAt: Number(log.args?.checkoutAt ?? 0),
-              returnLocation: String(log.args?.returnLocation ?? ""),
+              returnLocation: String(log.args?.returnLocation ?? ''),
               returnedAt: Number(log.args?.returnedAt ?? 0),
             },
           });
@@ -508,9 +508,9 @@ async function main() {
     }
     let block = null;
     if (blockHash) {
-      block = await provider.send("eth_getBlockByHash", [blockHash, true]);
+      block = await provider.send('eth_getBlockByHash', [blockHash, true]);
     } else if (blockNumber !== null && blockNumber !== undefined) {
-      block = await provider.send("eth_getBlockByNumber", [ethers.toQuantity(BigInt(blockNumber)), true]);
+      block = await provider.send('eth_getBlockByNumber', [ethers.toQuantity(BigInt(blockNumber)), true]);
     }
     blockCache.set(cacheKey, block);
     return block;
@@ -527,7 +527,7 @@ async function main() {
 
   for (const item of inputItems) {
     // 검증은 DB 원문 -> 온체인 원문 -> 트랜잭션 포함 여부 -> 머클루트 재계산 순으로 진행한다.
-    const usageId = String(item?.usageId ?? "");
+    const usageId = String(item?.usageId ?? '');
     const expectedRecord = normalizeExpectedRecord(item?.expected, usageId);
     const storedAnchor = normalizeAnchor(item?.anchor);
     const result = {
@@ -547,7 +547,7 @@ async function main() {
     };
 
     if (!expectedRecord) {
-      Object.assign(result, formatStatus("not_eligible"));
+      Object.assign(result, formatStatus('not_eligible'));
       results.push(result);
       continue;
     }
@@ -565,7 +565,7 @@ async function main() {
     result.anchor.recorded_at = onchainRecord.exists ? onchainRecord.recordedAt : result.anchor.recorded_at;
 
     if (!onchainRecord.exists) {
-      Object.assign(result, formatStatus("onchain_missing"));
+      Object.assign(result, formatStatus('onchain_missing'));
       results.push(result);
       continue;
     }
@@ -574,16 +574,13 @@ async function main() {
     result.db_matches_onchain = dbCompare.matches;
     result.mismatch_fields = dbCompare.mismatchFields;
     if (!dbCompare.matches) {
-      Object.assign(
-        result,
-        formatStatus("db_mismatch", `불일치 필드: ${dbCompare.mismatchFields.join(", ")}`),
-      );
+      Object.assign(result, formatStatus('db_mismatch', `불일치 필드: ${dbCompare.mismatchFields.join(', ')}`));
       results.push(result);
       continue;
     }
 
     let resolvedAnchor = {
-      source: storedAnchor?.txHash ? "db" : null,
+      source: storedAnchor?.txHash ? 'db' : null,
       txHash: storedAnchor?.txHash ?? null,
       blockNumber: storedAnchor?.blockNumber ?? null,
       blockHash: storedAnchor?.blockHash ?? null,
@@ -596,7 +593,7 @@ async function main() {
     if (!resolvedAnchor.txHash && eventRecord) {
       resolvedAnchor = {
         ...resolvedAnchor,
-        source: "event",
+        source: 'event',
         txHash: eventRecord.transactionHash,
         blockNumber: eventRecord.blockNumber,
       };
@@ -604,7 +601,7 @@ async function main() {
 
     if (!resolvedAnchor.txHash) {
       result.anchor = buildAnchorResult(resolvedAnchor);
-      Object.assign(result, formatStatus("anchor_unresolved"));
+      Object.assign(result, formatStatus('anchor_unresolved'));
       results.push(result);
       continue;
     }
@@ -612,7 +609,7 @@ async function main() {
     const receipt = await getReceipt(resolvedAnchor.txHash);
     if (!receipt) {
       result.anchor = buildAnchorResult(resolvedAnchor);
-      Object.assign(result, formatStatus("transaction_missing"));
+      Object.assign(result, formatStatus('transaction_missing'));
       results.push(result);
       continue;
     }
@@ -627,7 +624,7 @@ async function main() {
     const block = await getBlock(resolvedAnchor.blockHash, resolvedAnchor.blockNumber);
     if (!block || !Array.isArray(block.transactions)) {
       result.anchor = buildAnchorResult(resolvedAnchor);
-      Object.assign(result, formatStatus("transaction_missing", "앵커 블록을 조회하지 못했습니다."));
+      Object.assign(result, formatStatus('transaction_missing', '앵커 블록을 조회하지 못했습니다.'));
       results.push(result);
       continue;
     }
@@ -640,11 +637,11 @@ async function main() {
     );
 
     const txIndex = normalizeInteger(resolvedAnchor.transactionIndex);
-    const indexedTx = txIndex !== null ? block.transactions[txIndex] ?? null : null;
+    const indexedTx = txIndex !== null ? (block.transactions[txIndex] ?? null) : null;
     result.tx_included_in_block = Boolean(indexedTx && sameHex(indexedTx.hash, resolvedAnchor.txHash));
     if (!result.tx_included_in_block) {
       result.anchor = buildAnchorResult(resolvedAnchor);
-      Object.assign(result, formatStatus("tx_not_in_block"));
+      Object.assign(result, formatStatus('tx_not_in_block'));
       results.push(result);
       continue;
     }
@@ -652,7 +649,10 @@ async function main() {
     const decodedInput = decodeUsageRecordInput(iface, indexedTx);
     if (!decodedInput) {
       result.anchor = buildAnchorResult(resolvedAnchor);
-      Object.assign(result, formatStatus("tx_input_mismatch", "앵커 트랜잭션 입력을 UsageRecord로 해석하지 못했습니다."));
+      Object.assign(
+        result,
+        formatStatus('tx_input_mismatch', '앵커 트랜잭션 입력을 UsageRecord로 해석하지 못했습니다.'),
+      );
       results.push(result);
       continue;
     }
@@ -663,7 +663,7 @@ async function main() {
       result.anchor = buildAnchorResult(resolvedAnchor);
       Object.assign(
         result,
-        formatStatus("tx_input_mismatch", `불일치 필드: ${txInputCompare.mismatchFields.join(", ")}`),
+        formatStatus('tx_input_mismatch', `불일치 필드: ${txInputCompare.mismatchFields.join(', ')}`),
       );
       results.push(result);
       continue;
@@ -671,13 +671,13 @@ async function main() {
 
     if (!result.transactions_root_matches) {
       result.anchor = buildAnchorResult(resolvedAnchor);
-      Object.assign(result, formatStatus("transactions_root_mismatch"));
+      Object.assign(result, formatStatus('transactions_root_mismatch'));
       results.push(result);
       continue;
     }
 
     result.anchor = buildAnchorResult(resolvedAnchor);
-    Object.assign(result, formatStatus("verified"));
+    Object.assign(result, formatStatus('verified'));
     results.push(result);
   }
 
@@ -689,9 +689,9 @@ async function main() {
       } else {
         acc.not_eligible_count += 1;
       }
-      if (item.verification_status === "verified") {
+      if (item.verification_status === 'verified') {
         acc.verified_count += 1;
-      } else if (item.verification_status === "not_eligible") {
+      } else if (item.verification_status === 'not_eligible') {
         acc.not_eligible_count += 0;
       } else {
         acc.failed_count += 1;
