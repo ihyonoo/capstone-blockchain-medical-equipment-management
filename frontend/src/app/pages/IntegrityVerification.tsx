@@ -877,7 +877,7 @@ export default function IntegrityVerification() {
                   </Select>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-4">
+                <div className="flex flex-wrap items-center gap-2 pt-4">
                   <Button type="submit" disabled={isLoading}>
                     {isLoading ? '조회 중...' : '조회'}
                   </Button>
