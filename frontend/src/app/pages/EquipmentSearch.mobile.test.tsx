@@ -182,6 +182,23 @@ describe('EquipmentSearch on a narrow (mobile) viewport', () => {
 
     await screen.findByRole('button', { name: /검색 결과 1건 보기/ });
   });
+
+  it('labels each filter select so "전체" is not ambiguous', async () => {
+    renderPage();
+    await screen.findByTestId('floor-map-container');
+
+    expect(screen.getByText('장비 유형')).toBeInTheDocument();
+    expect(screen.getByText('층')).toBeInTheDocument();
+    expect(screen.getByText('위치 필터')).toBeInTheDocument();
+  });
+
+  it('keeps the two toggles out of the horizontally scrolling filter row', async () => {
+    renderPage();
+    await screen.findByTestId('floor-map-container');
+
+    const toggles = screen.getByTestId('equipment-filter-toggles');
+    expect(toggles.closest('.overflow-x-auto')).toBeNull();
+  });
 });
 
 describe('EquipmentSearch on a wide (desktop) viewport', () => {
