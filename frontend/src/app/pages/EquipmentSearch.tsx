@@ -2,6 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../components/ui/dialog';
 import AppShell from '../components/layout/AppShell';
 import StaffNav from '../components/layout/StaffNav';
 import FloorMapView, {
@@ -18,6 +27,11 @@ import { formatIBeaconTag } from '../lib/iBeaconTag';
 import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout } from '../lib/useAuthGuard';
+import { useMediaQuery } from '../lib/useMediaQuery';
+
+// 사이드바가 지도 옆에 나란히 붙는 시점(xl) — 그 미만에서는 사이드바 대신
+// 가로 스크롤 필터 바 + 결과 목록 다이얼로그를 쓴다.
+const DESKTOP_QUERY = '(min-width: 1280px)';
 
 type LiveLocationItem = {
   tag_id: string;
@@ -113,6 +127,8 @@ export default function EquipmentSearch() {
   const [availableOnly, setAvailableOnly] = useState(false);
   const [hideSimulated, setHideSimulated] = useState(false);
   const [highlightedZone, setHighlightedZone] = useState<FloorMapHighlight | null>(null);
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const [resultsOpen, setResultsOpen] = useState(false);
   const isAuthorized = useAuthGuard(() => {
     try {
       const session = getStoredAuthSession();
@@ -326,6 +342,131 @@ export default function EquipmentSearch() {
     setSelectedEquipment((prev) => (prev === tagId ? null : tagId));
   };
 
+  // 검색/필터 필드들 — 데스크탑 사이드바(세로 목록)와 모바일 가로 스크롤 바에서 함께 쓴다.
+  // compact=true면 라벨을 없애고 스크롤 바 안에서 줄어들지 않는 폭을 준다.
+  const typeFilterField = (compact: boolean) => (
+    <div className={compact ? 'w-36 shrink-0' : 'space-y-2'}>
+      {compact ? null : <label className="text-base font-medium">장비 유형</label>}
+      <Select value={selectedType} onValueChange={setSelectedType}>
+        <SelectTrigger>
+          <SelectValue placeholder="유형 선택" />
+        </SelectTrigger>
+        <SelectContent>
+          {equipmentTypes.map((type) => (
+            <SelectItem key={type} value={type}>
+              {type}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const floorFilterField = (compact: boolean) => (
+    <div className={compact ? 'w-28 shrink-0' : 'space-y-2'}>
+      {compact ? null : <label className="text-base font-medium">층</label>}
+      <Select
+        value={String(selectedListFloor)}
+        onValueChange={(value) => setSelectedListFloor(value === '전체' ? '전체' : (Number(value) as FloorNumber))}
+      >
+        <SelectTrigger aria-label="층">
+          <SelectValue placeholder="층 선택" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="전체">전체</SelectItem>
+          {FLOOR_MAPS.map((f) => (
+            <SelectItem key={f.floor} value={String(f.floor)}>
+              {f.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const locationFilterField = (compact: boolean) => (
+    <div className={compact ? 'w-36 shrink-0' : 'space-y-2'}>
+      {compact ? null : <label className="text-base font-medium">위치 필터</label>}
+      <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+        <SelectTrigger aria-label="위치">
+          <SelectValue placeholder="위치 선택" />
+        </SelectTrigger>
+        <SelectContent>
+          {locations.map((location) => (
+            <SelectItem key={location} value={location}>
+              {location}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const toggleFilters = (compact: boolean) => (
+    <div
+      data-testid="equipment-filter-toggles"
+      className={compact ? 'flex shrink-0 items-center gap-4' : 'flex flex-wrap items-center gap-x-5 gap-y-2'}
+    >
+      <label
+        className={
+          compact
+            ? 'flex items-center gap-2 whitespace-nowrap text-base font-medium'
+            : 'flex items-center gap-2 text-base font-medium'
+        }
+      >
+        <input type="checkbox" checked={availableOnly} onChange={(event) => setAvailableOnly(event.target.checked)} />
+        사용 가능 장비만 보기
+      </label>
+
+      <label
+        className={
+          compact
+            ? 'flex items-center gap-2 whitespace-nowrap text-base font-medium'
+            : 'flex items-center gap-2 text-base font-medium'
+        }
+      >
+        <input type="checkbox" checked={hideSimulated} onChange={(event) => setHideSimulated(event.target.checked)} />
+        시뮬레이션 장비 숨기기
+      </label>
+    </div>
+  );
+
+  // 필터링된 장비 목록 항목들 — 데스크탑 사이드바에서는 그대로, 모바일 결과 다이얼로그에서는
+  // 항목을 고르면 다이얼로그를 닫도록 afterSelect를 넘긴다.
+  const resultsListItems = (afterSelect?: () => void) => {
+    if (isLoading) {
+      return <div className="empty-state">실시간 데이터 로딩 중입니다.</div>;
+    }
+    if (filteredEquipment.length === 0) {
+      return <div className="empty-state">표시할 실시간 태그가 없습니다.</div>;
+    }
+    return filteredEquipment.map((item) => (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => {
+          toggleSelectedEquipment(item.id);
+          afterSelect?.();
+        }}
+        title={item.id}
+        className={`w-full border-b border-border px-3 py-2 text-left transition-all last:border-b-0 ${
+          selectedEquipment === item.id
+            ? 'border-l-2 border-l-foreground bg-secondary'
+            : 'border-l-2 border-l-transparent hover:bg-secondary'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-[1.05rem] leading-tight">{item.name}</span>
+          <span className={`shrink-0 ${getAssetStatusColor(item.assetStatus)}`} />
+        </div>
+        <div className="truncate text-sm text-muted-foreground">
+          {item.location}
+          {item.currentHolderName ? ` · ${item.currentHolderName}` : ''}
+        </div>
+      </button>
+    ));
+  };
+
   const handleZoneGuideClick = (zone: ZoneGuideRow) => {
     setViewMode('map');
     // 이미 강조 중인 구역을 다시 누르면 해제한다 — 켤 때 같이 걸었던 위치 필터도 함께 푼다.
@@ -438,140 +579,90 @@ export default function EquipmentSearch() {
           나머지(지도+상세/구역안내) 쪽에만 그 패딩을 되돌려준다. */}
       {/* xl:items-start — 자식이 stretch로 늘어나면 사이드바의 sticky가 동작하지 않는다 */}
       <div className="-mt-4 -mb-14 flex w-full flex-col gap-4 sm:-mt-5 xl:flex-row xl:items-start">
-        <ResizableSidebar testId="equipment-sidebar">
-          <>
-            <div className="panel-header shrink-0">
-              <div>
-                <div className="panel-title">장비 위치 검색</div>
+        {isDesktop ? (
+          <ResizableSidebar testId="equipment-sidebar">
+            <>
+              <div className="panel-header shrink-0">
+                <div>
+                  <div className="panel-title">장비 위치 검색</div>
+                </div>
+                <Badge variant="outline">추적 중 {equipment.length}개</Badge>
               </div>
+              <div className="shrink-0 space-y-3">
+                <Input
+                  placeholder="태그 ID, 장비명, 위치 검색"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+
+                {typeFilterField(false)}
+                {floorFilterField(false)}
+                {locationFilterField(false)}
+                {/* 두 토글은 짝이라 한 줄에 둔다 — 사이드바를 좁히면 자동으로 줄바꿈된다. */}
+                {toggleFilters(false)}
+
+                {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
+              </div>
+
+              <div data-testid="equipment-result-summary" className="mt-4 shrink-0 border-t border-border pt-3">
+                <div className="text-base font-medium">
+                  {activeFilterLabels.length > 0 ? '검색 결과' : '전체'} {filteredEquipment.length}건
+                </div>
+                {activeFilterLabels.length > 0 ? (
+                  <div className="mt-0.5 text-sm text-muted-foreground">{activeFilterLabels.join(' · ')}</div>
+                ) : null}
+              </div>
+
+              <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto">{resultsListItems()}</div>
+            </>
+          </ResizableSidebar>
+        ) : (
+          // 좁은 화면에서는 사이드바 박스 대신, 지도 바로 위에 검색바 + 가로 스크롤 필터를
+          // 얹고 결과 목록은 다이얼로그로 뗀다 — 세로로 쌓이는 박스 하나가 더 늘어나는 느낌을 피한다.
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="panel-title">장비 위치 검색</div>
               <Badge variant="outline">추적 중 {equipment.length}개</Badge>
             </div>
-            <div className="shrink-0 space-y-3">
-              <Input
-                placeholder="태그 ID, 장비명, 위치 검색"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
 
-              <div className="space-y-2">
-                <label className="text-base font-medium">장비 유형</label>
-                <Select value={selectedType} onValueChange={setSelectedType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="유형 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {equipmentTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <Input
+              placeholder="태그 ID, 장비명, 위치 검색"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
 
-              <div className="space-y-2">
-                <label className="text-base font-medium">층</label>
-                <Select
-                  value={String(selectedListFloor)}
-                  onValueChange={(value) =>
-                    setSelectedListFloor(value === '전체' ? '전체' : (Number(value) as FloorNumber))
-                  }
+            <div className="-mx-[clamp(1rem,2.5vw,2rem)] flex gap-2 overflow-x-auto px-[clamp(1rem,2.5vw,2rem)] pb-1">
+              {typeFilterField(true)}
+              {floorFilterField(true)}
+              {locationFilterField(true)}
+              {toggleFilters(true)}
+            </div>
+
+            {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
+
+            <Dialog open={resultsOpen} onOpenChange={setResultsOpen}>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="w-full rounded-md border border-border bg-card px-4 py-2.5 text-left text-base font-medium"
                 >
-                  <SelectTrigger aria-label="층">
-                    <SelectValue placeholder="층 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="전체">전체</SelectItem>
-                    {FLOOR_MAPS.map((f) => (
-                      <SelectItem key={f.floor} value={String(f.floor)}>
-                        {f.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-base font-medium">위치 필터</label>
-                <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                  <SelectTrigger aria-label="위치">
-                    <SelectValue placeholder="위치 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations.map((location) => (
-                      <SelectItem key={location} value={location}>
-                        {location}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* 두 토글은 짝이라 한 줄에 둔다 — 사이드바를 좁히면 자동으로 줄바꿈된다. */}
-              <div data-testid="equipment-filter-toggles" className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                <label className="flex items-center gap-2 text-base font-medium">
-                  <input
-                    type="checkbox"
-                    checked={availableOnly}
-                    onChange={(event) => setAvailableOnly(event.target.checked)}
-                  />
-                  사용 가능 장비만 보기
-                </label>
-
-                <label className="flex items-center gap-2 text-base font-medium">
-                  <input
-                    type="checkbox"
-                    checked={hideSimulated}
-                    onChange={(event) => setHideSimulated(event.target.checked)}
-                  />
-                  시뮬레이션 장비 숨기기
-                </label>
-              </div>
-
-              {fetchError ? <div className="alert alert-error">{fetchError}</div> : null}
-            </div>
-
-            <div data-testid="equipment-result-summary" className="mt-4 shrink-0 border-t border-border pt-3">
-              <div className="text-base font-medium">
-                {activeFilterLabels.length > 0 ? '검색 결과' : '전체'} {filteredEquipment.length}건
-              </div>
-              {activeFilterLabels.length > 0 ? (
-                <div className="mt-0.5 text-sm text-muted-foreground">{activeFilterLabels.join(' · ')}</div>
-              ) : null}
-            </div>
-
-            <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto">
-              {isLoading ? (
-                <div className="empty-state">실시간 데이터 로딩 중입니다.</div>
-              ) : filteredEquipment.length === 0 ? (
-                <div className="empty-state">표시할 실시간 태그가 없습니다.</div>
-              ) : (
-                filteredEquipment.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => toggleSelectedEquipment(item.id)}
-                    title={item.id}
-                    className={`w-full border-b border-border px-3 py-2 text-left transition-all last:border-b-0 ${
-                      selectedEquipment === item.id
-                        ? 'border-l-2 border-l-foreground bg-secondary'
-                        : 'border-l-2 border-l-transparent hover:bg-secondary'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[1.05rem] leading-tight">{item.name}</span>
-                      <span className={`shrink-0 ${getAssetStatusColor(item.assetStatus)}`} />
-                    </div>
-                    <div className="truncate text-sm text-muted-foreground">
-                      {item.location}
-                      {item.currentHolderName ? ` · ${item.currentHolderName}` : ''}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </>
-        </ResizableSidebar>
+                  {activeFilterLabels.length > 0 ? '검색 결과' : '전체'} {filteredEquipment.length}건 보기
+                </button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>
+                    {activeFilterLabels.length > 0 ? '검색 결과' : '전체'} {filteredEquipment.length}건
+                  </DialogTitle>
+                  {activeFilterLabels.length > 0 ? (
+                    <DialogDescription>{activeFilterLabels.join(' · ')}</DialogDescription>
+                  ) : null}
+                </DialogHeader>
+                <DialogBody className="space-y-0 p-0">{resultsListItems(() => setResultsOpen(false))}</DialogBody>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
 
         <div className="flex w-full min-w-0 flex-1 justify-center pt-4 pb-14 pr-[clamp(1rem,2.5vw,2rem)] sm:pt-5">
           <div className="grid w-full max-w-[1360px] grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -693,7 +784,10 @@ export default function EquipmentSearch() {
               </div>
             </section>
 
-            <section className="space-y-4 fade-rise-delay">
+            {/* 좁은 화면에서는 지도/목록으로 이미 구역별 장비를 볼 수 있어, 층별 구역 안내
+                패널까지 세로로 쌓이면 화면을 너무 많이 차지한다 — xl(사이드바가 나란히
+                배치되는 지점)부터만 보여준다. */}
+            <section className="hidden space-y-4 fade-rise-delay xl:block">
               <div data-testid="zone-guide-panel" className="surface-panel surface-panel--muted p-5">
                 <div className="panel-header">
                   <div>
