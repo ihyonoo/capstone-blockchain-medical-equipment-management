@@ -1,6 +1,11 @@
 pragma solidity ^0.8.20;
 
 contract UsageRecordRegistry {
+    struct MovementPoint {
+        string location;
+        uint64 at;
+    }
+
     struct UsageRecord {
         uint64 checkoutUserId;
         uint64 returnUserId;
@@ -12,6 +17,7 @@ contract UsageRecordRegistry {
         uint64 recordedAt;
         address recorder;
         bool exists;
+        MovementPoint[] movementPath;
     }
 
     mapping(string => UsageRecord) private records;
@@ -37,7 +43,8 @@ contract UsageRecordRegistry {
         string calldata checkoutLocation,
         uint64 checkoutAt,
         string calldata returnLocation,
-        uint64 returnedAt
+        uint64 returnedAt,
+        MovementPoint[] calldata movementPath
     ) external {
         require(bytes(usageId).length > 0, "usageId required");
         require(bytes(tagId).length > 0, "tagId required");
@@ -50,18 +57,20 @@ contract UsageRecordRegistry {
 
         uint64 recordedAt = uint64(block.timestamp);
 
-        records[usageId] = UsageRecord({
-            checkoutUserId: checkoutUserId,
-            returnUserId: returnUserId,
-            tagId: tagId,
-            checkoutLocation: checkoutLocation,
-            checkoutAt: checkoutAt,
-            returnLocation: returnLocation,
-            returnedAt: returnedAt,
-            recordedAt: recordedAt,
-            recorder: msg.sender,
-            exists: true
-        });
+        UsageRecord storage record = records[usageId];
+        record.checkoutUserId = checkoutUserId;
+        record.returnUserId = returnUserId;
+        record.tagId = tagId;
+        record.checkoutLocation = checkoutLocation;
+        record.checkoutAt = checkoutAt;
+        record.returnLocation = returnLocation;
+        record.returnedAt = returnedAt;
+        record.recordedAt = recordedAt;
+        record.recorder = msg.sender;
+        record.exists = true;
+        for (uint256 i = 0; i < movementPath.length; i++) {
+            record.movementPath.push(movementPath[i]);
+        }
 
         emit UsageRecordStored(
             usageId,
@@ -90,10 +99,11 @@ contract UsageRecordRegistry {
             uint64 returnedAt,
             uint64 recordedAt,
             address recorder,
-            bool exists
+            bool exists,
+            MovementPoint[] memory movementPath
         )
     {
-        UsageRecord memory record = records[usageId];
+        UsageRecord storage record = records[usageId];
         return (
             record.checkoutUserId,
             record.returnUserId,
@@ -104,7 +114,8 @@ contract UsageRecordRegistry {
             record.returnedAt,
             record.recordedAt,
             record.recorder,
-            record.exists
+            record.exists,
+            record.movementPath
         );
     }
 }

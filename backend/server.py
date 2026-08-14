@@ -1391,6 +1391,17 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
                   return_reader_id = %s,
                   return_location = %s,
                   returned_at = %s,
+                  movement_path = (
+                    SELECT COALESCE(json_agg(json_build_object(
+                             'location', COALESCE(r.location_name, tsh.reader_id),
+                             'at', EXTRACT(EPOCH FROM tsh.decided_at)::BIGINT
+                           ) ORDER BY tsh.decided_at), '[]'::json)
+                    FROM tag_state_history tsh
+                    JOIN readers r ON r.reader_id = tsh.reader_id
+                    WHERE tsh.tag_id = %s
+                      AND tsh.decided_at > (SELECT checkout_at FROM usage_history WHERE usage_id = %s)
+                      AND tsh.decided_at <= %s
+                  ),
                   updated_at = now()
                 WHERE usage_id = %s
                 """,
@@ -1401,6 +1412,9 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
                     actor["department"],
                     reader_id,
                     location_name,
+                    now,
+                    tag_id,
+                    current_usage_id,
                     now,
                     current_usage_id,
                 ),

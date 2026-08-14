@@ -28,6 +28,8 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock, HelpCircle,
 // "상세검색" 토글로 접고 펼치는 폼을 쓴다.
 const DESKTOP_QUERY = '(min-width: 1280px)';
 
+type MovementPoint = { location: string; at: number };
+
 type UsageChainRecord = {
   usageId: string;
   checkoutUserId: number | null;
@@ -37,6 +39,7 @@ type UsageChainRecord = {
   checkoutAt: number | null;
   returnLocation: string;
   returnedAt: number | null;
+  movementPath: MovementPoint[];
 };
 
 type UsageHistoryItem = {
@@ -67,6 +70,7 @@ type UsageHistoryItem = {
     location: string | null;
     at: number | null;
   };
+  movement_path: MovementPoint[];
   blockchain: {
     verification_status: string;
     verification_label: string;
@@ -371,6 +375,12 @@ function RecordSnapshot({
           <div>반납 위치: {record.returnLocation || '-'}</div>
           <div>대여 시각: {formatDateTime(record.checkoutAt)}</div>
           <div>반납 시각: {formatDateTime(record.returnedAt)}</div>
+          <div>
+            이동 경로:{' '}
+            {record.movementPath && record.movementPath.length > 0
+              ? record.movementPath.map((point) => point.location).join(' → ')
+              : '없음'}
+          </div>
           {notice ? <VerificationNotice value={noticeState}>{notice}</VerificationNotice> : null}
         </>
       )}
@@ -490,6 +500,21 @@ function UsageDetailDialog({ item, onClose }: { item: UsageHistoryItem | null; o
                     반납: {formatDateTime(item.return.at)}
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-card p-3">
+                <div className="metric-label text-[0.92rem]">이동 경로</div>
+                {item.movement_path && item.movement_path.length > 0 ? (
+                  <ol className="mt-1.5 space-y-1 text-[0.95rem] leading-6 text-foreground">
+                    {item.movement_path.map((point, index) => (
+                      <li key={`${point.location}-${point.at}-${index}`}>
+                        {index + 1}. {point.location} · {formatDateTime(point.at)}
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <div className="mt-1.5 text-[0.95rem] text-muted-foreground">이동 기록 없음</div>
+                )}
               </div>
 
               <RecordSnapshot
@@ -708,6 +733,7 @@ export default function IntegrityVerification() {
       '반납자 직책',
       '대여 위치',
       '반납 위치',
+      '이동 경로',
       '대여 시각',
       '반납 시각',
     ];
@@ -724,6 +750,9 @@ export default function IntegrityVerification() {
       getDisplayReturnedByPosition(item),
       getLocationLabel(item.checkout.location, item.checkout.reader_id),
       getLocationLabel(item.return.location, item.return.reader_id),
+      item.movement_path && item.movement_path.length > 0
+        ? item.movement_path.map((point) => point.location).join(' → ')
+        : '-',
       formatDateTime(item.checkout.at),
       formatDateTime(item.return.at),
     ]);

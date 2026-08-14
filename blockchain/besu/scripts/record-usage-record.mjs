@@ -1,38 +1,37 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import solc from "solc";
-import { ethers } from "ethers";
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import solc from 'solc';
+import { ethers } from 'ethers';
 
-const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const CONTRACT_PATH = path.join(ROOT_DIR, "contracts", "UsageRecordRegistry.sol");
-const DEPLOYMENT_PATH = path.join(ROOT_DIR, "deployments", "usage-registry.json");
-const RPC_URL = process.env.BESU_RPC_URL ?? "http://127.0.0.1:8549";
-const CHAIN_ID = Number(process.env.BESU_CHAIN_ID ?? "1337");
+const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const CONTRACT_PATH = path.join(ROOT_DIR, 'contracts', 'UsageRecordRegistry.sol');
+const DEPLOYMENT_PATH = path.join(ROOT_DIR, 'deployments', 'usage-registry.json');
+const RPC_URL = process.env.BESU_RPC_URL ?? 'http://127.0.0.1:8549';
+const CHAIN_ID = Number(process.env.BESU_CHAIN_ID ?? '1337');
 const SENDER_PRIVATE_KEY =
-  process.env.BESU_SENDER_PRIVATE_KEY ??
-  "ae6ae8e5ccbfb04590405997ee2d52d2b330726137b875053c36d94e974d162f";
+  process.env.BESU_SENDER_PRIVATE_KEY ?? 'ae6ae8e5ccbfb04590405997ee2d52d2b330726137b875053c36d94e974d162f';
 
 function compileContract() {
   // 배포 파일에는 ABI만 따로 저장하지 않기 때문에, 전송 시점에 계약을 다시 해석한다.
-  const source = fs.readFileSync(CONTRACT_PATH, "utf8");
+  const source = fs.readFileSync(CONTRACT_PATH, 'utf8');
   const input = {
-    language: "Solidity",
+    language: 'Solidity',
     sources: {
-      "UsageRecordRegistry.sol": {
+      'UsageRecordRegistry.sol': {
         content: source,
       },
     },
     settings: {
-      evmVersion: "berlin",
+      evmVersion: 'berlin',
       optimizer: {
         enabled: true,
         runs: 200,
       },
       viaIR: true,
       outputSelection: {
-        "*": {
-          "*": ["abi"],
+        '*': {
+          '*': ['abi'],
         },
       },
     },
@@ -40,17 +39,17 @@ function compileContract() {
 
   const output = JSON.parse(solc.compile(JSON.stringify(input)));
   const errors = output.errors ?? [];
-  const fatalErrors = errors.filter((item) => item.severity === "error");
+  const fatalErrors = errors.filter((item) => item.severity === 'error');
 
   if (fatalErrors.length > 0) {
-    throw new Error(fatalErrors.map((item) => item.formattedMessage).join("\n"));
+    throw new Error(fatalErrors.map((item) => item.formattedMessage).join('\n'));
   }
 
-  return output.contracts["UsageRecordRegistry.sol"].UsageRecordRegistry.abi;
+  return output.contracts['UsageRecordRegistry.sol'].UsageRecordRegistry.abi;
 }
 
 function normalizeString(value) {
-  return typeof value === "string" ? value : "";
+  return typeof value === 'string' ? value : '';
 }
 
 function normalizeInteger(value, label) {
@@ -61,22 +60,38 @@ function normalizeInteger(value, label) {
   return parsed;
 }
 
+function normalizeMovementPath(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((point, index) => {
+    if (!point || typeof point !== 'object') {
+      throw new Error(`movementPath[${index}] must be an object`);
+    }
+    return {
+      location: normalizeString(point.location),
+      at: normalizeInteger(point.at, `movementPath[${index}].at`),
+    };
+  });
+}
+
 function normalizePayload(value) {
   const payload = JSON.parse(value);
-  if (!payload || typeof payload !== "object") {
-    throw new Error("payload must be a JSON object");
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('payload must be a JSON object');
   }
 
   // 검증 가능한 원문 필드만 계약 입력 형태로 고정한다.
   return {
     usageId: normalizeString(payload.usageId),
-    checkoutUserId: normalizeInteger(payload.checkoutUserId, "checkoutUserId"),
-    returnUserId: normalizeInteger(payload.returnUserId, "returnUserId"),
+    checkoutUserId: normalizeInteger(payload.checkoutUserId, 'checkoutUserId'),
+    returnUserId: normalizeInteger(payload.returnUserId, 'returnUserId'),
     tagId: normalizeString(payload.tagId),
     checkoutLocation: normalizeString(payload.checkoutLocation),
-    checkoutAt: normalizeInteger(payload.checkoutAt, "checkoutAt"),
+    checkoutAt: normalizeInteger(payload.checkoutAt, 'checkoutAt'),
     returnLocation: normalizeString(payload.returnLocation),
-    returnedAt: normalizeInteger(payload.returnedAt, "returnedAt"),
+    returnedAt: normalizeInteger(payload.returnedAt, 'returnedAt'),
+    movementPath: normalizeMovementPath(payload.movementPath),
   };
 }
 
@@ -88,14 +103,14 @@ async function main() {
   }
 
   if (!fs.existsSync(DEPLOYMENT_PATH)) {
-    throw new Error("deployment file not found. run deploy-usage-registry.mjs first");
+    throw new Error('deployment file not found. run deploy-usage-registry.mjs first');
   }
 
   const payload = normalizePayload(payloadInput);
-  const deployment = JSON.parse(fs.readFileSync(DEPLOYMENT_PATH, "utf8"));
+  const deployment = JSON.parse(fs.readFileSync(DEPLOYMENT_PATH, 'utf8'));
   const abi = compileContract();
   const provider = new ethers.JsonRpcProvider(RPC_URL, {
-    name: "besu-qbft",
+    name: 'besu-qbft',
     chainId: CHAIN_ID,
   });
   const wallet = new ethers.Wallet(SENDER_PRIVATE_KEY, provider);
@@ -111,8 +126,9 @@ async function main() {
     payload.checkoutAt,
     payload.returnLocation,
     payload.returnedAt,
+    payload.movementPath,
     {
-      gasPrice: ethers.parseUnits("1", "gwei"),
+      gasPrice: ethers.parseUnits('1', 'gwei'),
       type: 0,
     },
   );

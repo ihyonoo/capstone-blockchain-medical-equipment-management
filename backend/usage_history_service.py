@@ -52,7 +52,8 @@ def fetch_usage_record_for_chain(usage_id: int) -> dict | None:
       h.checkout_location,
       EXTRACT(EPOCH FROM h.checkout_at)::BIGINT AS checkout_at_epoch,
       h.return_location,
-      EXTRACT(EPOCH FROM h.returned_at)::BIGINT AS returned_at_epoch
+      EXTRACT(EPOCH FROM h.returned_at)::BIGINT AS returned_at_epoch,
+      h.movement_path
     FROM usage_history h
     WHERE h.usage_id = %s
       AND h.usage_status = 'returned'
@@ -77,6 +78,7 @@ def fetch_usage_record_for_chain(usage_id: int) -> dict | None:
         "checkoutAt": row[5] or 0,
         "returnLocation": row[6] or "",
         "returnedAt": row[7] or 0,
+        "movementPath": row[8] or [],
     }
 
 
@@ -124,6 +126,7 @@ def usage_record_matches_chain(expected: dict, actual: dict) -> bool:
         "checkoutAt",
         "returnLocation",
         "returnedAt",
+        "movementPath",
     )
     return all(expected.get(key) == actual.get(key) for key in comparable_keys)
 
@@ -268,6 +271,7 @@ def build_usage_history_item(row, blockchain: dict | None = None) -> dict:
             "at": row[18],
         },
         "created_at": row[19],
+        "movement_path": row[26] or [],
         "blockchain": blockchain,
     }
 
@@ -302,6 +306,7 @@ def build_usage_history_verification_request(row) -> dict:
         "checkoutAt": row[15] or 0,
         "returnLocation": row[17] or "",
         "returnedAt": row[18] or 0,
+        "movementPath": row[26] or [],
     }
     return payload
 
@@ -574,7 +579,8 @@ def query_usage_history_rows(
       h.blockchain_transaction_index,
       EXTRACT(EPOCH FROM h.blockchain_recorded_at)::BIGINT AS blockchain_recorded_at_epoch,
       -- 실물/모의 구분. 다른 자리 기반 row 인덱스를 밀지 않도록 반드시 맨 뒤에 둔다.
-      t.is_real_hardware
+      t.is_real_hardware,
+      h.movement_path
     FROM usage_history h
     LEFT JOIN tags t ON t.tag_id = h.tag_id
     {where_sql}
@@ -618,7 +624,8 @@ def query_my_usage_history_rows(user_id: int, limit: int):
       EXTRACT(EPOCH FROM h.checkout_at)::BIGINT AS checkout_at_epoch,
       h.return_location,
       h.return_reader_id,
-      EXTRACT(EPOCH FROM h.returned_at)::BIGINT AS returned_at_epoch
+      EXTRACT(EPOCH FROM h.returned_at)::BIGINT AS returned_at_epoch,
+      h.movement_path
     FROM usage_history h
     WHERE h.user_id = %s
     ORDER BY h.checkout_at DESC, h.usage_id DESC
@@ -639,4 +646,5 @@ def build_my_usage_history_item(row) -> dict:
         "equipment": {"name": row[2], "type": row[3]},
         "checkout": {"location": row[4] or row[5], "at": row[6]},
         "return": {"location": row[7] or row[8], "at": row[9]},
+        "movement_path": row[10] or [],
     }
