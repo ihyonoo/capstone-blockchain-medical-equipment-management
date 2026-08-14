@@ -162,9 +162,16 @@ class TestUsageRecordMatchesChain:
             "checkoutAt": 1,
             "returnLocation": "b",
             "returnedAt": 2,
+            "movementPath": [{"location": "a", "at": 1}],
         }
 
         assert svc.usage_record_matches_chain(record, dict(record)) is True
+
+    def test_mismatch_when_movement_path_differs(self):
+        expected = {"usageId": "1", "movementPath": [{"location": "a", "at": 1}]}
+        actual = {"usageId": "1", "movementPath": [{"location": "b", "at": 1}]}
+
+        assert svc.usage_record_matches_chain(expected, actual) is False
 
     def test_mismatch_when_a_field_differs(self):
         expected = {"usageId": "1", "tagId": "t"}
@@ -368,7 +375,7 @@ class TestBuildUsageHistoryVerificationRequest:
         assert result["usageStatus"] == "checked_out"
 
     def test_builds_expected_payload_when_returned(self):
-        row = [None] * 25
+        row = [None] * 27
         row[0] = 1
         row[1] = "returned"
         row[2] = 10  # user_id
@@ -378,6 +385,7 @@ class TestBuildUsageHistoryVerificationRequest:
         row[15] = 1_700_000_000
         row[17] = "영상의학과"
         row[18] = 1_700_003_600
+        row[26] = [{"location": "수술실", "at": 1_700_000_500}]  # movement_path
 
         result = svc.build_usage_history_verification_request(tuple(row))
 
@@ -385,3 +393,4 @@ class TestBuildUsageHistoryVerificationRequest:
         assert result["expected"]["checkoutUserId"] == 10
         assert result["expected"]["returnUserId"] == 20
         assert result["expected"]["tagId"] == "TAG-1"
+        assert result["expected"]["movementPath"] == [{"location": "수술실", "at": 1_700_000_500}]

@@ -28,6 +28,7 @@ type UsageHistoryItem = {
   equipment: { name: string | null; type: string | null };
   checkout: { location: string | null; at: number | null };
   return: { location: string | null; at: number | null };
+  movement_path: Array<{ location: string; at: number }>;
 };
 
 const ROLE_LABEL: Record<string, string> = { admin: '관리자', staff: '의료진' };
@@ -513,6 +514,7 @@ export default function MyPage() {
                           <th className="py-2 pr-3 font-medium">장비</th>
                           <th className="py-2 pr-3 font-medium">대여 (위치 · 시각)</th>
                           <th className="py-2 pr-3 font-medium">반납 (위치 · 시각)</th>
+                          <th className="py-2 pr-3 font-medium">이동 경로</th>
                           <th className="py-2 font-medium">상태</th>
                         </tr>
                       </thead>
@@ -532,6 +534,11 @@ export default function MyPage() {
                             <td className="py-2 pr-3">
                               <div>{item.return.location ?? '-'}</div>
                               <div className="text-xs text-muted-foreground">{formatDateTime(item.return.at)}</div>
+                            </td>
+                            <td className="py-2 pr-3">
+                              {item.movement_path && item.movement_path.length > 0
+                                ? item.movement_path.map((point) => point.location).join(' → ')
+                                : '-'}
                             </td>
                             <td className="py-2">
                               <span

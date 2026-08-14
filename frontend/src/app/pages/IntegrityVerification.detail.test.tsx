@@ -27,6 +27,7 @@ const HISTORY_PAYLOAD = {
       equipment: { tag_id: TAG_ID, name: '검체이송 카트 7호' },
       checkout: { reader_id: 'M101', location: '1층 병동 A', at: 1_700_000_000 },
       return: { reader_id: 'M503', location: '수술실', at: 1_700_003_600 },
+      movement_path: [],
       blockchain: {
         verification_status: 'verified',
         verification_label: '검증 성공',
@@ -142,6 +143,48 @@ describe('IntegrityVerification usage detail popup', () => {
     expect(dialog.getByText('반납자')).toBeInTheDocument();
     // 팝업 안에서는 압축 포맷이 아니라 사람이 읽는 전체 시각을 보여준다.
     expect(dialog.getByText(/2023년.*시.*분.*초/)).toBeInTheDocument();
+  });
+
+  it('shows an empty movement path message when there was no intermediate movement', async () => {
+    renderPage();
+
+    const dialog = within(await openDetail());
+    expect(dialog.getByText('이동 경로')).toBeInTheDocument();
+    expect(dialog.getByText('이동 기록 없음')).toBeInTheDocument();
+  });
+
+  it('renders the movement path timeline when the equipment moved between checkout and return', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => {
+            if (String(url).includes('/rtls/live')) return LIVE_PAYLOAD;
+            return {
+              ...HISTORY_PAYLOAD,
+              items: [
+                {
+                  ...HISTORY_PAYLOAD.items[0],
+                  movement_path: [
+                    { location: '복도', at: 1_700_001_000 },
+                    { location: '영상의학과', at: 1_700_002_000 },
+                  ],
+                },
+              ],
+            };
+          },
+        }),
+      ),
+    );
+
+    renderPage();
+
+    const dialog = within(await openDetail());
+    expect(dialog.getByText(/복도/)).toBeInTheDocument();
+    expect(dialog.getByText(/영상의학과/)).toBeInTheDocument();
+    expect(dialog.queryByText('이동 기록 없음')).not.toBeInTheDocument();
   });
 
   it('closes the dialog again', async () => {

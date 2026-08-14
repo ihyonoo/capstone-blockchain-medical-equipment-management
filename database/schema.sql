@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS usage_history (
     return_reader_id TEXT REFERENCES readers(reader_id) ON UPDATE CASCADE,
     return_location TEXT,
     returned_at TIMESTAMPTZ,
+    -- 반납 시점에 한 번 계산되어 고정되는 스냅샷. [{"location": ..., "at": epoch}, ...] 형태로
+    -- checkout_at~returned_at 사이 tag_state_history에서 관측된 중간 이동만 담는다(반납 후 재계산 안 함).
+    movement_path JSONB,
     note TEXT,
     blockchain_tx_hash TEXT,
     blockchain_block_number BIGINT,
@@ -235,6 +238,7 @@ ALTER TABLE tag_state_history
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 ALTER TABLE usage_history
+    ADD COLUMN IF NOT EXISTS movement_path JSONB,
     ADD COLUMN IF NOT EXISTS usage_status TEXT NOT NULL DEFAULT 'checked_out',
     ADD COLUMN IF NOT EXISTS returned_by_user_id BIGINT REFERENCES users(user_id) ON UPDATE CASCADE,
     ADD COLUMN IF NOT EXISTS returned_by_name TEXT,

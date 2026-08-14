@@ -67,6 +67,39 @@ function sameHex(left, right) {
   return normalizeString(left).toLowerCase() === normalizeString(right).toLowerCase();
 }
 
+function normalizeMovementPath(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((point) => point && typeof point === 'object')
+    .map((point) => ({
+      location: normalizeString(point.location),
+      at: normalizeInteger(point.at),
+    }));
+}
+
+function decodeMovementPathResult(value) {
+  if (!value) {
+    return [];
+  }
+  // point.at은 Array.prototype.at()과 이름이 겹쳐 ethers Result에서 undefined가 되므로
+  // 반드시 위치 인덱스(point[1])로 읽는다.
+  return Array.from(value).map((point) => ({
+    location: String(point[0]),
+    at: Number(point[1]),
+  }));
+}
+
+function movementPathEqual(left, right) {
+  const a = Array.isArray(left) ? left : [];
+  const b = Array.isArray(right) ? right : [];
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.every((point, index) => point.location === b[index].location && point.at === b[index].at);
+}
+
 function decodeOnchainRecord(usageId, record) {
   return {
     usageId: String(usageId),
@@ -80,6 +113,7 @@ function decodeOnchainRecord(usageId, record) {
     recordedAt: Number(record[7]),
     recorder: record[8],
     exists: Boolean(record[9]),
+    movementPath: decodeMovementPathResult(record[10]),
   };
 }
 
@@ -96,6 +130,7 @@ function normalizeExpectedRecord(value, usageId) {
     checkoutAt: normalizeInteger(value.checkoutAt),
     returnLocation: normalizeString(value.returnLocation),
     returnedAt: normalizeInteger(value.returnedAt),
+    movementPath: normalizeMovementPath(value.movementPath),
   };
 }
 
@@ -124,6 +159,9 @@ function compareUsageRecord(left, right) {
     'returnedAt',
   ];
   const mismatchFields = comparableKeys.filter((key) => left?.[key] !== right?.[key]);
+  if (!movementPathEqual(left?.movementPath, right?.movementPath)) {
+    mismatchFields.push('movementPath');
+  }
   return {
     matches: mismatchFields.length === 0,
     mismatchFields,
@@ -402,6 +440,7 @@ function decodeUsageRecordInput(iface, tx) {
       checkoutAt: Number(parsed.args[5]),
       returnLocation: String(parsed.args[6]),
       returnedAt: Number(parsed.args[7]),
+      movementPath: decodeMovementPathResult(parsed.args[8]),
     };
   } catch {
     return null;

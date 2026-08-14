@@ -19,6 +19,7 @@ def _insert_usage_history(
     returned_by_user_id: int | None = None,
     checkout_location: str = "수술실",
     return_location: str | None = "영상의학과",
+    movement_path: list | None = None,
 ) -> int:
     checkout_at = dt.datetime.now(dt.UTC).replace(microsecond=0) - dt.timedelta(hours=1)
     returned_at = dt.datetime.now(dt.UTC).replace(microsecond=0) if returned else None
@@ -28,8 +29,9 @@ def _insert_usage_history(
             INSERT INTO usage_history (
                 usage_status, user_id, user_name, tag_id, equipment_name,
                 checkout_method, checkout_location, checkout_at,
-                return_method, returned_by_user_id, return_location, returned_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                return_method, returned_by_user_id, return_location, returned_at,
+                movement_path
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING usage_id
             """,
             (
@@ -45,6 +47,7 @@ def _insert_usage_history(
                 returned_by_user_id,
                 return_location if returned else None,
                 returned_at,
+                json.dumps(movement_path) if movement_path is not None else None,
             ),
         )
         usage_id = cur.fetchone()[0]
@@ -76,6 +79,25 @@ class TestFetchUsageRecordForChain:
         assert payload["returnLocation"] == "영상의학과"
         assert isinstance(payload["checkoutAt"], int)
         assert isinstance(payload["returnedAt"], int)
+        assert payload["movementPath"] == []
+
+    def test_includes_movement_path_when_present(self, db_conn, seed_tag, seed_user):
+        tag_id = seed_tag(nfc_tag_uid="NFC-106")
+        user_id, _headers = seed_user(username="path-checkout")
+        returner_id, _headers2 = seed_user(username="path-return")
+        path = [{"location": "수술실", "at": 1_700_000_100}, {"location": "회복실", "at": 1_700_000_200}]
+        usage_id = _insert_usage_history(
+            db_conn,
+            tag_id=tag_id,
+            user_id=user_id,
+            returned=True,
+            returned_by_user_id=returner_id,
+            movement_path=path,
+        )
+
+        payload = svc.fetch_usage_record_for_chain(usage_id)
+
+        assert payload["movementPath"] == path
 
     def test_returns_none_when_not_returned(self, db_conn, seed_tag, seed_user):
         tag_id = seed_tag(nfc_tag_uid="NFC-101")
@@ -249,3 +271,48 @@ class TestAnchorUsageRecordToChainEndToEnd:
             cur.execute("SELECT blockchain_tx_hash FROM usage_history WHERE usage_id = %s", (usage_id,))
             (tx_hash,) = cur.fetchone()
         assert tx_hash is None
+
+
+class TestQueryUsageHistoryRowsMovementPath:
+    def test_build_usage_history_item_includes_movement_path(self, db_conn, seed_tag, seed_user):
+        tag_id = seed_tag(nfc_tag_uid="NFC-107")
+        user_id, _headers = seed_user(username="list-checkout")
+        returner_id, _headers2 = seed_user(username="list-return")
+        path = [{"location": "수술실", "at": 1_700_000_100}]
+        usage_id = _insert_usage_history(
+            db_conn,
+            tag_id=tag_id,
+            user_id=user_id,
+            returned=True,
+            returned_by_user_id=returner_id,
+            movement_path=path,
+        )
+
+        _limit, _offset, _total, rows = svc.query_usage_history_rows(
+            user=None,
+            equipment=None,
+            checkout_location=None,
+            return_location=None,
+            date=None,
+            start_date=None,
+            end_date=None,
+            sort_by="time",
+            sort_order="desc",
+            limit=10,
+            max_limit=200,
+        )
+        row = next(r for r in rows if r[0] == usage_id)
+        item = svc.build_usage_history_item(row)
+
+        assert item["movement_path"] == path
+
+    def test_build_my_usage_history_item_includes_movement_path(self, db_conn, seed_tag, seed_user):
+        tag_id = seed_tag(nfc_tag_uid="NFC-108")
+        user_id, _headers = seed_user(username="mine-checkout")
+        path = [{"location": "회복실", "at": 1_700_000_200}]
+        _insert_usage_history(db_conn, tag_id=tag_id, user_id=user_id, returned=True, movement_path=path)
+
+        rows = svc.query_my_usage_history_rows(user_id=user_id, limit=10)
+        item = svc.build_my_usage_history_item(rows[0])
+
+        assert item["movement_path"] == path
