@@ -958,3 +958,389 @@
     overflow: visible;
   }
 }
+
+/* ── 사용 이력 검증 증명서 (IntegrityVerification 상세 팝업) ───────────────
+   각진 모서리·네이비/틸 토큰은 그대로 두고, 규칙선과 정렬만으로 문서 느낌을 만든다. */
+
+.certificate__header {
+  text-align: center;
+  border-top: 3px solid var(--foreground);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1.1rem;
+}
+
+.certificate__title {
+  font-size: 1.35rem;
+  letter-spacing: 0.14em;
+  text-indent: 0.14em;
+}
+
+
+/* 제목 아래 발급 정보 한 줄 — 문서번호·검증 시각·상태를 나란히 세운다 */
+.certificate__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 1.4rem;
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.certificate__meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.certificate__meta-label {
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+}
+
+.certificate__meta-value {
+  color: var(--foreground);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+
+
+/* 장비명·태그·usage_id를 한 줄에 세로 구분선으로 나눠 놓는다 */
+.certificate-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1.5rem;
+}
+
+.certificate-identity__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.certificate-identity__label {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+}
+
+.certificate-identity__value {
+  color: var(--foreground);
+  font-size: 0.95rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.certificate-timeline__step--empty .certificate-timeline__place {
+  color: var(--muted-foreground);
+  font-weight: 450;
+}
+
+.certificate__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+}
+
+.certificate-section__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--foreground);
+}
+
+/* 로마 숫자는 조항 번호처럼 값 열과 같은 폭을 차지한다 */
+.certificate-section__numeral {
+  min-width: 1.4rem;
+  color: var(--primary);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.certificate-section__title {
+  color: var(--foreground);
+  font-size: 1.02rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+
+.certificate-section__body {
+  padding: 0.85rem 0 0 2rem;
+}
+
+.certificate-empty {
+  color: var(--muted-foreground);
+  font-size: 0.95rem;
+}
+
+/* 레이블 열 고정 폭 — 값이 세로로 정렬돼야 기록물처럼 읽힌다 */
+.certificate-fields {
+  display: grid;
+  gap: 0.4rem 2.2rem;
+}
+
+.certificate-fields--split {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.certificate-fields__row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.certificate-fields__label {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+}
+
+.certificate-fields__value {
+  color: var(--foreground);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 기계값은 등폭 칩에 담아 본문과 구분한다 */
+.certificate-hash {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+}
+
+.certificate-hash__value {
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.certificate-hash__copy {
+  flex-shrink: 0;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.certificate-hash__copy:hover {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+/* 대여 → 경유 → 반납을 잇는 세로 줄기 */
+.certificate-timeline {
+  position: relative;
+  margin-top: 0.9rem;
+  padding-left: 1.1rem;
+  border-left: 1px solid var(--border);
+}
+
+.certificate-timeline__step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4rem 13rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.2rem 0.9rem;
+  padding-bottom: 1rem;
+}
+
+.certificate-timeline__step:last-child {
+  padding-bottom: 0;
+}
+
+.certificate-timeline__marker {
+  position: absolute;
+  top: 0.45rem;
+  left: -1.42rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border: 1px solid var(--muted-foreground);
+  border-radius: 999px;
+  background: var(--card);
+}
+
+/* 양 끝(대여·반납)은 채운 점으로 경유 지점과 구분한다 */
+.certificate-timeline__step--end .certificate-timeline__marker {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.certificate-timeline__label {
+  color: var(--foreground);
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.certificate-timeline__time {
+  color: var(--foreground);
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.certificate-timeline__place {
+  color: var(--foreground);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* 사람 줄은 시각 열 아래로 흘려 장소와 한 덩어리로 읽히게 한다 */
+.certificate-timeline__person {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.88rem;
+}
+
+.certificate-timeline__role {
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+
+
+
+
+
+
+.certificate__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 좁은 화면 전용 — 인쇄는 여백 안쪽 지면 폭이 720px 아래로 내려가므로 screen으로 못박아야
+   타임라인이 1열로 접히고 마커 원이 지면 밖으로 잘리는 일이 없다. */
+@media screen and (max-width: 720px) {
+  .certificate-section__body {
+    padding-left: 0;
+  }
+
+  .certificate-fields--split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .certificate-timeline__step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .certificate-timeline__person {
+    grid-column: 1 / -1;
+  }
+}
+
+/* 인쇄 시에는 앱 화면과 오버레이를 걷어내고 증명서만 용지에 펼친다 */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  /* Radix가 다이얼로그를 열며 body에 건 스크롤 잠금이 인쇄 지면을 한 화면 높이로 잘라낸다 */
+  html,
+  body {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  #root,
+  [data-slot='dialog-overlay'] {
+    display: none !important;
+  }
+
+  /* 화면용 고정 배치를 풀고 일반 흐름의 블록으로 되돌린다 */
+  .certificate[data-slot='dialog-content'] {
+    position: static !important;
+    display: block !important;
+    inset: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    /* Tailwind 4의 -translate-x-1/2은 transform이 아니라 translate 속성이다.
+       transform: none을 같이 쓰면 미니파이어가 둘을 transform: translate(0)으로 합쳐 이 선언이 사라진다. */
+    translate: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    animation: none !important;
+  }
+
+  /* 스크롤 컨테이너를 풀지 않으면 접힌 부분이 찍히지 않는다 */
+  .certificate [data-slot='dialog-header'],
+  .certificate [data-slot='dialog-body'] {
+    max-height: none !important;
+    overflow: visible !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* 상태 점·해시 칩·톤 배경은 기본 설정으로는 인쇄되지 않는다 */
+  .certificate,
+  .certificate * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 되도록 한 장에 담는다 — rem 기준을 줄이면 증명서 전체가 비례 축소된다 */
+  html {
+    font-size: 12.5px !important;
+  }
+
+  .certificate__header {
+    padding-bottom: 0.7rem !important;
+  }
+
+  .certificate__body {
+    gap: 1rem !important;
+  }
+
+  .certificate-section__body {
+    padding-top: 0.5rem !important;
+  }
+
+  .certificate-timeline {
+    margin-top: 0.5rem !important;
+  }
+
+  .certificate-timeline__step {
+    padding-bottom: 0.55rem !important;
+  }
+
+  /* 절과 타임라인 한 줄이 페이지 경계에서 쪼개지지 않게 */
+  .certificate-section,
+  .certificate-timeline__step {
+    break-inside: avoid;
+  }
+
+  .certificate [data-slot='dialog-close'],
+  .certificate__actions,
+  .certificate-hash__copy {
+    display: none !important;
+  }
+}

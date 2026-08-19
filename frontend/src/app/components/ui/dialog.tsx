@@ -41,6 +41,7 @@ function DialogContent({ className, children, ...props }: React.ComponentProps<t
       >
         {children}
         <DialogPrimitive.Close
+          data-slot="dialog-close"
           aria-label="닫기"
           className="absolute top-4 right-4 opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/40"
         >

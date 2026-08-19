@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -14,15 +14,19 @@ import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
 import { useMediaQuery } from '../lib/useMediaQuery';
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../components/ui/dialog';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock, HelpCircle, Loader2, User } from 'lucide-react';
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  HelpCircle,
+  Loader2,
+  Printer,
+  User,
+} from 'lucide-react';
 
 // 사이드바가 결과 옆에 나란히 붙는 시점(xl) — 그 미만에서는 사이드바 대신
 // "상세검색" 토글로 접고 펼치는 폼을 쓴다.
@@ -321,70 +325,146 @@ function getVerificationCardTone(status: string) {
   return 'solid-err';
 }
 
-function VerificationStatusIcon({ status }: { status: string }) {
-  if (status === 'verified') return <CheckCircle2 className="h-4 w-4" />;
-  if (status === 'not_eligible') return <Clock className="h-4 w-4" />;
-  if (status === 'chain_error' || status === 'not_configured') return <HelpCircle className="h-4 w-4" />;
-  return <AlertTriangle className="h-4 w-4" />;
-}
-
+/** 상태 뱃지. 글자만 둔다 — 라벨이 상태를 다 말하고, 톤 색이 강약을 준다. */
 function VerificationStatusPill({ status, label }: { status: string; label: string }) {
-  const tone = getStatusTone(status);
-
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[0.82rem] font-semibold ${tone}`}
+      className={`inline-flex items-center rounded-md border px-2.5 py-1 text-[0.82rem] font-semibold ${getStatusTone(status)}`}
     >
-      <VerificationStatusIcon status={status} />
-      <span>{label}</span>
+      {label}
     </span>
   );
 }
 
-function SnapshotCard({ title, children }: { title: string; children: ReactNode }) {
+/** CSV의 검증 결과 칸. 사용 중인 이력은 애초에 내보내지 않으므로 두 값이면 충분하다. */
+function getCsvVerificationResult(status: string | undefined) {
+  return status === 'verified' ? '성공' : '실패';
+}
+
+/** 발급 대장이 따로 없으므로 문서번호는 usage_id에서만 파생한다. */
+function formatDocumentNumber(usageId: number) {
+  return `UR-${String(usageId).padStart(6, '0')}`;
+}
+
+/** 타임라인 노드에 붙는 '이름 · 부서 · 직책'. 비어 있는 칸은 '-'로 채워 열이 밀리지 않게 한다. */
+function formatHandler(name: string | null, department: string, position: string) {
+  return [name ?? '-', department, position].join(' · ');
+}
+
+type CertificateField = { label: string; value: ReactNode };
+
+/** 증명서의 한 절. 로마 숫자·제목·규칙선으로 묶어 문서의 조항처럼 읽히게 한다. */
+function CertificateSection({ numeral, title, children }: { numeral: string; title: string; children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="text-[1.08rem] font-semibold text-foreground">{title}</div>
-      <div className="mt-3 border-t border-border/70 pt-3 text-[1rem] leading-7 text-foreground">{children}</div>
-    </div>
+    <section role="group" aria-label={title} className="certificate-section">
+      <div className="certificate-section__head">
+        <span className="certificate-section__numeral">{numeral}</span>
+        <span className="certificate-section__title">{title}</span>
+      </div>
+      <div className="certificate-section__body">{children}</div>
+    </section>
   );
 }
 
-function RecordSnapshot({
-  title,
-  record,
-  notice,
-  noticeState,
-}: {
-  title: string;
-  record: UsageChainRecord | null;
-  notice?: string;
-  noticeState?: boolean | null;
-}) {
+/** 레이블 열과 값 열을 맞춘 정의 목록. 값이 위아래로 정렬돼야 기록물처럼 읽힌다. */
+function CertificateFields({ fields, split = false }: { fields: CertificateField[]; split?: boolean }) {
   return (
-    <SnapshotCard title={title}>
-      {!record ? (
-        <div>기록 없음</div>
+    <dl className={`certificate-fields${split ? ' certificate-fields--split' : ''}`}>
+      {fields.map((field) => (
+        <div key={field.label} className="certificate-fields__row">
+          <dt className="certificate-fields__label">{field.label}</dt>
+          <dd className="certificate-fields__value">{field.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** 머클 루트 같은 기계값 — 등폭으로 고정하고 그대로 복사할 수 있게 한다. */
+function HashValue({ value }: { value: string | null | undefined }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
+
+  const copy = () => {
+    if (!value) return;
+    void navigator.clipboard?.writeText(value);
+    setCopied(true);
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <span className="certificate-hash">
+      <code className="certificate-hash__value">{value ?? '-'}</code>
+      {value ? (
+        <button
+          type="button"
+          onClick={copy}
+          aria-label={copied ? '복사됨' : '값 복사'}
+          className="certificate-hash__copy"
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
+/** 대여 → 경유 → 반납을 한 줄기로 잇는다. 4칸으로 흩어져 있던 사람·장소·시각이 여기 모인다. */
+function RecordTimeline({ item }: { item: UsageHistoryItem }) {
+  const transit = item.movement_path ?? [];
+
+  return (
+    <ol aria-label="사용 기록 타임라인" className="certificate-timeline">
+      <li className="certificate-timeline__step certificate-timeline__step--end">
+        <span className="certificate-timeline__marker" aria-hidden="true" />
+        <span className="certificate-timeline__label">대여</span>
+        <span className="certificate-timeline__time">{formatDateTime(item.checkout.at)}</span>
+        <span className="certificate-timeline__place">
+          {getLocationLabel(item.checkout.location, item.checkout.reader_id)}
+        </span>
+        <span className="certificate-timeline__person">
+          <span className="certificate-timeline__role">대여자</span>
+          {formatHandler(item.user.name, getDisplayDepartment(item), getDisplayPosition(item))}
+        </span>
+      </li>
+
+      {transit.length === 0 ? (
+        <li className="certificate-timeline__step certificate-timeline__step--empty">
+          <span className="certificate-timeline__marker" aria-hidden="true" />
+          <span className="certificate-timeline__label">경유</span>
+          <span className="certificate-timeline__place">이동 기록 없음</span>
+        </li>
       ) : (
-        <>
-          <div>usage_id: {record.usageId}</div>
-          <div>태그: {formatIBeaconTag(record.tagId ?? '')}</div>
-          <div>사용 시작자 ID: {record.checkoutUserId ?? '-'}</div>
-          <div>사용 종료자 ID: {record.returnUserId ?? '-'}</div>
-          <div>대여 위치: {record.checkoutLocation || '-'}</div>
-          <div>반납 위치: {record.returnLocation || '-'}</div>
-          <div>대여 시각: {formatDateTime(record.checkoutAt)}</div>
-          <div>반납 시각: {formatDateTime(record.returnedAt)}</div>
-          <div>
-            이동 경로:{' '}
-            {record.movementPath && record.movementPath.length > 0
-              ? record.movementPath.map((point) => point.location).join(' → ')
-              : '없음'}
-          </div>
-          {notice ? <VerificationNotice value={noticeState}>{notice}</VerificationNotice> : null}
-        </>
+        transit.map((point, index) => (
+          <li key={`${point.location}-${point.at}-${index}`} className="certificate-timeline__step">
+            <span className="certificate-timeline__marker" aria-hidden="true" />
+            <span className="certificate-timeline__label">경유 {index + 1}</span>
+            <span className="certificate-timeline__time">{formatDateTime(point.at)}</span>
+            <span className="certificate-timeline__place">{point.location}</span>
+          </li>
+        ))
       )}
-    </SnapshotCard>
+
+      <li className="certificate-timeline__step certificate-timeline__step--end">
+        <span className="certificate-timeline__marker" aria-hidden="true" />
+        <span className="certificate-timeline__label">반납</span>
+        <span className="certificate-timeline__time">{formatDateTime(item.return.at)}</span>
+        <span className="certificate-timeline__place">
+          {getLocationLabel(item.return.location, item.return.reader_id)}
+        </span>
+        <span className="certificate-timeline__person">
+          <span className="certificate-timeline__role">반납자</span>
+          {formatHandler(
+            item.returned_by.name,
+            getDisplayReturnedByDepartment(item),
+            getDisplayReturnedByPosition(item),
+          )}
+        </span>
+      </li>
+    </ol>
   );
 }
 
@@ -438,103 +518,97 @@ function UsageHistoryRow({ item, onOpen }: { item: UsageHistoryItem; onOpen: () 
   );
 }
 
-/** 한 건의 전체 기록. 요약 4칸에 이어 온체인 원문과 머클 검증 결과를 보여준다. */
+/** 한 건의 전체 기록을 검증 증명서 형식으로 발급한다. 정보는 네 개 절로 나뉘고 하나도 생략하지 않는다. */
 function UsageDetailDialog({ item, onClose }: { item: UsageHistoryItem | null; onClose: () => void }) {
   const blockchain = item?.blockchain;
   const verificationStatus = blockchain?.verification_status ?? 'chain_error';
   const verificationLabel = blockchain?.verification_label ?? '검증 중 오류';
+  const record = blockchain?.db_record ?? null;
+  const anchor = blockchain?.anchor ?? null;
+  const onchainNotice = getOnchainRecordNotice(blockchain?.tx_input_matches_db);
+  const merkleNotice = getMerkleVerificationNotice(blockchain?.transactions_root_matches);
 
   return (
     <Dialog open={Boolean(item)} onOpenChange={(open) => (open ? undefined : onClose())}>
       {/* 온체인 해시가 길어 기본 max-w-2xl에서는 줄바꿈이 심하다 */}
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="certificate max-w-4xl" aria-describedby={undefined}>
         {item ? (
           <>
-            <DialogHeader className="pr-12">
-              <DialogTitle>{item.equipment.name}</DialogTitle>
-              <DialogDescription>
-                usage_id {item.usage_id} · {formatIBeaconTag(item.equipment.tag_id)}
-              </DialogDescription>
-              <div className="pt-1">
+            <DialogHeader className="certificate__header pr-12">
+              <DialogTitle className="certificate__title">의료 장비 사용 이력 검증 증명서</DialogTitle>
+              <div role="group" aria-label="증명서 발급 정보" className="certificate__meta">
+                <div className="certificate__meta-item">
+                  <span className="certificate__meta-label">문서번호</span>
+                  <span className="certificate__meta-value">{formatDocumentNumber(item.usage_id)}</span>
+                </div>
                 <VerificationStatusPill status={verificationStatus} label={verificationLabel} />
               </div>
             </DialogHeader>
 
-            <DialogBody className="space-y-3">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-lg border border-border bg-card p-3">
-                  <div className="metric-label text-[0.92rem]">대여자</div>
-                  <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div>이름: {item.user.name}</div>
-                      <div>부서: {getDisplayDepartment(item)}</div>
-                      <div>직책: {getDisplayPosition(item)}</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border bg-card p-3">
-                  <div className="metric-label text-[0.92rem]">반납자</div>
-                  <div className="mt-1.5 flex items-center gap-2 text-[1rem] leading-6 text-foreground">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div>이름: {item.returned_by.name ?? '-'}</div>
-                      <div>부서: {getDisplayReturnedByDepartment(item)}</div>
-                      <div>직책: {getDisplayReturnedByPosition(item)}</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border bg-card p-3">
-                  <div className="metric-label text-[0.92rem]">장소</div>
-                  <div className="mt-1.5 text-[1rem] leading-6 text-foreground">
-                    대여: {getLocationLabel(item.checkout.location, item.checkout.reader_id)}
-                    <br />
-                    반납: {getLocationLabel(item.return.location, item.return.reader_id)}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border bg-card p-3">
-                  <div className="metric-label text-[0.92rem]">시각</div>
-                  <div className="mt-1.5 text-[0.85rem] leading-5 tracking-[-0.02em] text-foreground">
-                    대여: {formatDateTime(item.checkout.at)}
-                    <br />
-                    반납: {formatDateTime(item.return.at)}
-                  </div>
-                </div>
-              </div>
+            <DialogBody className="certificate__body">
+              <CertificateSection numeral="Ⅰ" title="장비">
+                <ul aria-label="장비 식별 정보" className="certificate-identity">
+                  {[
+                    { label: '장비명', value: item.equipment.name },
+                    { label: '태그', value: formatIBeaconTag(item.equipment.tag_id) },
+                    { label: 'usage_id', value: String(item.usage_id) },
+                  ].map((field) => (
+                    <li key={field.label} className="certificate-identity__item">
+                      <span className="certificate-identity__label">{field.label}</span>
+                      <span className="certificate-identity__value">{field.value}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CertificateSection>
 
-              <div className="rounded-lg border border-border bg-card p-3">
-                <div className="metric-label text-[0.92rem]">이동 경로</div>
-                {item.movement_path && item.movement_path.length > 0 ? (
-                  <ol className="mt-1.5 space-y-1 text-[0.95rem] leading-6 text-foreground">
-                    {item.movement_path.map((point, index) => (
-                      <li key={`${point.location}-${point.at}-${index}`}>
-                        {index + 1}. {point.location} · {formatDateTime(point.at)}
-                      </li>
-                    ))}
-                  </ol>
+              <CertificateSection numeral="Ⅱ" title="사용 기록">
+                <RecordTimeline item={item} />
+              </CertificateSection>
+
+              <CertificateSection numeral="Ⅲ" title="의료 장비 사용 이력">
+                {!record ? (
+                  <div className="certificate-empty">기록 없음</div>
                 ) : (
-                  <div className="mt-1.5 text-[0.95rem] text-muted-foreground">이동 기록 없음</div>
+                  <>
+                    <CertificateFields
+                      split
+                      fields={[
+                        { label: 'usage_id', value: record.usageId },
+                        { label: '태그', value: formatIBeaconTag(record.tagId ?? '') },
+                        { label: '사용 시작자 ID', value: record.checkoutUserId ?? '-' },
+                        { label: '사용 종료자 ID', value: record.returnUserId ?? '-' },
+                        { label: '대여 위치', value: record.checkoutLocation || '-' },
+                        { label: '반납 위치', value: record.returnLocation || '-' },
+                        { label: '대여 시각', value: formatDateTime(record.checkoutAt) },
+                        { label: '반납 시각', value: formatDateTime(record.returnedAt) },
+                      ]}
+                    />
+                    <VerificationNotice value={blockchain?.tx_input_matches_db}>{onchainNotice}</VerificationNotice>
+                  </>
                 )}
+              </CertificateSection>
+
+              <CertificateSection numeral="Ⅳ" title="머클 검증 결과">
+                <CertificateFields
+                  fields={[
+                    { label: '블록 번호', value: anchor?.block_number ?? '-' },
+                    { label: '트랜잭션 인덱스', value: anchor?.transaction_index ?? '-' },
+                    { label: '원본 머클 루트 값', value: <HashValue value={anchor?.transactions_root} /> },
+                    {
+                      label: '재계산 머클 루트 값',
+                      value: <HashValue value={anchor?.recalculated_transactions_root} />,
+                    },
+                  ]}
+                />
+                <VerificationNotice value={blockchain?.transactions_root_matches}>{merkleNotice}</VerificationNotice>
+              </CertificateSection>
+
+              <div className="certificate__actions">
+                <Button type="button" variant="outline" onClick={() => window.print()}>
+                  <Printer className="h-4 w-4" />
+                  인쇄
+                </Button>
               </div>
-
-              <RecordSnapshot
-                title="의료 장비 사용 이력"
-                record={blockchain?.db_record ?? null}
-                notice={getOnchainRecordNotice(blockchain?.tx_input_matches_db)}
-                noticeState={blockchain?.tx_input_matches_db}
-              />
-
-              <SnapshotCard title="머클 검증 결과">
-                <div>블록 번호: {blockchain?.anchor?.block_number ?? '-'}</div>
-                <div>트랜잭션 인덱스: {blockchain?.anchor?.transaction_index ?? '-'}</div>
-                <div className="break-all">원본 머클 루트 값: {blockchain?.anchor?.transactions_root ?? '-'}</div>
-                <div className="break-all">
-                  재계산 머클 루트 값: {blockchain?.anchor?.recalculated_transactions_root ?? '-'}
-                </div>
-                <VerificationNotice value={blockchain?.transactions_root_matches}>
-                  {getMerkleVerificationNotice(blockchain?.transactions_root_matches)}
-                </VerificationNotice>
-              </SnapshotCard>
             </DialogBody>
           </>
         ) : null}
@@ -688,7 +762,8 @@ export default function IntegrityVerification() {
     if (!total) return;
 
     // 화면은 한 페이지씩만 받지만 CSV는 조회 조건에 맞는 전체를 담는다.
-    // 온체인 검증은 건당 비용이 커서 전수로 돌릴 수 없으므로 CSV에는 검증 결과를 넣지 않는다.
+    // 검증 결과 칸이 있어 온체인 검증까지 함께 받는다 — 청크당 스크립트 1회라 규모가 커도 호출 수는 늘지 않는다.
+    // 사용 중인 이력은 검증 대상이 아니므로 화면 체크와 무관하게 항상 뺀다.
     const session = getStoredAuthSession();
     if (!session?.token) {
       logout();
@@ -696,11 +771,13 @@ export default function IntegrityVerification() {
     }
 
     const collected: UsageHistoryItem[] = [];
+    // 화면 total은 사용 중인 이력까지 세므로, 받아야 할 건수는 CSV 첫 응답에서 다시 읽는다.
+    let csvTotal = Number.POSITIVE_INFINITY;
     try {
-      for (let chunk = 0; collected.length < total; chunk += 1) {
+      for (let chunk = 0; collected.length < csvTotal; chunk += 1) {
         const params = buildHistoryParams(
-          { ...query, page: chunk + 1, pageSize: CSV_CHUNK_SIZE },
-          { includeBlockchain: false },
+          { ...query, page: chunk + 1, pageSize: CSV_CHUNK_SIZE, includeInUse: false },
+          { includeBlockchain: true },
         );
         const response = await fetch(`${API_BASE_URL}/usage/history?${params.toString()}`, {
           method: 'GET',
@@ -711,6 +788,7 @@ export default function IntegrityVerification() {
         if (!response.ok || !payload?.ok) {
           throw new Error(payload?.detail ?? 'CSV로 내보낼 사용 이력을 불러오지 못했습니다.');
         }
+        if (typeof payload.total === 'number') csvTotal = payload.total;
         const chunkItems = Array.isArray(payload.items) ? (payload.items as UsageHistoryItem[]) : [];
         if (!chunkItems.length) break;
         collected.push(...chunkItems);
@@ -723,38 +801,30 @@ export default function IntegrityVerification() {
 
     const header = [
       '사용 이력 ID',
-      '장비 ID',
       '장비명',
-      '대여자 이름',
-      '대여자 부서',
-      '대여자 직책',
-      '반납자 이름',
-      '반납자 부서',
-      '반납자 직책',
+      '대여자 정보',
+      '반납자 정보',
       '대여 위치',
       '반납 위치',
-      '이동 경로',
       '대여 시각',
       '반납 시각',
+      '이동 경로',
+      '무결성 검증 결과',
     ];
 
     const rows = collected.map((item) => [
       item.usage_id,
-      item.equipment.tag_id,
       item.equipment.name,
-      item.user.name,
-      getDisplayDepartment(item),
-      getDisplayPosition(item),
-      item.returned_by.name ?? '-',
-      getDisplayReturnedByDepartment(item),
-      getDisplayReturnedByPosition(item),
+      formatHandler(item.user.name, getDisplayDepartment(item), getDisplayPosition(item)),
+      formatHandler(item.returned_by.name, getDisplayReturnedByDepartment(item), getDisplayReturnedByPosition(item)),
       getLocationLabel(item.checkout.location, item.checkout.reader_id),
       getLocationLabel(item.return.location, item.return.reader_id),
+      formatDateTime(item.checkout.at),
+      formatDateTime(item.return.at),
       item.movement_path && item.movement_path.length > 0
         ? item.movement_path.map((point) => point.location).join(' → ')
         : '-',
-      formatDateTime(item.checkout.at),
-      formatDateTime(item.return.at),
+      getCsvVerificationResult(item.blockchain?.verification_status),
     ]);
 
     const csv = [

@@ -141,15 +141,14 @@ describe('IntegrityVerification usage detail popup', () => {
     const dialog = within(await openDetail());
     expect(dialog.getByText('대여자')).toBeInTheDocument();
     expect(dialog.getByText('반납자')).toBeInTheDocument();
-    // 팝업 안에서는 압축 포맷이 아니라 사람이 읽는 전체 시각을 보여준다.
-    expect(dialog.getByText(/2023년.*시.*분.*초/)).toBeInTheDocument();
+    // 팝업 안에서는 압축 포맷이 아니라 사람이 읽는 전체 시각을 보여준다 — 대여·반납 두 번.
+    expect(dialog.getAllByText(/2023년.*시.*분.*초/)).toHaveLength(2);
   });
 
   it('shows an empty movement path message when there was no intermediate movement', async () => {
     renderPage();
 
     const dialog = within(await openDetail());
-    expect(dialog.getByText('이동 경로')).toBeInTheDocument();
     expect(dialog.getByText('이동 기록 없음')).toBeInTheDocument();
   });
 
@@ -182,8 +181,10 @@ describe('IntegrityVerification usage detail popup', () => {
     renderPage();
 
     const dialog = within(await openDetail());
-    expect(dialog.getByText(/복도/)).toBeInTheDocument();
-    expect(dialog.getByText(/영상의학과/)).toBeInTheDocument();
+    // 경유 지점은 요약 줄에도 한 번 더 나오므로 타임라인으로 좁혀 확인한다.
+    const timeline = within(dialog.getByRole('list', { name: '사용 기록 타임라인' }));
+    expect(timeline.getByText('복도')).toBeInTheDocument();
+    expect(timeline.getByText('영상의학과')).toBeInTheDocument();
     expect(dialog.queryByText('이동 기록 없음')).not.toBeInTheDocument();
   });
 
