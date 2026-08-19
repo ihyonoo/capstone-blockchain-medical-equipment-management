@@ -1,20 +1,14 @@
-# MediLedger & EquipTrace
+# MediLedger &amp; EquipTrace
 
-- IoT 기술을 활용한 실내 의료 장비 실시간 위치 추적 및
+IoT 기반 실내 의료 장비 실시간 위치 추적, 블록체인 기반 사용 이력 무결성 검증 시스템
 
-- 블록체인을 활용한 의료 장비 사용 이력 무결성 검증 시스템
+![Live](https://img.shields.io/badge/Live-mediledger.xyz-38C172?style=for-the-badge&logo=cloudflare&logoColor=white)
 
-의료 장비에 BLE iBeacon Tag를 부착하고, BLE 리더가 신호 세기를 보고하면 백엔드가 각 장비의 현재 위치를 산출한다.
-
-의료진은 시스템을 통해 실시간으로 장비의 위치를 확인할 수 있다.
-
-사용하고자 하는 의료 장비에 의료진이 자신의 스마트폰으로 NFC 태깅을 하면 대여 및 반납 처리가 이루어진다.
-
-의료 장비 사용 이력은 **프라이빗 Hyperledger Besu 블록체인에 앵커링**되어 이후 위·변조 여부를 검증할 수 있다.
-
-의료 장비 사용 이력의 구성: {장비 사용자, 사용 장비, 사용 시간, 반납 시간, 사용 위치}
-
-[![Live](https://img.shields.io/badge/Live-mediledger.xyz-38C172?style=for-the-badge&logo=cloudflare&logoColor=white)](https://mediledger.xyz)
+- 의료 장비에 BLE iBeacon 태그 부착, BLE 리더가 신호 세기(RSSI) 보고, 백엔드가 장비의 현재 위치 산출
+- 의료진은 웹에서 장비 위치를 실시간 확인
+- 의료진이 스마트폰으로 장비의 NFC 태그를 태깅하면 대여·반납 처리
+- 사용 이력은 프라이빗 Hyperledger Besu 블록체인에 앵커링되어 이후 위·변조 여부 검증 가능
+- 사용 이력 구성: 사용자, 장비, 사용 시각, 반납 시각, 사용 위치
 
 ---
 
@@ -22,25 +16,29 @@
 
 - [주요 기능](#주요-기능)
 - [기술 스택](#기술-스택)
-- [디렉토리 구조](#디렉토리-구조)
-- [Docker 구성](#docker-구성)
-- [빠른 시작](#빠른-시작)
-- [코드 품질](#코드-품질)
-- [핵심 동작 원리](#핵심-동작-원리)
+- [시스템 구성](#시스템-구성)
+- [실행](#실행)
+- [동작 원리](#동작-원리)
 - [NFC 태깅과 사용 이력](#nfc-태깅과-사용-이력)
 - [블록체인 무결성 검증](#블록체인-무결성-검증)
-- [현재 구성의 한계와 분산의 중요성](#현재-구성의-한계와-분산의-중요성)
-- [설계 문서](#설계-문서)
+- [가상 병원 시뮬레이션](#가상-병원-시뮬레이션)
+- [블록체인 분산 구성](#블록체인-분산-구성)
+- [코드 품질](#코드-품질)
 
 ---
 
 ## 주요 기능
 
-- **실시간 위치 추적**: RTLS 리더가 보고한 RSSI로 장비의 현재 위치를 산출하고, 의료진 화면에 실시간(1초 폴링) 반영
-- **사용 이력 관리**: NFC 토큰 스캔으로 장비 대여(checkout)/반납(return)을 기록
-- **블록체인 앵커링**: 반납 완료 시 사용 기록을 Besu 체인에 기록하여 불변성 확보
-- **무결성 검증(관리자)**: 저장된 사용 기록을 온체인 값과 대조하여 위·변조 여부를 확인 (온체인 원문 일치 / 머클루트 일치)
-- **역할 기반 접근**: 관리자(admin) / 의료진(staff) 권한 분리
+
+| 기능          | 내용                                              |
+| ----------- | ----------------------------------------------- |
+| 실시간 위치 추적   | 리더가 보고한 RSSI로 장비 위치 산출, 의료진 화면에 1초 폴링 반영        |
+| 사용 이력 관리    | NFC 토큰 스캔으로 대여(checkout)·반납(return) 기록          |
+| 블록체인 앵커링    | 반납 완료 기록을 Besu 체인에 기록                           |
+| 무결성 검증      | 관리자 화면에서 DB 기록과 온체인 값 대조 (온체인 원문 일치, 머클루트 일치)   |
+| 역할 기반 접근    | 관리자(admin) / 의료진(staff) 권한 분리                   |
+| 가상 병원 시뮬레이션 | 실물 하드웨어 없이 구역 42 · 장비 50 · 의료진 120 규모 트래픽 상시 생성 |
+
 
 ---
 
@@ -53,7 +51,7 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)
 
-psycopg 3로 직접 쿼리(ORM 미사용), Redis는 위치 캐시 용도(best-effort)
+psycopg 3로 직접 쿼리(ORM 미사용), Redis는 위치 캐시(best-effort)
 
 **프론트엔드**
 
@@ -68,86 +66,58 @@ psycopg 3로 직접 쿼리(ORM 미사용), Redis는 위치 캐시 용도(best-ef
 ![Solidity](https://img.shields.io/badge/Solidity-363636?style=flat&logo=solidity&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=nodedotjs&logoColor=white)
 
-QBFT 합의, `UsageRecordRegistry.sol`, 백엔드가 호출하는 Node.js(ethers) 스크립트
+QBFT 합의, `UsageRecordRegistry.sol`, 백엔드가 subprocess로 호출하는 Node.js(ethers) 스크립트
 
-**엣지 (RTLS)**
+**엣지(RTLS)**
 
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![Bluetooth](https://img.shields.io/badge/BLE-0082FC?style=flat&logo=bluetooth&logoColor=white)
 
-bleak 라이브러리로 BLE 스캔/브로드캐스트
+bleak 라이브러리로 BLE 스캔·브로드캐스트
 
 ---
 
-## 디렉토리 구조
+## 시스템 구성
+
+Compose 파일은 3개, 이 중 블록체인 스택만 공유한다.
 
 ```
-capstone/
-├── backend/                 FastAPI 앱 + 로직 모듈 (server.py, *_utils.py, settings.py …)
-├── frontend/                React SPA (src/app/pages, components …)
-├── rtls/                    BLE 태그/리더 엣지 스크립트
-├── blockchain/besu/         Besu 네트워크, 컨트랙트, Node 스크립트
-├── database/                schema.sql (스키마 원본)
-├── docker-compose.dev.yml   로컬 개발 인프라 (postgres + redis + include: besu)
-└── docker-compose.yml       홈서버 전체 배포 (postgres + redis + 앱 + include: besu)
+              blockchain/besu/docker-compose.yml
+              (validator1~4 · rpc-node)
+                     ▲                ▲
+             include │                │ include
+                     │                │
+      docker-compose.dev.yml    docker-compose.yml
+      (로컬 개발)                (홈서버 배포)
 ```
+
+```
+[로컬 개발] docker-compose.dev.yml
+  컨테이너 : postgres · redis · besu(검증자 4 + RPC 노드 1)
+  호스트   : uvicorn backend :8000 · vite dev :5173
+  접속     : localhost 5432 / 6379 / 8549
+
+[홈서버 배포] docker-compose.yml
+  컨테이너 : postgres · redis · backend · web(nginx) · simulator
+             · besu(검증자 4 + RPC 노드 1) · cloudflared
+  외부 노출: cloudflared 터널로 mediledger.xyz 연결 (포트 개방 없음)
+```
+
+- 로컬은 인프라만 컨테이너화하고 앱은 호스트에서 실행 (코드 변경 시 hot-reload)
+- 배포는 앱까지 전부 컨테이너화
+- `simulator`는 포트를 열지 않고 컨테이너 DNS로 `backend`에만 요청하는 클라이언트
+- validator는 호스트 포트를 열지 않고 컨테이너 네트워크 내부에서만 통신
+- redis는 dev/배포에서 포트 바인딩·네트워크 소속이 달라 공유하지 않고 각 파일에 정의
+- `blockchain/besu/.env`(부트노드 enode 등)는 `env_file:`로 include 시점에 주입
+- `blockchain/besu/`에서 `docker compose up -d`로 블록체인만 단독 기동 가능
 
 ---
 
-## Docker 구성
+## 실행
 
-`blockchain/besu/docker-compose.yml`은 블록체인 전용(검증자 4 + RPC 노드)이다. 두 최상위 Compose 파일이 이 파일만 `include`로 가져와 재사용하고, redis는 블록체인과 무관하므로 공유하지 않고 각 파일에 직접 정의한다.
+로컬은 하이브리드 구성이다. DB·Redis·Besu는 컨테이너, 앱은 호스트에서 실행한다.
 
-```
-                 blockchain/besu/docker-compose.yml
-                 (validator1~4 · rpc-node)
-                          ▲            ▲
-                include   │            │   include
-                          │            │
-        ┌──────────────────┘            └──────────────────┐
-        │                                                   │
-docker-compose.dev.yml                              docker-compose.yml
-(로컬 개발, 저장소 루트)                             (홈서버 배포, 저장소 루트)
-  + postgres, redis                                   + postgres, redis
-                                                        + backend, web, cloudflared
-```
-
-- 로컬 개발용은 postgres·redis만 추가하고 앱은 호스트에서 실행
-- 배포용은 postgres·redis 외에 backend·web(nginx)·cloudflared까지 같은 Compose에 정의해 전부 컨테이너로 묶음
-- redis는 dev/배포용으로 설정(포트 바인딩, 네트워크 소속)이 다르므로 공유 파일로 뽑지 않고 각각 정의 — 설정이 자주 안 바뀌는 서비스라 중복 비용보다 파일 하나 줄이는 단순함이 더 크다고 판단
-- `blockchain/besu/.env`(부트노드 enode 등)는 `env_file:`로 include 시점에 주입됨
-- `blockchain/besu/` 디렉터리에서 `docker compose up -d`로 단독 실행하면 redis 없이 블록체인만 뜬다 (redis는 RTLS 위치 캐시용 best-effort라 블록체인 작업과 무관)
-
-```
-[로컬 개발] docker-compose.dev.yml — 인프라만 컨테이너화
-┌───────────────────────────────────────┐
-│ Docker: postgres · redis · besu(4+1)   │
-└─────────────────┬───────────────────────┘
-                   │ localhost:5432 / :6379 / :8549
-        ┌──────────┴──────────┐
-        ▼                     ▼
- 호스트: uvicorn        호스트: vite dev
- backend :8000          frontend :5173
-
-[홈서버 배포] docker-compose.yml — 전부 컨테이너화
-┌───────────────────────────────────────────────────┐
-│ Docker: postgres · backend · web(nginx) · besu(4+1) │
-└──────────────────────┬──────────────────────────────┘
-                        ▼
-                  cloudflared
-                        ▼
-            mediledger.xyz (Cloudflare Tunnel)
-```
-
-- **로컬 개발**: DB·Redis·Besu만 컨테이너, 앱(백엔드/프론트)은 호스트에서 직접 실행 → 코드 변경 시 hot-reload
-- **홈서버 배포**: 앱까지 전부 컨테이너화, `cloudflared`가 외부 포트 개방 없이 터널로 연결
-- `blockchain/besu/docker-compose.yml`은 두 상위 Compose가 공유하는 단일 소스 — validator는 호스트 포트를 열지 않고 컨테이너 네트워크 내부에서만 통신
-
----
-
-## 빠른 시작
-
-로컬 개발은 **하이브리드** 구성이다: DB · Redis · Besu 는 Docker 컨테이너로, 앱(백엔드/프론트)은 호스트에서 직접 실행한다. (홈서버 전체 배포는 루트 `docker-compose.yml`을 사용한다.)
+`bash scripts/dev-up.sh` 한 줄로 인프라 → 스키마 적용·재시드 → 백엔드 → 프론트엔드 → 시뮬레이터까지 기동된다(멱등). 아래는 개별 실행 절차다.
 
 ### 0) 최초 1회 준비
 
@@ -157,23 +127,22 @@ docker-compose.dev.yml                              docker-compose.yml
 bash blockchain/besu/scripts/generate-network.sh
 ```
 
-### 1) 인프라 기동 (DB · Redis · Besu)
-
-`docker-compose.dev.yml`이 postgres · redis · besu(검증자 4 + RPC 노드 1)를 한 번에 띄운다.
+### 1) 인프라 (DB · Redis · Besu)
 
 ```bash
-docker-compose -f docker-compose.dev.yml up -d   # 인프라 기동
-psql "$DATABASE_URL" -f database/schema.sql       # DB 스키마 적용 (멱등: 재실행 가능)
+docker-compose -f docker-compose.dev.yml up -d   # postgres · redis · besu(4+1)
+psql "$DATABASE_URL" -f database/schema.sql      # 스키마 적용 (멱등)
 
 # 컨트랙트 배포 (최초 1회)
 cd blockchain/besu && npm install && node scripts/deploy-usage-registry.mjs && cd -
 ```
 
-> DB는 Docker의 named volume `mediledger_pgdata`(컨테이너 `mediledger-postgres-dev`)에 영속된다. 접속: `postgresql://mediledger:mediledger@localhost:5432/mediledger_db` — DBeaver 등 GUI 툴도 `localhost:5432`로 그대로 붙는다. 정지는 `docker-compose -f docker-compose.dev.yml down` (데이터 유지; `-v`는 볼륨까지 지우므로 금지).
->
-> RPC 엔드포인트: `http://127.0.0.1:8549` (chain ID 1337, QBFT). 블록체인이 준비되지 않으면 백엔드는 앵커링·검증을 **우아하게 건너뛰고** 나머지 기능은 정상 동작한다.
+- DB는 named volume `mediledger_pgdata`에 영속, 접속 `postgresql://mediledger:mediledger@localhost:5432/mediledger_db`
+- 정지는 `docker-compose -f docker-compose.dev.yml down` (`-v`는 볼륨까지 삭제하므로 금지)
+- RPC 엔드포인트 `http://127.0.0.1:8549` (chain ID 1337, QBFT)
+- 블록체인 미기동 시 백엔드는 앵커링·검증만 건너뛰고 나머지 기능은 정상 동작
 
-### 2) 백엔드 (저장소 루트에서 실행)
+### 2) 백엔드 (저장소 루트)
 
 ```bash
 pip install -r backend/requirements.txt
@@ -188,41 +157,39 @@ npm run dev            # Vite dev 서버 :5173
 npm run build          # 변경 후 검증
 ```
 
-### 4) RTLS 엣지 스크립트 (`rtls/`, BLE 하드웨어 필요)
+### 4) RTLS 엣지 (`rtls/`, BLE 하드웨어 필요)
 
 ```bash
 pip install -r requirements.txt
-python rtls_tag/ibeacon_broadcast.py   # Tag: iBeacon UUID Broadcast
+python rtls_tag/ibeacon_broadcast.py   # Tag: iBeacon UUID 브로드캐스트
 python rtls_reader/send_to_server.py   # Reader: RSSI 스캔 후 /ingest 로 POST
+```
+
+### 5) 가상 병원 시뮬레이터 (저장소 루트, 하드웨어 불필요)
+
+```bash
+python -m simulation.apply_seed        # 시드 적용 (최초 1회, topology 변경 후)
+python -m simulation.simulator         # 상시 가동
 ```
 
 ---
 
-## 코드 품질
-
-- **프론트엔드(JS/TS)**: ESLint(`eslint.config.mjs`) + Prettier(`.prettierrc`). `npm run lint`으로 직접 실행 가능하다.
-- **백엔드/RTLS(Python)**: Ruff(`pyproject.toml`)로 린트·포맷을 겸한다. `pip install -r requirements-dev.txt`로 버전을 맞춘다.
-- **커밋 시 자동 검사**: Husky + lint-staged가 `git commit`마다 스테이징된 파일만 자동으로 검사·수정한다(`.husky/pre-commit`).
-- **PR 검사**: `main`으로의 PR에서 GitHub Super-Linter가 변경된 파일을 한 번 더 검증한다(`.github/workflows/super-linter.yml`).
-
----
-
-## 핵심 동작 원리
+## 동작 원리
 
 <img src="docs/figure/scenario.png" alt="전체 사용 시나리오" width="50%">
 
-### 위치 산출 파이프라인
+### 위치 산출
 
-1. 리더가 태그별 RSSI를 2초 창으로 모아 `POST /ingest` 로 배치 전송
-2. 백엔드가 가장 센 신호의 리더로 태그 위치를 판정 (히스테리시스·dwell·staleness 임계값으로 흔들림 방지)
-3. 결과를 **PostgreSQL(원본)에 먼저 저장 → Redis(캐시)에 갱신** (write-through)
-4. 의료진 화면은 `GET /rtls/live` 를 **1초 폴링**하여 Redis+DB 병합 결과를 렌더 (Redis 장애 시 DB 폴백)
+1. 리더가 태그별 RSSI를 2초 창으로 모아 `POST /ingest`로 배치 전송
+2. 백엔드가 가장 센 신호의 리더로 태그 위치 판정 (히스테리시스·dwell·staleness 임계값으로 흔들림 억제)
+3. PostgreSQL(원본) 저장 후 Redis(캐시) 갱신 (write-through)
+4. 의료진 화면이 `GET /rtls/live`를 1초 폴링해 Redis+DB 병합 결과 렌더 (Redis 장애 시 DB 폴백)
 
-### 사용 이력 라이프사이클 + 앵커링
+### 사용 이력과 앵커링
 
-1. NFC 토큰 스캔 → `POST /usage/checkout` / `POST /usage/return` 으로 `usage_history` 행을 열고 닫음
-2. 반납 시 완료 기록을 온체인에 앵커링. 백엔드는 라이브러리 대신 **`subprocess`로 `blockchain/besu/scripts/`의 Node 스크립트를 호출**한다 (`record-usage-record.mjs` 등)
-3. 이름·부서 등 표시용 필드는 앵커링에서 **의도적으로 제외**, 최소 사실 기록만 온체인에 저장
+1. NFC 토큰 스캔 시 `POST /usage/checkout` · `POST /usage/return`으로 `usage_history` 행을 열고 닫음
+2. 반납 시 완료 기록을 온체인에 앵커링. 백엔드는 라이브러리 대신 subprocess로 `blockchain/besu/scripts/`의 Node 스크립트 호출(`record-usage-record.mjs`)
+3. 이름·부서 등 표시용 필드는 앵커링에서 제외, 최소 사실 기록만 온체인 저장
 
 <img src="docs/figure/sequence.png" alt="시퀀스 다이어그램" width="50%">
 
@@ -230,27 +197,26 @@ python rtls_reader/send_to_server.py   # Reader: RSSI 스캔 후 /ingest 로 POS
 
 ## NFC 태깅과 사용 이력
 
-BLE 태그가 **위치추적**을 담당한다면, NFC는 같은 장비(`tags` 테이블의 같은 행)에
-붙는 **대여/반납 트리거**다. 물리 태그는 NTAG215를 사용하며, NFC Tools 같은 앱으로
-`{PUBLIC_APP_URL}/nfc/<token>` 형식의 URL을 태그에 기록해 장비에 부착한다.
+BLE 태그가 위치 추적을 담당한다면, NFC는 같은 장비(`tags` 테이블의 같은 행)에 붙는 대여·반납 트리거다.
+
+- 물리 태그는 NTAG215 사용, `{PUBLIC_APP_URL}/nfc/<token>` 형식 URL을 기록해 장비에 부착
 
 ### 관리자: 태그-NFC 매핑
 
-- `/admin/nfc-mapping` 페이지에서 장비(BLE 태그)에 NFC 토큰을 매핑
-- `GET/POST/DELETE /admin/nfc-mappings` 로 매핑 CRUD
+- `/admin/nfc-mapping`에서 장비(BLE 태그)에 NFC 토큰 매핑
+- `GET/POST/DELETE /admin/nfc-mappings`로 매핑 CRUD
 
-### 의료진: 태깅으로 대여/반납
+### 의료진: 태깅으로 대여·반납
 
-1. 스마트폰으로 장비의 NFC 태그를 스캔 → `/nfc/:token` 진입
+1. 스마트폰으로 NFC 태그 스캔, `/nfc/:token` 진입
 2. 장비 현재 상태·위치 확인 (`GET /nfc/{token}`)
-3. "사용 시작"/"사용 종료" 버튼 → `POST /usage/checkout` / `POST /usage/return`
-4. 반납 시 완료 기록이 자동으로 블록체인에 앵커링
+3. "사용 시작" / "사용 종료" 버튼으로 `POST /usage/checkout` · `POST /usage/return` 호출
+4. 반납 시 완료 기록 자동 앵커링
 
 ### 이벤트 로그
 
-모든 태깅 시도(성공/거부/무시)는 `usage_nfc_events` 테이블에 감사 로그로 남는다
-(리더/위치/사유 포함). `usage_history.checkout_method`/`return_method` 필드로
-NFC 처리와 수동(manual) 처리를 구분한다.
+- 모든 태깅 시도(성공·거부·무시)는 `usage_nfc_events`에 감사 로그로 기록 (리더·위치·사유 포함)
+- `usage_history.checkout_method` / `return_method`로 NFC 처리와 수동(manual) 처리 구분
 
 ---
 
@@ -258,49 +224,140 @@ NFC 처리와 수동(manual) 처리를 구분한다.
 
 관리자가 이력 화면(`GET /usage/history?include_blockchain=true`)에 진입하면:
 
-1. `usage_history` 를 DB에서 조회
-2. 각 기록을 **체인에서 다시 읽어** 현재 DB 값과 대조 (`verify-usage-records.mjs`)
-   - **온체인 원문 일치** (`tx_input_matches_db`)
-   - **머클루트 일치** (`transactions_root_matches`)
-3. 위·변조가 있으면 재계산 해시가 온체인 값과 **불일치**로 드러남
-
-누군가 DB를 몰래 고쳐도, 온체인에 박힌 불변 값과 대조되어 **감지**된다.
+1. `usage_history`를 DB에서 조회
+2. 각 기록을 체인에서 다시 읽어 현재 DB 값과 대조 (`verify-usage-records.mjs`)
+  - 온체인 원문 일치 (`tx_input_matches_db`)
+  - 머클루트 일치 (`transactions_root_matches`)
+3. DB가 수정된 경우 재계산 해시가 온체인 값과 불일치로 드러남
 
 ---
 
-## 현재 구성의 한계와 분산의 중요성
+## 가상 병원 시뮬레이션
 
-### 현재(개발) 구성의 한계
+### 도입 배경
 
-지금은 검증자 4개 + RPC 노드가 **모두 개발용 노트북 한 대의 Docker 컨테이너**로 실행된다. 이 때문에:
+- 확보한 실물 하드웨어는 라즈베리파이 리더 2대(M501 중앙수술센터, M502 통원수술센터)와 비컨 태그 소수뿐
+- 규모가 있어야 검증되는 항목이 다수: 위치 판정 임계값(히스테리시스·dwell)의 흔들림 억제, 다구역 지도 렌더, 이력 조회·페이징, 앵커링 처리량
+- 수동으로 넣은 더미 데이터에는 시간대·요일 분포, 이동 경로, 동시 대여 수 변동이 없어 화면·통계 검증에 부적합
+- 구역 42개에 리더를, 장비 50대에 비컨을 설치하는 것은 비용·설치 모두 프로젝트 범위 밖
+- 대안으로 실물 리더와 동일한 HTTP 규격으로 백엔드에 접속하는 가상 병원 1개를 상시 가동 (순천향대학교 천안병원 본관 1~5층 구성 기반)
 
-- **노트북을 끄면 체인이 멈춘다.** 모든 노드가 한 대에 있으므로 네트워크 전체가 정지한다. (단, 데이터는 볼륨에 보존되어 재시작 시 이어서 재개된다 — 정지이지 초기화는 아님)
-- **각 컨테이너의 데이터 폴더를 전부 지우면 체인이 초기화된다.** 모든 노드의 사본을 동시에 삭제할 수 있기 때문에 이력이 사라진다. (일부 노드만 지우면 나머지에서 재동기화되어 복구된다)
+### 설계 원칙
 
-즉 **모든 노드를 한 주체가 한 장소에서 통제하면, 물리적으로만 여러 노드일 뿐 진정한 분산이 아니다.** 단일 장애점(SPOF)이자, 마음먹으면 조작도 가능하다. → **그래서 각 기관에 노드를 분산하는 것이 결정적으로 중요하다.**
 
-### 진짜 의미 있는 구성 = 컨소시엄
+| 원칙             | 내용                                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 서버는 시뮬레이터를 모른다 | 시뮬레이터는 `/ingest`, `/auth/login`, `/usage/checkout`, `/usage/return`만 호출하는 HTTP 클라이언트. 백엔드에 시뮬레이션 전용 코드 경로 없음. 서버가 요청 출처를 구분하지 못하므로 시뮬레이터로 검증한 동작이 곧 실물 경로의 검증 |
+| 구분은 데이터로만      | 실물·가상 구분은 시드의 `is_real_hardware` 플래그. 태그 ID의 major 자리도 `1`=실물, `2`=시뮬레이션으로 분리                                                                                 |
+| 정본과 산출물 분리     | `simulation/topology/`(구역 폴리곤·인접 그래프·장비 카탈로그·의료진 로스터)가 정본. 시드 SQL과 프론트엔드 층별 좌표 TS는 `generate_seed.py`가 생성하는 산출물                                               |
+| 실물 구역 불가침      | 실물 리더 담당 구역 M501·M502는 시뮬레이션 대상에서 제외. 실물 하드웨어를 켜도 같은 지도 위에 충돌 없이 공존                                                                                           |
+| 런타임은 DB 미접근    | DB 접근은 시딩(`apply_seed`) 전용. 기동 후에는 실물 리더와 동일하게 HTTP로만 통신                                                                                                      |
 
-블록체인의 가치는 **"서로 믿지 않아도 되는(trustless)"** 데서 나온다. 이는 검증자를 **서로 독립적인 여러 주체**가 나누어 운영할 때 비로소 성립한다. 의료 장비 이력 추적에서는 다음과 같은 컨소시엄이 적합하다.
 
-| 참여 주체 | 역할 |
-|-----------|------|
-| 🏥 **참여 병원들** | 각 병원이 검증자 1개씩 운영 |
-| 🏛️ **규제/공공기관** | 보건복지부·식약처 등 감독기관 |
-| 🔍 **감사/보험사** | 제3자 검증 주체 |
-| 🏭 **장비 제조사** | 이력 추적 이해관계자 |
-| 🎓 **인증기관** | 무결성 보증 주체 |
+### 시뮬레이션 대상
 
-이렇게 구성되면 **어느 한 병원이 사용 기록을 조작하려 해도 나머지 노드가 이를 거부**한다. 그제서야 **"누구도 믿지 않아도 되는" 블록체인**이 성립한다.
 
-### 내결함성 참고 (QBFT)
+| 대상     | 규모                                      |
+| ------ | --------------------------------------- |
+| 구역(리더) | 42개 (본관 1~5층, 실물 담당 구역 제외)              |
+| 장비(태그) | 50대 / 20종 (수액펌프·제세동기·초음파진단기 등 이동형 의료기기) |
+| 의료진    | 120명 (직종·담당 층별 구분, 3교대 또는 평일 상근·온콜)     |
 
-QBFT는 **`3f+1`** 개의 검증자로 **`f`** 개의 장애/악의적 노드를 견딘다.
 
-| 검증자 수 | 견딜 수 있는 장애 노드 |
-|-----------|----------------------|
-| 4 | 1 |
-| 7 | 2 |
-| 10 | 3 |
+### 구조
 
-**독립 주체가 많을수록 더 안전하고 더 신뢰할 수 있다.**
+```
+simulation/topology/  (정본: 구역 폴리곤 · 인접 그래프 · 장비 · 의료진)
+        │
+        ├─ generate_seed.py ──→ 시드 SQL + 프론트 층별 좌표 TS (산출물)
+        │                              │
+        │                       apply_seed.py ──→ PostgreSQL
+        │
+        └─ simulator.py (asyncio 프로세스 1개, 루프 4개)
+                 │
+                 ▼
+            HTTP  ──→  backend  ──→  위치 판정 · 사용 이력 · 온체인 앵커링
+        (/ingest · /auth/login · /usage/checkout · /usage/return)
+```
+
+
+| 루프    | 주기      | 역할                                                                                                           |
+| ----- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| 물리    | 200ms   | 실물 태그의 iBeacon 브로드캐스트 주기와 동일. 장비 위치 갱신, 리더별 RSSI 샘플 생성                                                       |
+| 리더    | 1초      | 리더 42개가 각자 2초 윈도우 median RSSI를 `POST /ingest`로 전송. 실물 리더 스크립트와 동일 규격(`WINDOW_SEC=2.0`, `SEND_EVERY_SEC=1.0`) |
+| 행동    | 10초     | 수요 곡선 기반 확률 추첨으로 대여 판정, 대여 상태 머신 전이                                                                          |
+| 반납 워커 | 큐 기반 직렬 | 반납이 온체인 앵커링을 트리거하므로 nonce 충돌 방지를 위해 항상 1건씩 처리                                                                |
+
+
+- 루프 하나가 죽으면 예외를 그대로 올려 프로세스 전체 종료 (일부 루프만 정지한 채 정상으로 보이는 상태 방지)
+
+### 모델
+
+- **전파**: `RSSI(d) = -59 - 20·log10(d) - 6·(벽 홉 수) + 태그 개체차 + 느린 노이즈(OU) + 빠른 노이즈`. 수신 감도 −95dBm, 최대 유효 거리 40m. 벽 감쇠는 태그 구역과 리더 구역 간 인접 그래프 최단 홉 수로 근사
+- **이동**: 인접 그래프(42노드 51엣지, 구역 폴리곤 경계 간격에서 도출)의 최단경로를 따라 평균 1.1m/s로 이동, 층 이동 없음. 벽 통과·순간이동 궤적 방지
+- **수요 곡선**: 장비를 급성기(24시간 가동, 주말 영향 적음)와 외래(진료 시간 집중, 야간·일요일 거의 정지)로 분류해 시간대·요일 배율 적용. 동시 대여 수가 목표 밴드(주간 8~~14대, 야간 2~~4대)를 벗어나면 피드백 계수가 체크아웃 확률 조정. 야간에 드물게 응급 버스트(3배 배율) 발생
+- **대여 상태 머신**: `AVAILABLE → TRANSIT → IN_USE → (TRANSIT → IN_USE)* → RETURNING → 반납`. 대여 1건이 사용지 1~4곳 경유, 시각·구역·직종 조건을 만족하는 근무 중 직원만 대여·반납 가능
+- **예외 이벤트**: 현실의 어긋남을 의도적으로 포함. 예상보다 긴 사용(5%), 엉뚱한 위치 반납(3%), 스캔 실수 후 즉시 반납(2%), 대여자 퇴근 후 동료의 대리 반납(퇴근 시 85%)
+
+### 산출 규모
+
+- 평일 주간 동시 대여 평균 8~9대, 야간 3대 안팎
+- 하루 대여 약 142건 (24시간 오프라인 측정 기준), 반납 건은 전량 앵커링
+
+### 운용
+
+- 실행 절차는 [실행](#실행) 5) 참고. 로컬은 `simulation/.env`, 홈서버 배포는 루트 `.env`에서 설정 주입
+- `SIM_STAFF_PASSWORD` 필수, 없으면 즉시 종료
+- `SIM_RANDOM_SEED`를 지정하면 궤적 재현 가능, 비우면 기동마다 다른 궤적
+- 홈서버 배포에서는 `simulator` 컨테이너로 상시 가동
+- 상세: [`simulation/README.md`](simulation/README.md)
+
+---
+
+## 블록체인 분산 구성
+
+### 현재 개발 구성의 한계
+
+검증자 4개와 RPC 노드가 모두 개발용 노트북 한 대의 컨테이너로 실행된다.
+
+- 노트북을 끄면 체인 전체가 정지 (데이터는 볼륨에 보존되어 재시작 시 재개, 초기화는 아님)
+- 각 컨테이너의 데이터 폴더를 전부 지우면 이력 소멸 (일부 노드만 삭제하면 나머지에서 재동기화)
+- 한 주체가 한 장소에서 모든 노드를 통제하는 구성은 물리적으로만 다중 노드일 뿐, 단일 장애점이며 조작 가능
+
+### 컨소시엄 구성
+
+블록체인의 신뢰 비의존성(trustless)은 검증자를 서로 독립적인 주체가 나누어 운영할 때 성립한다.
+
+
+| 참여 주체   | 역할               |
+| ------- | ---------------- |
+| 참여 병원   | 각 병원이 검증자 1개씩 운영 |
+| 규제·공공기관 | 보건복지부·식약처 등 감독   |
+| 감사·보험사  | 제3자 검증           |
+| 장비 제조사  | 이력 추적 이해관계자      |
+| 인증기관    | 무결성 보증           |
+
+
+- 한 병원이 사용 기록을 조작해도 나머지 노드가 거부
+
+### 내결함성 (QBFT)
+
+검증자 `3f+1`개로 장애·악의 노드 `f`개를 허용한다.
+
+
+| 검증자 수 | 허용 장애 노드 |
+| ----- | -------- |
+| 4     | 1        |
+| 7     | 2        |
+| 10    | 3        |
+
+
+---
+
+## 코드 품질
+
+- **JS/TS**: ESLint(`eslint.config.mjs`) + Prettier(`.prettierrc`), `npm run lint`
+- **Python**: Ruff(`pyproject.toml`)로 린트·포맷, `pip install -r requirements-dev.txt`
+- **커밋 훅**: Husky + lint-staged가 스테이징된 파일만 검사·수정 (`.husky/pre-commit`)
+- **PR 검사**: `main` 대상 PR에서 GitHub Super-Linter가 변경 파일 재검증 (`.github/workflows/super-linter.yml`)
+- **테스트**: 저장소 루트에서 `pytest`
