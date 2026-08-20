@@ -25,12 +25,22 @@ def is_besu_ready() -> tuple[bool, str | None]:
     return True, None
 
 
-def run_besu_script(script_name: str, *args: str) -> tuple[bool, str, str]:
+# 검증 스크립트 1회 호출이 감당할 이력 수. 100건에 약 6초라 30초 타임아웃 안에 넉넉히 들어간다.
+VERIFY_BATCH_SIZE = 100
+
+
+def run_besu_script(script_name: str, *args: str, stdin_payload: str | None = None) -> tuple[bool, str, str]:
+    """JSON payload는 인자가 아니라 stdin으로 넘긴다.
+
+    리눅스는 인자 하나의 길이를 MAX_ARG_STRLEN(128KB)으로 제한해서, 검증 대상이 많아지면
+    exec 자체가 E2BIG로 실패한다. stdin에는 그런 상한이 없다.
+    """
     try:
         process = subprocess.run(
             ["node", f"scripts/{script_name}", *args],
             cwd=BESU_DIR,
             env=os.environ.copy(),
+            input=stdin_payload,
             capture_output=True,
             text=True,
             timeout=30,
@@ -165,7 +175,9 @@ def anchor_usage_record_to_chain(usage_id: int) -> dict:
             "record": onchain_record,
         }
 
-    ok, stdout, stderr = run_besu_script("record-usage-record.mjs", json.dumps(payload, ensure_ascii=False))
+    ok, stdout, stderr = run_besu_script(
+        "record-usage-record.mjs", stdin_payload=json.dumps(payload, ensure_ascii=False)
+    )
     if not ok:
         return {
             "ok": False,
@@ -370,88 +382,99 @@ def build_default_integrity_result(*, usage_status: str, detail: str) -> dict:
     }
 
 
-def verify_usage_history_integrity(rows) -> tuple[dict[int, dict], dict]:
-    requests = [build_usage_history_verification_request(row) for row in rows]
-    default_results = {
-        row[0]: build_default_integrity_result(
-            usage_status=row[1],
-            detail="온체인 검증 환경이 아직 준비되지 않았습니다.",
-        )
-        for row in rows
+def build_verification_failure_summary(rows, status: str) -> dict:
+    returned = sum(1 for row in rows if row[1] == "returned")
+    not_eligible = len(rows) - returned
+    return {
+        "total_count": len(rows),
+        "eligible_count": returned,
+        "verified_count": 0,
+        "failed_count": returned,
+        "not_eligible_count": not_eligible,
+        "status_counts": {status: returned, "not_eligible": not_eligible},
     }
 
+
+def merge_verification_summaries(summaries) -> dict:
+    merged = {
+        "total_count": 0,
+        "eligible_count": 0,
+        "verified_count": 0,
+        "failed_count": 0,
+        "not_eligible_count": 0,
+    }
+    status_counts: dict[str, int] = {}
+    for summary in summaries:
+        for key in merged:
+            value = summary.get(key)
+            if isinstance(value, int):
+                merged[key] += value
+        for status, count in (summary.get("status_counts") or {}).items():
+            if isinstance(count, int):
+                status_counts[status] = status_counts.get(status, 0) + count
+    merged["status_counts"] = status_counts
+    return merged
+
+
+def verify_usage_history_batch(rows) -> tuple[dict[int, dict], dict]:
+    """스크립트 한 번 호출로 처리하는 단위. 실패하면 이 배치만 저하된다."""
+    requests = [build_usage_history_verification_request(row) for row in rows]
+    ok, stdout, stderr = run_besu_script(
+        "verify-usage-records.mjs",
+        stdin_payload=json.dumps({"items": requests}, ensure_ascii=False, separators=(",", ":")),
+    )
+    if not ok:
+        detail = stderr or stdout or "온체인 검증 스크립트 실행에 실패했습니다."
+    else:
+        try:
+            payload = json.loads(stdout)
+        except json.JSONDecodeError:
+            detail = "온체인 검증 응답을 해석하지 못했습니다."
+        else:
+            results = {
+                int(item["usage_id"]): item
+                for item in payload.get("items", [])
+                if isinstance(item, dict) and str(item.get("usage_id", "")).isdigit()
+            }
+            for row in rows:
+                results.setdefault(
+                    row[0],
+                    build_default_integrity_result(
+                        usage_status=row[1],
+                        detail="해당 이력의 온체인 검증 결과를 찾지 못했습니다.",
+                    ),
+                )
+            return results, payload.get("summary") or {}
+
+    fallback = {row[0]: build_default_integrity_result(usage_status=row[1], detail=detail) for row in rows}
+    return fallback, build_verification_failure_summary(rows, "chain_error")
+
+
+def verify_usage_history_integrity(rows) -> tuple[dict[int, dict], dict]:
     ready, reason = is_besu_ready()
     if not ready:
-        summary = {
-            "total_count": len(rows),
-            "eligible_count": sum(1 for row in rows if row[1] == "returned"),
-            "verified_count": 0,
-            "failed_count": sum(1 for row in rows if row[1] == "returned"),
-            "not_eligible_count": sum(1 for row in rows if row[1] != "returned"),
-            "status_counts": {
-                "not_configured": sum(1 for row in rows if row[1] == "returned"),
-                "not_eligible": sum(1 for row in rows if row[1] != "returned"),
-            },
+        default_results = {
+            row[0]: build_default_integrity_result(
+                usage_status=row[1],
+                detail="온체인 검증 환경이 아직 준비되지 않았습니다.",
+            )
+            for row in rows
         }
         if reason:
             for row in rows:
                 if row[1] == "returned":
                     default_results[row[0]]["verification_method"] = reason
                     default_results[row[0]]["detail"] = reason
-        return default_results, summary
+        return default_results, build_verification_failure_summary(rows, "not_configured")
 
-    ok, stdout, stderr = run_besu_script(
-        "verify-usage-records.mjs",
-        json.dumps({"items": requests}, ensure_ascii=False, separators=(",", ":")),
-    )
-    if not ok:
-        detail = stderr or stdout or "온체인 검증 스크립트 실행에 실패했습니다."
-        fallback_results = {row[0]: build_default_integrity_result(usage_status=row[1], detail=detail) for row in rows}
-        summary = {
-            "total_count": len(rows),
-            "eligible_count": sum(1 for row in rows if row[1] == "returned"),
-            "verified_count": 0,
-            "failed_count": sum(1 for row in rows if row[1] == "returned"),
-            "not_eligible_count": sum(1 for row in rows if row[1] != "returned"),
-            "status_counts": {
-                "chain_error": sum(1 for row in rows if row[1] == "returned"),
-                "not_eligible": sum(1 for row in rows if row[1] != "returned"),
-            },
-        }
-        return fallback_results, summary
-
-    try:
-        payload = json.loads(stdout)
-    except json.JSONDecodeError:
-        detail = "온체인 검증 응답을 해석하지 못했습니다."
-        fallback_results = {row[0]: build_default_integrity_result(usage_status=row[1], detail=detail) for row in rows}
-        summary = {
-            "total_count": len(rows),
-            "eligible_count": sum(1 for row in rows if row[1] == "returned"),
-            "verified_count": 0,
-            "failed_count": sum(1 for row in rows if row[1] == "returned"),
-            "not_eligible_count": sum(1 for row in rows if row[1] != "returned"),
-            "status_counts": {
-                "chain_error": sum(1 for row in rows if row[1] == "returned"),
-                "not_eligible": sum(1 for row in rows if row[1] != "returned"),
-            },
-        }
-        return fallback_results, summary
-
-    results = {
-        int(item["usage_id"]): item
-        for item in payload.get("items", [])
-        if isinstance(item, dict) and str(item.get("usage_id", "")).isdigit()
-    }
-    for row in rows:
-        results.setdefault(
-            row[0],
-            build_default_integrity_result(
-                usage_status=row[1],
-                detail="해당 이력의 온체인 검증 결과를 찾지 못했습니다.",
-            ),
-        )
-    return results, payload.get("summary") or {}
+    results: dict[int, dict] = {}
+    summaries = []
+    for start in range(0, len(rows), VERIFY_BATCH_SIZE):
+        batch = rows[start : start + VERIFY_BATCH_SIZE]
+        batch_results, batch_summary = verify_usage_history_batch(batch)
+        results.update(batch_results)
+        summaries.append(batch_summary)
+    return results, merge_verification_summaries(summaries)
 
 
 def query_usage_history_rows(

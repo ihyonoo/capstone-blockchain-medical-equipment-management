@@ -95,11 +95,23 @@ function normalizePayload(value) {
   };
 }
 
+/** payload는 stdin으로 들어온다 — 인자로 넘기면 128KB(MAX_ARG_STRLEN)에서 exec가 실패한다.
+    인자로 준 경우도 계속 받아, 명령줄에서 직접 돌려볼 수 있게 둔다. */
+async function readPayloadInput() {
+  const fromArgv = process.argv[2];
+  if (fromArgv) return fromArgv;
+  if (process.stdin.isTTY) return '';
+  // readFileSync(0)은 논블로킹 파이프에서 EAGAIN으로 실패한다 — 스트림으로 읽는다.
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  return Buffer.concat(chunks).toString('utf8').trim();
+}
+
 async function main() {
-  const payloadInput = process.argv[2];
+  const payloadInput = await readPayloadInput();
 
   if (!payloadInput) {
-    throw new Error("usage: node scripts/record-usage-record.mjs '<json-payload>'");
+    throw new Error('usage: node scripts/record-usage-record.mjs < payload.json');
   }
 
   if (!fs.existsSync(DEPLOYMENT_PATH)) {

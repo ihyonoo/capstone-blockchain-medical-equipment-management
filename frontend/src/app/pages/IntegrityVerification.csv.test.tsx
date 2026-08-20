@@ -80,8 +80,12 @@ async function downloadCsv() {
 }
 
 /** CSV 요청만 골라낸다 — 화면 조회 요청과 구분해야 파라미터를 확인할 수 있다. */
+function csvRequestUrls() {
+  return requestedUrls.filter((url) => url.includes('limit=200'));
+}
+
 function csvRequestUrl() {
-  return requestedUrls.filter((url) => url.includes(`limit=1000`)).at(-1) ?? '';
+  return csvRequestUrls().at(-1) ?? '';
 }
 
 describe('IntegrityVerification CSV export', () => {
@@ -185,7 +189,7 @@ describe('IntegrityVerification CSV export', () => {
         if (text.includes('/rtls/live')) {
           return Promise.resolve({ ok: true, status: 200, json: async () => LIVE_PAYLOAD });
         }
-        if (text.includes('limit=1000')) {
+        if (text.includes('limit=200')) {
           csvCalls += 1;
           // CSV 대상은 1건뿐 — 두 번째 요청부터는 빈 페이지다.
           return Promise.resolve({
@@ -207,6 +211,50 @@ describe('IntegrityVerification CSV export', () => {
     await downloadCsv();
 
     expect(csvCalls).toBe(1);
+  });
+
+  // 백엔드는 검증을 켜면 limit을 200으로 자른다. 요청한 수가 아니라 받은 수만큼 전진해야
+  // 201번째부터가 통째로 누락되지 않는다.
+  it('advances the offset by the rows the server actually returned', async () => {
+    const pages = [
+      Array.from({ length: 200 }, (_, i) => buildItem({ usage_id: 1000 - i })),
+      Array.from({ length: 50 }, (_, i) => buildItem({ usage_id: 800 - i })),
+    ];
+    let csvCalls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        const text = String(url);
+        requestedUrls.push(text);
+        if (text.includes('/rtls/live')) {
+          return Promise.resolve({ ok: true, status: 200, json: async () => LIVE_PAYLOAD });
+        }
+        if (text.includes('limit=200')) {
+          const items = pages[csvCalls] ?? [];
+          csvCalls += 1;
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ ok: true, total: 250, count: items.length, items }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, total: 250, count: 1, items: [buildItem()] }),
+        });
+      }),
+    );
+
+    renderPage();
+    const lines = await downloadCsv();
+
+    const urls = csvRequestUrls();
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toContain('offset=0');
+    expect(urls[1]).toContain('offset=200');
+    // 헤더 1줄 + 250건
+    expect(lines).toHaveLength(251);
   });
 
   // 사용 중인 이력은 검증 대상이 아니라 CSV에 넣지 않는다 — 화면 체크와 무관하게 항상 제외한다.

@@ -212,7 +212,7 @@ class TestAnchorUsageRecordToChainEndToEnd:
 
         monkeypatch.setattr(svc, "is_besu_ready", lambda: (True, None))
 
-        def fake_run_besu_script(script_name, *args):
+        def fake_run_besu_script(script_name, *args, stdin_payload=None, **kwargs):
             if script_name == "read-usage-record.mjs":
                 return True, json.dumps({"exists": False}), ""
             if script_name == "record-usage-record.mjs":
