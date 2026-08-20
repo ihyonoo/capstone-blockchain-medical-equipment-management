@@ -14,7 +14,14 @@ import { API_BASE_URL } from '../lib/runtime';
 import { buildAuthHeaders, getStoredAuthSession, LOGIN_PATH } from '../lib/auth';
 import { useAuthGuard, useLogout, useRunWhenReady } from '../lib/useAuthGuard';
 import { useMediaQuery } from '../lib/useMediaQuery';
-import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 import {
   AlertTriangle,
   Check,
@@ -518,6 +525,56 @@ function UsageHistoryRow({ item, onOpen }: { item: UsageHistoryItem; onOpen: () 
   );
 }
 
+/** CSV를 만드는 동안 띄우는 진행 모달. 온체인 대조 때문에 수십 초가 걸려, 멈춘 게 아니라는 신호가 필요하다. */
+function CsvProgressDialog({ progress }: { progress: { received: number; total: number } | null }) {
+  const total = progress?.total ?? 0;
+  const received = progress?.received ?? 0;
+  const percent = total > 0 ? Math.min(100, Math.round((received / total) * 100)) : 0;
+
+  return (
+    <Dialog open={Boolean(progress)}>
+      <DialogContent
+        className="csv-progress max-w-md"
+        // 닫아도 작업은 계속 돌아 화면에만 안 보이게 된다 — 아예 닫히지 않게 막는다.
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
+        <DialogHeader className="flex flex-col items-center text-center">
+          <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" />
+          <DialogTitle className="pt-2">CSV를 준비하는 중입니다</DialogTitle>
+          <DialogDescription>
+            기록마다 온체인 값을 대조하고 그 기록이 담긴 블록의 머클루트를 다시 계산하기 때문에 수십 초가 걸릴 수
+            있습니다.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogBody className="space-y-2 text-center">
+          {total > 0 ? (
+            <>
+              <div className="text-[1rem] font-semibold text-foreground">
+                {total}건 중 {received}건 내려받았습니다
+              </div>
+              <div
+                className="csv-progress__track"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={total}
+                aria-valuenow={received}
+              >
+                <div className="csv-progress__bar" style={{ width: `${percent}%` }} />
+              </div>
+              <div className="text-[0.85rem] text-muted-foreground">{percent}%</div>
+            </>
+          ) : (
+            <div className="text-[0.95rem] text-muted-foreground">전체 건수를 확인하는 중입니다…</div>
+          )}
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** 한 건의 전체 기록을 검증 증명서 형식으로 발급한다. 정보는 네 개 절로 나뉘고 하나도 생략하지 않는다. */
 function UsageDetailDialog({ item, onClose }: { item: UsageHistoryItem | null; onClose: () => void }) {
   const blockchain = item?.blockchain;
@@ -637,6 +694,8 @@ export default function IntegrityVerification() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [detailUsageId, setDetailUsageId] = useState<number | null>(null);
+  // null이면 모달이 닫힌 상태. 내보내는 동안만 값이 들어간다.
+  const [csvProgress, setCsvProgress] = useState<{ received: number; total: number } | null>(null);
   const [locationOptions, setLocationOptions] = useState<Array<{ value: string; label: string }>>([]);
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
@@ -773,6 +832,7 @@ export default function IntegrityVerification() {
     const collected: UsageHistoryItem[] = [];
     // 화면 total은 사용 중인 이력까지 세므로, 받아야 할 건수는 CSV 첫 응답에서 다시 읽는다.
     let csvTotal = Number.POSITIVE_INFINITY;
+    setCsvProgress({ received: 0, total: 0 });
     try {
       while (collected.length < csvTotal) {
         const params = buildHistoryParams(
@@ -794,11 +854,15 @@ export default function IntegrityVerification() {
         const chunkItems = Array.isArray(payload.items) ? (payload.items as UsageHistoryItem[]) : [];
         if (!chunkItems.length) break;
         collected.push(...chunkItems);
+        setCsvProgress({ received: collected.length, total: Number.isFinite(csvTotal) ? csvTotal : 0 });
       }
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError('CSV 내보내기 중 오류가 발생했습니다.');
       return;
+    } finally {
+      // 성공하든 실패하든 모달은 반드시 닫는다.
+      setCsvProgress(null);
     }
 
     const header = [
@@ -969,7 +1033,12 @@ export default function IntegrityVerification() {
         <Button type="button" variant="outline" onClick={onReset}>
           초기화
         </Button>
-        <Button type="button" variant="outline" onClick={() => void downloadCsv()} disabled={isLoading || total === 0}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void downloadCsv()}
+          disabled={isLoading || total === 0 || csvProgress !== null}
+        >
           CSV 다운로드
         </Button>
       </div>
@@ -1095,6 +1164,8 @@ export default function IntegrityVerification() {
         item={items.find((item) => item.usage_id === detailUsageId) ?? null}
         onClose={() => setDetailUsageId(null)}
       />
+
+      <CsvProgressDialog progress={csvProgress} />
     </AppShell>
   );
 }
