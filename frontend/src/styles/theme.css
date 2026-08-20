@@ -1251,6 +1251,24 @@
   }
 }
 
+/* CSV 진행 모달 — 닫으면 작업만 계속 돌고 화면엔 안 남으므로 닫기 버튼을 없앤다 */
+.csv-progress [data-slot='dialog-close'] {
+  display: none;
+}
+
+.csv-progress__track {
+  height: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  overflow: hidden;
+}
+
+.csv-progress__bar {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.25s ease;
+}
+
 /* 인쇄 시에는 앱 화면과 오버레이를 걷어내고 증명서만 용지에 펼친다 */
 @media print {
   @page {
