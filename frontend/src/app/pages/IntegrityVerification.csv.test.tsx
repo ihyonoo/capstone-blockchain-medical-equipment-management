@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import IntegrityVerification from './IntegrityVerification';
 
@@ -87,6 +87,153 @@ function csvRequestUrls() {
 function csvRequestUrl() {
   return csvRequestUrls().at(-1) ?? '';
 }
+
+/** 응답 시점을 직접 잡아, 내보내는 도중의 화면을 관찰할 수 있게 한다. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+describe('IntegrityVerification CSV progress modal', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    storeAdminSession();
+    requestedUrls = [];
+    blobs = [];
+    Element.prototype.scrollIntoView = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: (blob: Blob) => {
+        blobs.push(blob);
+        return 'blob:test';
+      },
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  /** CSV 응답 두 개를 순서대로 내가 풀어준다. 화면(limit!=200) 요청은 즉시 응답한다. */
+  function stubStagedCsv() {
+    const gates = [deferred<unknown>(), deferred<unknown>()];
+    let csvCalls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        const text = String(url);
+        requestedUrls.push(text);
+        if (text.includes('/rtls/live')) {
+          return Promise.resolve({ ok: true, status: 200, json: async () => LIVE_PAYLOAD });
+        }
+        if (text.includes('limit=200')) {
+          const gate = gates[csvCalls];
+          csvCalls += 1;
+          return gate.promise.then((payload) => ({ ok: true, status: 200, json: async () => payload }));
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, total: 250, count: 1, items: [buildItem()] }),
+        });
+      }),
+    );
+    return gates;
+  }
+
+  async function startExport() {
+    const button = await screen.findByRole('button', { name: 'CSV 다운로드' });
+    fireEvent.click(button);
+    return button;
+  }
+
+  it('opens a progress modal as soon as the export starts', async () => {
+    stubStagedCsv();
+    renderPage();
+    await startExport();
+
+    const modal = within(await screen.findByRole('dialog'));
+    expect(modal.getByText('CSV를 준비하는 중입니다')).toBeInTheDocument();
+  });
+
+  it('counts up as each chunk arrives', async () => {
+    const gates = stubStagedCsv();
+    renderPage();
+    await startExport();
+    await screen.findByRole('dialog');
+
+    gates[0].resolve({
+      ok: true,
+      total: 250,
+      count: 200,
+      items: Array.from({ length: 200 }, (_, i) => buildItem({ usage_id: 1000 - i })),
+    });
+
+    const modal = within(await screen.findByRole('dialog'));
+    await waitFor(() => expect(modal.getByText('250건 중 200건 내려받았습니다')).toBeInTheDocument());
+  });
+
+  it('keeps the download button disabled while the export runs', async () => {
+    const gates = stubStagedCsv();
+    renderPage();
+    const button = await startExport();
+    await screen.findByRole('dialog');
+
+    expect(button).toBeDisabled();
+
+    gates[0].resolve({ ok: true, total: 1, count: 1, items: [buildItem()] });
+    await waitFor(() => expect(blobs).toHaveLength(1));
+    await waitFor(() => expect(button).not.toBeDisabled());
+  });
+
+  it('closes the modal once the file is handed over', async () => {
+    const gates = stubStagedCsv();
+    renderPage();
+    await startExport();
+    await screen.findByRole('dialog');
+
+    gates[0].resolve({ ok: true, total: 1, count: 1, items: [buildItem()] });
+
+    await waitFor(() => expect(blobs).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('closes the modal and surfaces the error when the export fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        const text = String(url);
+        requestedUrls.push(text);
+        if (text.includes('/rtls/live')) {
+          return Promise.resolve({ ok: true, status: 200, json: async () => LIVE_PAYLOAD });
+        }
+        if (text.includes('limit=200')) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: async () => ({ detail: '체인이 응답하지 않습니다.' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, total: 1, count: 1, items: [buildItem()] }),
+        });
+      }),
+    );
+    renderPage();
+    await startExport();
+
+    await screen.findByText('체인이 응답하지 않습니다.');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(blobs).toHaveLength(0);
+  });
+});
 
 describe('IntegrityVerification CSV export', () => {
   beforeEach(() => {
