@@ -144,8 +144,8 @@ const DEFAULT_QUERY: HistoryQuery = {
   includeInUse: false,
 };
 
-/** CSV는 검증 없이 전체를 훑으므로 페이지 크기를 크게 잡는다. 서버 상한과 같은 값. */
-const CSV_CHUNK_SIZE = 1000;
+/** CSV 한 번에 받아올 건수. 서버는 include_blockchain일 때 limit을 200으로 자르므로 그 값에 맞춘다. */
+const CSV_CHUNK_SIZE = 200;
 
 function buildHistoryParams(query: HistoryQuery, { includeBlockchain }: { includeBlockchain: boolean }) {
   const { filters, page, pageSize, hideSimulated, includeInUse } = query;
@@ -774,11 +774,13 @@ export default function IntegrityVerification() {
     // 화면 total은 사용 중인 이력까지 세므로, 받아야 할 건수는 CSV 첫 응답에서 다시 읽는다.
     let csvTotal = Number.POSITIVE_INFINITY;
     try {
-      for (let chunk = 0; collected.length < csvTotal; chunk += 1) {
+      while (collected.length < csvTotal) {
         const params = buildHistoryParams(
-          { ...query, page: chunk + 1, pageSize: CSV_CHUNK_SIZE, includeInUse: false },
+          { ...query, page: 1, pageSize: CSV_CHUNK_SIZE, includeInUse: false },
           { includeBlockchain: true },
         );
+        // 서버가 limit을 잘라도 어긋나지 않도록, 요청한 수가 아니라 이미 받은 수만큼 전진한다.
+        params.set('offset', String(collected.length));
         const response = await fetch(`${API_BASE_URL}/usage/history?${params.toString()}`, {
           method: 'GET',
           cache: 'no-store',

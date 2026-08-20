@@ -73,6 +73,25 @@ class TestRunBesuScript:
         assert captured["kwargs"]["timeout"] == 30
         assert captured["kwargs"]["capture_output"] is True
 
+    # 검증 payload를 인자로 넘기면 리눅스의 인자 길이 한도(MAX_ARG_STRLEN, 128KB)에 걸려
+    # exec 자체가 E2BIG로 실패한다. 크기 제한이 없는 stdin으로 넘긴다.
+    def test_sends_the_payload_through_stdin_instead_of_argv(self, monkeypatch):
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            return subprocess.CompletedProcess(cmd, 0, stdout="{}", stderr="")
+
+        monkeypatch.setattr(svc.subprocess, "run", fake_run)
+
+        payload = '{"items":[]}' + "x" * 200_000
+        ok, _, _ = svc.run_besu_script("verify-usage-records.mjs", stdin_payload=payload)
+
+        assert ok is True
+        assert captured["cmd"] == ["node", "scripts/verify-usage-records.mjs"]
+        assert captured["kwargs"]["input"] == payload
+
     def test_returns_false_on_nonzero_exit_code(self, monkeypatch):
         monkeypatch.setattr(
             svc.subprocess,
@@ -271,8 +290,8 @@ class TestAnchorUsageRecordToChain:
         )
         recorded = []
 
-        def fake_run(script_name, *args):
-            recorded.append((script_name, args))
+        def fake_run(script_name, *args, stdin_payload=None, **kwargs):
+            recorded.append((script_name, args, stdin_payload))
             return True, json.dumps(chain_result), ""
 
         monkeypatch.setattr(svc, "run_besu_script", fake_run)
@@ -284,7 +303,9 @@ class TestAnchorUsageRecordToChain:
         assert result["transaction_hash"] == "0xabc"
         assert result["block_number"] == 5
         assert recorded[0][0] == "record-usage-record.mjs"
-        assert json.loads(recorded[0][1][0]) == payload
+        # 원문은 인자가 아니라 stdin으로 넘어간다.
+        assert recorded[0][1] == ()
+        assert json.loads(recorded[0][2]) == payload
 
     def test_record_error_when_script_fails(self, monkeypatch):
         payload = _payload()
@@ -350,6 +371,64 @@ class TestVerifyUsageHistoryIntegrity:
         assert results[1]["verification_status"] == "not_eligible"
         assert results[1]["eligible"] is False
         assert len(calls) == 1  # not_eligible 이어도 스크립트 자체는 한 번 호출된다
+
+    # 한 번에 다 넘기면 100건에 6초라 601건이면 30초 타임아웃을 넘긴다. 배치로 쪼개 호출한다.
+    def test_splits_large_batches_across_multiple_script_calls(self, monkeypatch):
+        monkeypatch.setattr(svc, "is_besu_ready", lambda: (True, None))
+        batches = []
+
+        def fake_run(script, *args, stdin_payload=None, **kwargs):
+            items = json.loads(stdin_payload)["items"]
+            batches.append(len(items))
+            return (
+                True,
+                json.dumps(
+                    {
+                        "items": [{"usage_id": item["usageId"], "verification_status": "verified"} for item in items],
+                        "summary": {"total_count": len(items), "verified_count": len(items)},
+                    }
+                ),
+                "",
+            )
+
+        monkeypatch.setattr(svc, "run_besu_script", fake_run)
+        rows = [(i, "returned") + (None,) * 23 for i in range(1, 251)]
+
+        results, summary = svc.verify_usage_history_integrity(rows)
+
+        assert batches == [svc.VERIFY_BATCH_SIZE, svc.VERIFY_BATCH_SIZE, 250 - 2 * svc.VERIFY_BATCH_SIZE]
+        assert len(results) == 250
+        assert all(r["verification_status"] == "verified" for r in results.values())
+        assert summary["total_count"] == 250
+        assert summary["verified_count"] == 250
+
+    def test_one_failing_batch_does_not_void_the_others(self, monkeypatch):
+        monkeypatch.setattr(svc, "is_besu_ready", lambda: (True, None))
+        seen = {"calls": 0}
+
+        def fake_run(script, *args, stdin_payload=None, **kwargs):
+            seen["calls"] += 1
+            items = json.loads(stdin_payload)["items"]
+            if seen["calls"] == 2:
+                return False, "", "터짐"
+            return (
+                True,
+                json.dumps(
+                    {
+                        "items": [{"usage_id": item["usageId"], "verification_status": "verified"} for item in items],
+                        "summary": {},
+                    }
+                ),
+                "",
+            )
+
+        monkeypatch.setattr(svc, "run_besu_script", fake_run)
+        rows = [(i, "returned") + (None,) * 23 for i in range(1, 2 * svc.VERIFY_BATCH_SIZE + 1)]
+
+        results, _summary = svc.verify_usage_history_integrity(rows)
+
+        assert results[1]["verification_status"] == "verified"
+        assert results[svc.VERIFY_BATCH_SIZE + 1]["verification_status"] == "not_configured"
 
 
 class TestBuildDefaultIntegrityResult:
