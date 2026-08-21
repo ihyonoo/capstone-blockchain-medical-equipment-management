@@ -90,6 +90,7 @@ services:
       - backend
     networks:
       - besu-qbft
+      - analytics
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -113,3 +114,6 @@ networks:
     # 실제 driver·subnet 설정은 include된 besu 스택 쪽에 있음.
     # 여기서는 외부 네트워크가 아님을 명시.
     external: false
+  analytics:
+    name: analytics
+    external: true
