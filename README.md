@@ -357,7 +357,7 @@ simulation/topology/  (정본: 구역 폴리곤 · 인접 그래프 · 장비 ·
 ## 코드 품질
 
 - **JS/TS**: ESLint(`eslint.config.mjs`) + Prettier(`.prettierrc`), `npm run lint`
-- **Python**: Ruff(`pyproject.toml`)로 린트·포맷, `pip install -r requirements-dev.txt`
+- **Python**: Ruff(`pyproject.toml`)로 린트·포맷. 개발 의존성은 저장소 루트에서 `pip install -r requirements-dev.txt` 한 번이면 ruff·pytest와 테스트용 런타임까지 모두 설치된다
 - **커밋 훅**: Husky + lint-staged가 스테이징된 파일만 검사·수정 (`.husky/pre-commit`)
 - **PR 검사**: `main` 대상 PR에서 GitHub Super-Linter가 변경 파일 재검증 (`.github/workflows/super-linter.yml`)
 - **테스트**: 저장소 루트에서 `pytest`

@@ -28,7 +28,7 @@ uvicorn backend.server:app --host 0.0.0.0 --port 8000       # LAN(리더/기기)
 ## 테스트
 
 ```bash
-pip install -r backend/requirements-dev.txt
+pip install -r requirements-dev.txt   # 저장소 루트에서
 ```
 
 통합 테스트는 실제 Postgres에 붙는다. 최초 1회, 개발용 DB와 분리된 테스트 전용 DB를 만들고 스키마를 적용한다.
