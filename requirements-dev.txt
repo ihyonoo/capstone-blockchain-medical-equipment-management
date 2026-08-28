@@ -1,3 +1,9 @@
-# backend/requirements.txt는 런타임 의존성이고, 이 파일은 로컬 개발 도구(lint/format)용이다.
-# pre-commit 훅(.husky/pre-commit -> lint-staged)이 ruff를 PATH에서 찾아 실행하므로 반드시 설치돼 있어야 한다.
+# 저장소 전체 개발 환경. 린트(ruff)·테스트(pytest)와 테스트가 임포트하는 런타임 의존성.
+# 각 모듈의 requirements.txt는 배포용 런타임 의존성이며 Dockerfile이 그것만 설치한다.
+# pre-commit 훅(.husky/pre-commit -> lint-staged)이 ruff를 PATH에서 찾아 실행한다.
+# pytest testpaths가 backend/tests와 simulation/tests 양쪽이라 두 모듈 의존성을 모두 끌어온다.
+-r backend/requirements.txt
+-r simulation/requirements.txt
 ruff==0.16.1
+pytest==8.4.2
+httpx==0.28.1

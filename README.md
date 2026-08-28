@@ -176,7 +176,7 @@ python -m simulation.simulator         # 상시 가동
 
 ## 동작 원리
 
-<img src="docs/figure/scenario.png" alt="전체 사용 시나리오" width="50%">
+<img src="assets/readme/scenario.png" alt="전체 사용 시나리오" width="50%">
 
 ### 위치 산출
 
@@ -191,7 +191,7 @@ python -m simulation.simulator         # 상시 가동
 2. 반납 시 완료 기록을 온체인에 앵커링. 백엔드는 라이브러리 대신 subprocess로 `blockchain/besu/scripts/`의 Node 스크립트 호출(`record-usage-record.mjs`)
 3. 이름·부서 등 표시용 필드는 앵커링에서 제외, 최소 사실 기록만 온체인 저장
 
-<img src="docs/figure/sequence.png" alt="시퀀스 다이어그램" width="50%">
+<img src="assets/readme/sequence.png" alt="시퀀스 다이어그램" width="50%">
 
 ---
 
@@ -357,7 +357,7 @@ simulation/topology/  (정본: 구역 폴리곤 · 인접 그래프 · 장비 ·
 ## 코드 품질
 
 - **JS/TS**: ESLint(`eslint.config.mjs`) + Prettier(`.prettierrc`), `npm run lint`
-- **Python**: Ruff(`pyproject.toml`)로 린트·포맷, `pip install -r requirements-dev.txt`
+- **Python**: Ruff(`pyproject.toml`)로 린트·포맷. 개발 의존성은 저장소 루트에서 `pip install -r requirements-dev.txt` 한 번이면 ruff·pytest와 테스트용 런타임까지 모두 설치된다
 - **커밋 훅**: Husky + lint-staged가 스테이징된 파일만 검사·수정 (`.husky/pre-commit`)
 - **PR 검사**: `main` 대상 PR에서 GitHub Super-Linter가 변경 파일 재검증 (`.github/workflows/super-linter.yml`)
 - **테스트**: 저장소 루트에서 `pytest`
