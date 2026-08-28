@@ -176,7 +176,7 @@ python -m simulation.simulator         # 상시 가동
 
 ## 동작 원리
 
-<img src="docs/figure/scenario.png" alt="전체 사용 시나리오" width="50%">
+<img src="assets/readme/scenario.png" alt="전체 사용 시나리오" width="50%">
 
 ### 위치 산출
 
@@ -191,7 +191,7 @@ python -m simulation.simulator         # 상시 가동
 2. 반납 시 완료 기록을 온체인에 앵커링. 백엔드는 라이브러리 대신 subprocess로 `blockchain/besu/scripts/`의 Node 스크립트 호출(`record-usage-record.mjs`)
 3. 이름·부서 등 표시용 필드는 앵커링에서 제외, 최소 사실 기록만 온체인 저장
 
-<img src="docs/figure/sequence.png" alt="시퀀스 다이어그램" width="50%">
+<img src="assets/readme/sequence.png" alt="시퀀스 다이어그램" width="50%">
 
 ---
 
