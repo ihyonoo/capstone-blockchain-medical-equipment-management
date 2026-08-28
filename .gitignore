@@ -32,11 +32,12 @@ pnpm-debug.log*
 .codex
 *.log
 backups/
+.logs/
 .local-backups/
 .postgres-data/
 .postgres-data-migration-backup/
 AGENTS.md
-DESIGN.md
+frontend/DESIGN.md
 
 # 로컬 상태 스냅샷 / DB 덤프 (대용량·민감 데이터, 저장소 대상 아님)
 # database/schema.sql 은 스키마 원본이므로 제외되지 않는다.
@@ -52,6 +53,7 @@ Thumbs.db
 .gstack/
 
 # 로컬 전용 프로젝트 지침 (공유 저장소에는 올리지 않음)
+# AGENTS.md가 원본, CLAUDE.md는 그것을 가리키는 심볼릭 링크 (AGENTS.md는 위 38행)
 CLAUDE.md
 
 # 문서 디렉터리 (논문·저작권·발표 자료 등 로컬 전용)
