@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # 로컬 전면 가동: Colima → 인프라(postgres·redis·besu) → backend → frontend → simulator.
 # 멱등: 이미 떠 있는 건 건드리지 않고 넘어간다.
-# 로그는 저장소 루트의 backend.log / frontend.log / simulator.log (매 기동마다 새로 씀).
+# 로그는 .logs/backend.log / .logs/frontend.log / .logs/simulator.log (매 기동마다 새로 씀).
 # 정지: bash scripts/dev-down.sh 는 없다 — 앱은 kill, 인프라는 docker-compose -f docker-compose.dev.yml down.
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
+mkdir -p "$ROOT/.logs"
 
 port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
 
@@ -47,7 +48,7 @@ if port_busy 8000; then
 else
   echo "[4/6] backend: uvicorn :8000"
   nohup "$ROOT/.venv/bin/uvicorn" backend.server:app --reload --host 0.0.0.0 --port 8000 \
-    >"$ROOT/backend.log" 2>&1 &
+    >"$ROOT/.logs/backend.log" 2>&1 &
 fi
 
 # 4) frontend — vite dev
@@ -55,7 +56,7 @@ if port_busy 5173; then
   echo "[5/6] frontend: 이미 :5173 사용 중 — 건너뜀"
 else
   echo "[5/6] frontend: vite :5173"
-  (cd frontend && nohup npm run dev >"$ROOT/frontend.log" 2>&1 &)
+  (cd frontend && nohup npm run dev >"$ROOT/.logs/frontend.log" 2>&1 &)
 fi
 
 # 5) simulator — 가상 병원 상시 가동
@@ -64,7 +65,7 @@ if pgrep -f 'simulation\.simulator' >/dev/null 2>&1; then
 else
   echo "[6/6] simulator: python -m simulation.simulator"
   # -u: 리다이렉트 시 stdout이 버퍼링돼 로그가 비는 걸 막음.
-  nohup "$ROOT/.venv/bin/python" -u -m simulation.simulator >"$ROOT/simulator.log" 2>&1 &
+  nohup "$ROOT/.venv/bin/python" -u -m simulation.simulator >"$ROOT/.logs/simulator.log" 2>&1 &
 fi
 
 echo
