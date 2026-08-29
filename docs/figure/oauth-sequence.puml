@@ -1,5 +1,5 @@
 @startuml
-' MediLedger EquipTrace — Google OAuth 2.0 (Authorization Code) 흐름
+' Locuvera — Google OAuth 2.0 (Authorization Code) 흐름
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontName "AppleSDGothicNeo"
 skinparam defaultFontSize 13

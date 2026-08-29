@@ -1,4 +1,4 @@
-# MediLedger &amp; EquipTrace
+# Locuvera
 
 IoT 기반 실내 의료 장비 실시간 위치 추적, 블록체인 기반 사용 이력 무결성 검증 시스템
 

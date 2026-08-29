@@ -591,8 +591,7 @@
     display: none;
   }
 
-  /* 로고가 두 단어(MediLedger & EquipTrace)라 좁은 화면에서 원래 크기로는
-     한 줄에 들어가지 않고 두 줄로 밀린다 — 상단바 높이 안에 맞도록 줄인다. */
+  /* 좁은 화면에서 상단바 높이에 맞도록 브랜드 글자를 줄인다. */
   .landing__brand {
     font-size: 1rem;
   }

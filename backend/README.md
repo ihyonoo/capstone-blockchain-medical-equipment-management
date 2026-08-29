@@ -1,6 +1,6 @@
 # backend
 
-MediLedger EquipTrace의 FastAPI + PostgreSQL API 서버.
+Locuvera의 FastAPI + PostgreSQL API 서버.
 
 ## 설치
 

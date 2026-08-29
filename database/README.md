@@ -1,6 +1,6 @@
 # database
 
-MediLedger EquipTrace의 PostgreSQL 스키마.
+Locuvera의 PostgreSQL 스키마.
 
 ## 적용
 

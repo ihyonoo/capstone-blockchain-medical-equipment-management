@@ -18,7 +18,7 @@ function renderShell() {
       <AppShell>본문</AppShell>
     </MemoryRouter>,
   );
-  return screen.getByRole('link', { name: /MediLedger/ });
+  return screen.getByRole('link', { name: /Locuvera/ });
 }
 
 describe('AppShell brand logo', () => {

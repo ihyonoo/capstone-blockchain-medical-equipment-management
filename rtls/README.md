@@ -1,6 +1,6 @@
 # rtls
 
-MediLedger EquipTrace의 BLE 기반 실시간 위치 추적(RTLS) 엣지 스크립트.
+Locuvera의 BLE 기반 실시간 위치 추적(RTLS) 엣지 스크립트.
 
 ## 설치
 
