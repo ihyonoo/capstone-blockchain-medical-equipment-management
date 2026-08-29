@@ -1,6 +1,6 @@
 # frontend
 
-MediLedger EquipTrace의 React 18 + Vite + TailwindCSS SPA.
+Locuvera의 React 18 + Vite + TailwindCSS SPA.
 
 ## 설치
 

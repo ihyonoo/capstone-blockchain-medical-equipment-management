@@ -5,7 +5,7 @@ import '../../styles/landing.css';
 
 const CONTACT_EMAIL = 'hyunu.choe@gmail.com';
 const CONTACT_MAILTO = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
-  'MediLedger EquipTrace 도입 문의',
+  'Locuvera 도입 문의',
 )}&body=${encodeURIComponent('병원명: \n담당자: \n연락처: \n문의 내용: \n')}`;
 
 const FEATURES = [
@@ -84,7 +84,7 @@ export default function Landing() {
             className="landing__brand"
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           >
-            MediLedger &amp; EquipTrace
+            Locuvera
           </button>
           <nav className="landing__nav-links">
             <a className="landing__nav-link" href="#features">
@@ -120,7 +120,7 @@ export default function Landing() {
               <em>위변조 없이</em> 증명합니다
             </h1>
             <p className="landing__subcopy">
-              MediLedger EquipTrace는 BLE 기반 실시간 위치 추적과
+              Locuvera는 BLE 기반 실시간 위치 추적과
               <br className="landing__subcopy-break" />
               프라이빗 블록체인 앵커링으로 의료 장비의 대여·반납 이력을
               <br className="landing__subcopy-break" />
@@ -214,8 +214,8 @@ export default function Landing() {
       <footer className="landing__footer">
         <div className="landing__container landing__footer-inner">
           <div>
-            <div className="landing__footer-brand">MediLedger &amp; EquipTrace</div>
-            <div className="landing__footer-copyright">© 2026 MediLedger &amp; EquipTrace</div>
+            <div className="landing__footer-brand">Locuvera</div>
+            <div className="landing__footer-copyright">© 2026 Locuvera</div>
           </div>
           <div className="landing__footer-links">
             <Link to="/login">로그인</Link>

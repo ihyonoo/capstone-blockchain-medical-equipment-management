@@ -63,9 +63,9 @@ def _send(to: str, subject: str, body: str) -> None:
 
 
 def send_verification_email(to: str, link: str) -> None:
-    subject = "[MediLedger] 이메일 인증을 완료해 주세요"
+    subject = "[Locuvera] 이메일 인증을 완료해 주세요"
     body = (
-        "MediLedger EquipTrace 회원가입을 완료하려면 아래 링크에서 이메일 인증을 진행해 주세요.\n\n"
+        "Locuvera 회원가입을 완료하려면 아래 링크에서 이메일 인증을 진행해 주세요.\n\n"
         f"{link}\n\n"
         "이 링크는 일정 시간 후 만료됩니다.\n"
         "본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다."
@@ -74,7 +74,7 @@ def send_verification_email(to: str, link: str) -> None:
 
 
 def send_reset_email(to: str, link: str) -> None:
-    subject = "[MediLedger] 비밀번호 재설정 안내"
+    subject = "[Locuvera] 비밀번호 재설정 안내"
     body = (
         "비밀번호를 재설정하려면 아래 링크에서 새 비밀번호를 설정해 주세요.\n\n"
         f"{link}\n\n"
@@ -85,7 +85,7 @@ def send_reset_email(to: str, link: str) -> None:
 
 
 def send_find_id_email(to: str, usernames: list[str]) -> None:
-    subject = "[MediLedger] 아이디 찾기 안내"
+    subject = "[Locuvera] 아이디 찾기 안내"
     joined = "\n".join(f"  - {name}" for name in usernames)
     body = (
         "요청하신 이메일로 가입된 아이디는 다음과 같습니다.\n\n"

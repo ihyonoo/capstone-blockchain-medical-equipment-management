@@ -85,8 +85,10 @@ class TestConfiguredSend:
         sent = server.send_message.call_args[0][0]
         assert sent["From"] == "bot@example.com"
         assert sent["To"] == "user@example.com"
-        assert "인증" in sent["Subject"]
-        assert "http://app.local/verify?token=abc" in sent.get_content()
+        assert sent["Subject"] == "[Locuvera] 이메일 인증을 완료해 주세요"
+        body = sent.get_content()
+        assert "Locuvera 회원가입" in body
+        assert "http://app.local/verify?token=abc" in body
 
     def test_send_reset_email_sends_via_smtp(self, configured_smtp, mock_smtp):
         smtp_cls, server = mock_smtp
@@ -99,7 +101,7 @@ class TestConfiguredSend:
 
         sent = server.send_message.call_args[0][0]
         assert sent["To"] == "user@example.com"
-        assert "재설정" in sent["Subject"]
+        assert sent["Subject"] == "[Locuvera] 비밀번호 재설정 안내"
         assert "http://app.local/reset?token=xyz" in sent.get_content()
 
     def test_send_find_id_email_sends_via_smtp(self, configured_smtp, mock_smtp):
@@ -113,7 +115,7 @@ class TestConfiguredSend:
 
         sent = server.send_message.call_args[0][0]
         assert sent["To"] == "user@example.com"
-        assert "아이디" in sent["Subject"]
+        assert sent["Subject"] == "[Locuvera] 아이디 찾기 안내"
         body = sent.get_content()
         assert "alice" in body
         assert "bob" in body

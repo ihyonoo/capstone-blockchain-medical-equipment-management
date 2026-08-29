@@ -1,6 +1,6 @@
 # simulation
 
-MediLedger EquipTrace의 상시 가동 가상 병원 시뮬레이터. 실물 RTLS 하드웨어 없이도
+Locuvera의 상시 가동 가상 병원 시뮬레이터. 실물 RTLS 하드웨어 없이도
 시연 가능한 규모의 트래픽을 만들어 백엔드에 HTTP로 보낸다.
 
 ## 무엇을 시뮬레이션하는가
