@@ -57,7 +57,7 @@ def _insert_usage_history(
 
 class TestFetchUsageRecordForChain:
     def test_returns_payload_for_returned_usage(self, db_conn, seed_tag, seed_user):
-        tag_id = seed_tag(nfc_tag_uid="NFC-100")
+        tag_id = seed_tag(nfc_token="NFC-100")
         user_id, _headers = seed_user(username="checkout-user")
         returner_id, _headers2 = seed_user(username="return-user")
         usage_id = _insert_usage_history(
@@ -82,7 +82,7 @@ class TestFetchUsageRecordForChain:
         assert payload["movementPath"] == []
 
     def test_includes_movement_path_when_present(self, db_conn, seed_tag, seed_user):
-        tag_id = seed_tag(nfc_tag_uid="NFC-106")
+        tag_id = seed_tag(nfc_token="NFC-106")
         user_id, _headers = seed_user(username="path-checkout")
         returner_id, _headers2 = seed_user(username="path-return")
         path = [{"location": "수술실", "at": 1_700_000_100}, {"location": "회복실", "at": 1_700_000_200}]
@@ -100,7 +100,7 @@ class TestFetchUsageRecordForChain:
         assert payload["movementPath"] == path
 
     def test_returns_none_when_not_returned(self, db_conn, seed_tag, seed_user):
-        tag_id = seed_tag(nfc_tag_uid="NFC-101")
+        tag_id = seed_tag(nfc_token="NFC-101")
         user_id, _headers = seed_user(username="checkout-only")
         usage_id = _insert_usage_history(db_conn, tag_id=tag_id, user_id=user_id, returned=False)
 
@@ -114,7 +114,7 @@ class TestFetchUsageRecordForChain:
 
 class TestPersistUsageChainAnchorMetadata:
     def test_writes_anchor_fields_to_db(self, db_conn, seed_tag, seed_user):
-        tag_id = seed_tag(nfc_tag_uid="NFC-102")
+        tag_id = seed_tag(nfc_token="NFC-102")
         user_id, _headers = seed_user(username="anchor-user")
         returner_id, _ = seed_user(username="anchor-returner")
         usage_id = _insert_usage_history(
@@ -150,7 +150,7 @@ class TestPersistUsageChainAnchorMetadata:
         assert recorded_at is not None
 
     def test_noop_when_anchor_result_has_no_tx_hash(self, db_conn, seed_tag, seed_user):
-        tag_id = seed_tag(nfc_tag_uid="NFC-103")
+        tag_id = seed_tag(nfc_token="NFC-103")
         user_id, _headers = seed_user(username="noop-user")
         usage_id = _insert_usage_history(
             db_conn, tag_id=tag_id, user_id=user_id, returned=True, returned_by_user_id=user_id
@@ -203,7 +203,7 @@ class TestAnchorUsageRecordToChainEndToEnd:
     """실 DB 조회(fetch_usage_record_for_chain) + mocked subprocess로 전체 앵커링 흐름을 검증."""
 
     def test_anchors_and_persists_when_besu_ready(self, db_conn, seed_tag, seed_user, monkeypatch):
-        tag_id = seed_tag(nfc_tag_uid="NFC-104")
+        tag_id = seed_tag(nfc_token="NFC-104")
         user_id, _headers = seed_user(username="e2e-checkout")
         returner_id, _headers2 = seed_user(username="e2e-return")
         usage_id = _insert_usage_history(
@@ -250,7 +250,7 @@ class TestAnchorUsageRecordToChainEndToEnd:
         assert block_number == 7
 
     def test_degrades_gracefully_when_besu_not_configured(self, db_conn, seed_tag, seed_user, monkeypatch):
-        tag_id = seed_tag(nfc_tag_uid="NFC-105")
+        tag_id = seed_tag(nfc_token="NFC-105")
         user_id, _headers = seed_user(username="degrade-user")
         usage_id = _insert_usage_history(
             db_conn, tag_id=tag_id, user_id=user_id, returned=True, returned_by_user_id=user_id
@@ -275,7 +275,7 @@ class TestAnchorUsageRecordToChainEndToEnd:
 
 class TestQueryUsageHistoryRowsMovementPath:
     def test_build_usage_history_item_includes_movement_path(self, db_conn, seed_tag, seed_user):
-        tag_id = seed_tag(nfc_tag_uid="NFC-107")
+        tag_id = seed_tag(nfc_token="NFC-107")
         user_id, _headers = seed_user(username="list-checkout")
         returner_id, _headers2 = seed_user(username="list-return")
         path = [{"location": "수술실", "at": 1_700_000_100}]
@@ -307,7 +307,7 @@ class TestQueryUsageHistoryRowsMovementPath:
         assert item["movement_path"] == path
 
     def test_build_my_usage_history_item_includes_movement_path(self, db_conn, seed_tag, seed_user):
-        tag_id = seed_tag(nfc_tag_uid="NFC-108")
+        tag_id = seed_tag(nfc_token="NFC-108")
         user_id, _headers = seed_user(username="mine-checkout")
         path = [{"location": "회복실", "at": 1_700_000_200}]
         _insert_usage_history(db_conn, tag_id=tag_id, user_id=user_id, returned=True, movement_path=path)

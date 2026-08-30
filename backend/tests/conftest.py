@@ -88,16 +88,16 @@ def seed_tag(db_conn):
     def _seed(
         tag_id: str = "EQ-TEST-0001",
         equipment_name: str = "테스트 장비",
-        nfc_tag_uid: str | None = None,
+        nfc_token: str | None = None,
         is_real_hardware: bool = True,
     ):
         with db_conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO tags (tag_id, equipment_name, nfc_tag_uid, is_active, is_real_hardware)
+                INSERT INTO tags (tag_id, equipment_name, nfc_token, is_active, is_real_hardware)
                 VALUES (%s, %s, %s, TRUE, %s)
                 """,
-                (tag_id, equipment_name, nfc_tag_uid, is_real_hardware),
+                (tag_id, equipment_name, nfc_token, is_real_hardware),
             )
         db_conn.commit()
         return tag_id
@@ -182,7 +182,7 @@ def bind_ntag(db_conn):
 
     def _bind(nfc_token: str, ntag_uid: str | None = None):
         with db_conn.cursor() as cur:
-            cur.execute("SELECT tag_id FROM tags WHERE nfc_tag_uid = %s", (nfc_token,))
+            cur.execute("SELECT tag_id FROM tags WHERE nfc_token = %s", (nfc_token,))
             row = cur.fetchone()
             assert row is not None, f"바인딩할 태그가 없다: {nfc_token}"
             uid = ntag_uid or _uid_for(row[0])
@@ -204,7 +204,7 @@ def tap_session(client, db_conn, bind_ntag):
     def _session(nfc_token: str, headers: dict) -> str:
         with db_conn.cursor() as cur:
             cur.execute(
-                "SELECT ntag_uid, ntag_bound, ntag_last_ctr FROM tags WHERE nfc_tag_uid = %s",
+                "SELECT ntag_uid, ntag_bound, ntag_last_ctr FROM tags WHERE nfc_token = %s",
                 (nfc_token,),
             )
             uid, bound, last_ctr = cur.fetchone()
@@ -221,7 +221,7 @@ def tap_session(client, db_conn, bind_ntag):
 
 def _is_real_hardware(db_conn, nfc_token: str) -> bool:
     with db_conn.cursor() as cur:
-        cur.execute("SELECT is_real_hardware FROM tags WHERE nfc_tag_uid = %s", (nfc_token,))
+        cur.execute("SELECT is_real_hardware FROM tags WHERE nfc_token = %s", (nfc_token,))
         row = cur.fetchone()
     db_conn.commit()
     return bool(row and row[0])

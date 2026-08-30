@@ -9,7 +9,7 @@ def _seed_checkouts(checkout, seed_tag, seed_user, count: int, *, is_real_hardwa
         seed_tag(
             tag_id=f"{prefix}-{index:04d}",
             equipment_name=f"{prefix} 장비 {index:02d}",
-            nfc_tag_uid=token,
+            nfc_token=token,
             is_real_hardware=is_real_hardware,
         )
         checkout(token, headers)
@@ -23,7 +23,7 @@ def _seed_returns(checkout, return_equipment, seed_tag, seed_user, count: int, *
         seed_tag(
             tag_id=f"{prefix}-{index:04d}",
             equipment_name=f"{prefix} 장비 {index:02d}",
-            nfc_tag_uid=token,
+            nfc_token=token,
         )
         checkout(token, headers)
         return_equipment(token, headers)
@@ -138,8 +138,8 @@ class TestUsageHistoryProvenance:
         assert response.status_code == 403
 
     def test_marks_records_made_with_simulated_equipment(self, client, seed_tag, seed_user, checkout):
-        seed_tag(tag_id="EQ-REAL-0001", equipment_name="실물 장비", nfc_tag_uid="NFC-REAL", is_real_hardware=True)
-        seed_tag(tag_id="EQ-SIM-0001", equipment_name="모의 장비", nfc_tag_uid="NFC-SIM", is_real_hardware=False)
+        seed_tag(tag_id="EQ-REAL-0001", equipment_name="실물 장비", nfc_token="NFC-REAL", is_real_hardware=True)
+        seed_tag(tag_id="EQ-SIM-0001", equipment_name="모의 장비", nfc_token="NFC-SIM", is_real_hardware=False)
         _, staff_headers = seed_user(username="staffer", role="staff")
         checkout("NFC-REAL", staff_headers)
         checkout("NFC-SIM", staff_headers)

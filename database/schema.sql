@@ -28,8 +28,8 @@ CREATE TABLE IF NOT EXISTS tags (
     tag_id TEXT PRIMARY KEY,
     equipment_name TEXT NOT NULL,
     equipment_type TEXT,
-    nfc_tag_uid TEXT,
-    -- NTAG 424 DNA 칩의 7바이트 UID(14자리 hex). nfc_tag_uid와 헷갈리지 말 것 —
+    nfc_token TEXT,
+    -- NTAG 424 DNA 칩의 7바이트 UID(14자리 hex). 위의 nfc_token과는 다르다 —
     -- 그쪽은 URL 경로에 들어가는 장비 토큰(pump-001)이고 이쪽이 실제 칩 UID다.
     ntag_uid TEXT,
     -- 마지막으로 받아들인 SDM 읽기 카운터. 언바인딩해도 절대 되돌리지 않는다 —
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS usage_history (
     tag_id TEXT NOT NULL REFERENCES tags(tag_id) ON UPDATE CASCADE,
     equipment_name TEXT NOT NULL,
     equipment_type TEXT,
-    equipment_nfc_uid TEXT,
+    equipment_nfc_token TEXT,
     checkout_method TEXT NOT NULL DEFAULT 'nfc',
     checkout_reader_id TEXT REFERENCES readers(reader_id) ON UPDATE CASCADE,
     checkout_location TEXT,
@@ -136,7 +136,7 @@ CREATE TABLE IF NOT EXISTS usage_nfc_events (
     usage_id BIGINT REFERENCES usage_history(usage_id) ON DELETE SET NULL,
     tag_id TEXT NOT NULL REFERENCES tags(tag_id) ON UPDATE CASCADE,
     user_id BIGINT REFERENCES users(user_id) ON UPDATE CASCADE,
-    equipment_nfc_uid TEXT,
+    equipment_nfc_token TEXT,
     action TEXT NOT NULL,
     result TEXT NOT NULL DEFAULT 'accepted',
     reader_id TEXT REFERENCES readers(reader_id) ON UPDATE CASCADE,
@@ -245,7 +245,7 @@ ALTER TABLE readers
     DROP COLUMN IF EXISTS map_y;
 
 ALTER TABLE tags
-    ADD COLUMN IF NOT EXISTS nfc_tag_uid TEXT,
+    ADD COLUMN IF NOT EXISTS nfc_token TEXT,
     ADD COLUMN IF NOT EXISTS asset_status TEXT NOT NULL DEFAULT 'available',
     ADD COLUMN IF NOT EXISTS current_holder_user_id BIGINT REFERENCES users(user_id) ON UPDATE CASCADE,
     ADD COLUMN IF NOT EXISTS current_usage_id BIGINT,
@@ -281,7 +281,7 @@ ALTER TABLE usage_history
     ADD COLUMN IF NOT EXISTS returned_by_position TEXT,
     ADD COLUMN IF NOT EXISTS returned_by_department TEXT,
     ADD COLUMN IF NOT EXISTS equipment_type TEXT,
-    ADD COLUMN IF NOT EXISTS equipment_nfc_uid TEXT,
+    ADD COLUMN IF NOT EXISTS equipment_nfc_token TEXT,
     ADD COLUMN IF NOT EXISTS checkout_method TEXT NOT NULL DEFAULT 'nfc',
     ADD COLUMN IF NOT EXISTS return_method TEXT,
     ADD COLUMN IF NOT EXISTS note TEXT,
@@ -464,9 +464,9 @@ BEGIN
     END IF;
 END $$;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_nfc_tag_uid동
-    ON tags (nfc_tag_uid)
-    WHERE nfc_tag_uid IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_nfc_token
+    ON tags (nfc_token)
+    WHERE nfc_token IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_ntag_uid
     ON tags (ntag_uid)

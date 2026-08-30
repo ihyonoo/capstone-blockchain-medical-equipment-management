@@ -67,7 +67,7 @@ def _render_tags() -> list[str]:
         )
     return [
         "-- 태그 50개. 시뮬레이션 시작 시점에는 전부 사용 가능 상태다.",
-        "INSERT INTO tags (tag_id, equipment_name, equipment_type, nfc_tag_uid,",
+        "INSERT INTO tags (tag_id, equipment_name, equipment_type, nfc_token,",
         "                  asset_status, is_active, is_real_hardware) VALUES",
         ",\n".join(rows) + ";",
         "",
