@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getHomePath, type AuthUser } from './auth';
+import { getHomePath, getRedirectTarget, type AuthUser } from './auth';
 
 function user(role: string): AuthUser {
   return { user_id: 1, username: 'tester', display_name: '테스터', role };
@@ -25,5 +25,24 @@ describe('getHomePath', () => {
 
   it('falls back to equipment search for any other role', () => {
     expect(getHomePath(user('viewer'))).toBe('/equipment');
+  });
+});
+
+describe('getRedirectTarget open-redirect guard', () => {
+  it('keeps an in-app path', () => {
+    expect(getRedirectTarget('?redirect=%2Fnfc%2Fpump-001%3Fuid%3D04AABB')).toBe('/nfc/pump-001?uid=04AABB');
+  });
+
+  it('rejects a protocol-relative URL that would leave the site', () => {
+    // //evil.com 은 슬래시로 시작하지만 브라우저는 외부 주소로 해석한다.
+    expect(getRedirectTarget('?redirect=%2F%2Fevil.example.com')).toBeNull();
+  });
+
+  it('rejects a backslash that some browsers treat like //', () => {
+    expect(getRedirectTarget('?redirect=%2F%5Cevil.example.com')).toBeNull();
+  });
+
+  it('rejects an absolute URL', () => {
+    expect(getRedirectTarget('?redirect=https%3A%2F%2Fevil.example.com')).toBeNull();
   });
 });

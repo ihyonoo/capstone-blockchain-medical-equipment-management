@@ -51,16 +51,37 @@ def _unb64(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
 
-def sign_state(mode: str) -> str:
-    """{mode, exp} 를 HMAC 서명한 state 문자열을 만든다."""
+def safe_redirect_path(path: str | None) -> str | None:
+    """같은 사이트 경로만 통과시킨다. 아니면 None.
+
+    redirect를 그대로 믿으면 오픈 리다이렉트가 된다 — 공격자가 로그인 링크에 외부 주소를
+    심어두면 사용자는 우리 도메인에서 로그인한 뒤 남의 사이트로 떨어진다.
+    """
+    if not path or not path.startswith("/"):
+        return None
+    # //evil.com 은 프로토콜 상대 URL이고, /\evil.com 은 일부 브라우저가 그와 같게 해석한다.
+    if path.startswith("//") or path.startswith("/\\"):
+        return None
+    return path
+
+
+def sign_state(mode: str, redirect: str | None = None) -> str:
+    """{mode, redirect, exp} 를 HMAC 서명한 state 문자열을 만든다.
+
+    redirect를 여기 싣는 이유: 구글로 나갔다 돌아오는 사이 브라우저 상태가 끊기므로,
+    "원래 가려던 곳"을 나를 곳이 state밖에 없다. 서명돼 있어 왕복 중 변조되지 않는다.
+    """
     payload = {"mode": mode, "exp": int(time.time()) + OAUTH_STATE_TTL_SEC}
+    safe = safe_redirect_path(redirect)
+    if safe:
+        payload["redirect"] = safe
     segment = _b64(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     signature = hmac.new(AUTH_TOKEN_SECRET.encode("utf-8"), segment.encode("ascii"), hashlib.sha256).digest()
     return f"{segment}.{_b64(signature)}"
 
 
-def verify_state(state: str) -> str:
-    """state를 검증하고 mode를 반환한다. 실패 시 HTTPException(400)."""
+def verify_state(state: str) -> tuple[str, str | None]:
+    """state를 검증하고 (mode, redirect)를 반환한다. 실패 시 HTTPException(400)."""
     try:
         segment, signature_segment = state.split(".", 1)
     except (ValueError, AttributeError):
@@ -75,7 +96,8 @@ def verify_state(state: str) -> str:
     if int(payload.get("exp", 0)) <= int(time.time()):
         raise HTTPException(400, "OAuth 요청이 만료되었습니다. 다시 시도해 주세요.")
     mode = payload.get("mode")
-    return mode if mode in ("login", "signup") else "login"
+    # 서명을 통과했어도 redirect는 다시 검사한다 — 서명 키가 새는 상황까지 감안한 이중 방어다.
+    return (mode if mode in ("login", "signup") else "login"), safe_redirect_path(payload.get("redirect"))
 
 
 def build_authorization_url(state: str) -> str:

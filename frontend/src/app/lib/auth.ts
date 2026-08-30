@@ -80,6 +80,9 @@ export function getRedirectTarget(search: string): string | null {
   if (!value) return null;
   // 외부 URL로의 오픈 리다이렉트는 막고, 앱 내부 경로만 유지한다.
   if (!value.startsWith('/')) return null;
+  // //evil.com 은 슬래시로 시작하지만 프로토콜 상대 URL이라 외부로 나간다.
+  // /\evil.com 도 일부 브라우저가 그와 같게 해석한다.
+  if (value.startsWith('//') || value.startsWith('/\\')) return null;
   return value;
 }
 

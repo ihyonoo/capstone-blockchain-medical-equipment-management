@@ -5,6 +5,7 @@ import pytest
 import requests
 from fastapi import HTTPException
 
+from backend import google_oauth
 from backend.google_oauth import exchange_code, sign_state, verify_state
 
 
@@ -19,11 +20,11 @@ def _resp(status_code: int, json_data: dict | None = None) -> MagicMock:
 class TestOAuthState:
     def test_round_trip_defaults_to_login_mode(self):
         state = sign_state("login")
-        assert verify_state(state) == "login"
+        assert verify_state(state) == ("login", None)
 
     def test_round_trip_signup_mode(self):
         state = sign_state("signup")
-        assert verify_state(state) == "signup"
+        assert verify_state(state) == ("signup", None)
 
     def test_rejects_tampered_signature(self):
         state = sign_state("login")
@@ -149,3 +150,71 @@ class TestExchangeCode:
             result = exchange_code("auth-code")
         assert result["email_verified"] is False
         assert result["name"] == ""
+
+
+class TestRedirectInState:
+    """구글 왕복 중 '원래 가려던 곳'을 잃지 않아야 한다.
+
+    NFC 태그를 태깅해 /nfc/{token}으로 들어온 사람이 구글로 로그인하면, 돌아왔을 때
+    대여 화면이어야 한다. 그 값을 나를 곳이 state뿐이라 여기에 실어 보낸다.
+    """
+
+    def test_round_trips_the_redirect_target(self):
+        state = google_oauth.sign_state("login", "/nfc/pump-001?uid=04AABB&ctr=000001&cmac=00112233")
+
+        mode, redirect = google_oauth.verify_state(state)
+
+        assert mode == "login"
+        assert redirect == "/nfc/pump-001?uid=04AABB&ctr=000001&cmac=00112233"
+
+    def test_redirect_is_optional(self):
+        mode, redirect = google_oauth.verify_state(google_oauth.sign_state("signup"))
+
+        assert mode == "signup"
+        assert redirect is None
+
+    def test_the_signature_covers_the_redirect(self):
+        """서명이 redirect까지 덮지 않으면, 공격자가 목적지만 바꿔치기해 로그인 직후 원하는
+        화면으로 끌고 갈 수 있다. payload를 고쳐 서명을 그대로 붙이면 거부돼야 한다."""
+        import base64
+        import json
+
+        state = google_oauth.sign_state("login", "/nfc/pump-001")
+        segment, signature = state.split(".", 1)
+        payload = json.loads(base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4)))
+        payload["redirect"] = "/admin/nfc-mapping"
+        forged = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
+
+        with pytest.raises(HTTPException):
+            google_oauth.verify_state(f"{forged}.{signature}")
+
+
+class TestSafeRedirectPath:
+    """redirect를 그대로 믿으면 오픈 리다이렉트가 된다.
+
+    공격자가 로그인 링크에 외부 주소를 심어두면, 사용자는 우리 도메인에서 로그인한 뒤
+    남의 사이트로 떨어진다. 같은 사이트 경로만 통과시킨다.
+    """
+
+    @pytest.mark.parametrize(
+        "path",
+        ["/", "/nfc/pump-001", "/nfc/pump-001?uid=04AABB&cmac=00", "/admin/nfc-mapping"],
+    )
+    def test_accepts_same_site_paths(self, path):
+        assert google_oauth.safe_redirect_path(path) == path
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "https://evil.example.com/steal",
+            "http://evil.example.com",
+            "//evil.example.com",  # 프로토콜 상대 URL
+            "/\\evil.example.com",  # 백슬래시 우회
+            "javascript:alert(1)",
+            "nfc/pump-001",  # 슬래시로 시작하지 않음
+            "",
+            None,
+        ],
+    )
+    def test_rejects_anything_that_could_leave_the_site(self, path):
+        assert google_oauth.safe_redirect_path(path) is None

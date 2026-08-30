@@ -780,11 +780,13 @@ def _frontend_redirect(path: str, fragment_params: dict) -> RedirectResponse:
 
 
 @app.get("/auth/google/start")
-def google_start(mode: str = Query(default="login")):
+def google_start(mode: str = Query(default="login"), redirect: str | None = Query(default=None)):
     if not google_oauth.is_google_configured():
         raise HTTPException(503, "Google 로그인이 설정되지 않았습니다.")
     mode = mode if mode in ("login", "signup") else "login"
-    state = google_oauth.sign_state(mode)
+    # redirect는 구글 왕복을 건너 살아남아야 한다 — NFC 태그를 태깅해 들어온 사람이
+    # 로그인을 마치면 홈이 아니라 그 장비 화면으로 돌아가야 하기 때문이다.
+    state = google_oauth.sign_state(mode, redirect)
     return RedirectResponse(url=google_oauth.build_authorization_url(state), status_code=302)
 
 
@@ -797,7 +799,7 @@ def google_callback(
     if error or not code or not state:
         return _frontend_redirect("/", {"oauth_error": error or "google_login_failed"})
 
-    google_oauth.verify_state(state)
+    _mode, redirect_target = google_oauth.verify_state(state)
     info = google_oauth.exchange_code(code)
     provider = "google"
 
@@ -838,7 +840,10 @@ def google_callback(
             ttl_sec=OAUTH_HANDOFF_TTL_SEC,
             user_id=linked_user_id,
         )
-        return _frontend_redirect("/auth/callback", {"code": handoff})
+        handoff_params = {"code": handoff}
+        if redirect_target:
+            handoff_params["redirect"] = redirect_target
+        return _frontend_redirect("/auth/callback", handoff_params)
 
     # 3) 계정 없음 → pending 토큰 발급 후 추가정보 입력 화면으로 유도한다.
     pending = create_action_token(

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import AppShell from '../components/layout/AppShell';
-import { getHomePath, storeAuthSession, LOGIN_PATH } from '../lib/auth';
+import { getHomePath, getRedirectTarget, storeAuthSession, LOGIN_PATH } from '../lib/auth';
 import { API_BASE_URL } from '../lib/runtime';
 
 // Google 로그인 성공 후 백엔드가 #code=<handoff> 프래그먼트로 리다이렉트한다.
@@ -39,7 +39,9 @@ export default function AuthCallback() {
           expires_at: Number(payload.expires_at ?? 0),
           user: payload.user,
         });
-        navigate(getHomePath(payload.user), { replace: true });
+        // 백엔드가 state에 실어 되돌려준 목적지. 없거나 외부 주소면 역할별 홈으로 간다.
+        const target = getRedirectTarget(`?redirect=${encodeURIComponent(params.get('redirect') ?? '')}`);
+        navigate(target ?? getHomePath(payload.user), { replace: true });
       } catch (err) {
         setError(err instanceof Error ? err.message : '로그인 처리 중 오류가 발생했습니다.');
       }
