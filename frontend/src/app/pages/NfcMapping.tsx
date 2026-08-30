@@ -36,12 +36,13 @@ type MappingItem = {
   is_active: boolean;
   // 관리자만 받는 값. 예전 응답에는 없을 수 있어 optional.
   is_real_hardware?: boolean;
-  reader_id: string | null;
-  location: string | null;
-  updated_at: number | null;
   // 장비 등록 시각. 예전 응답에는 없을 수 있어 optional.
   created_at?: number | null;
-  is_stale: boolean;
+  // 어떤 NTAG 424 DNA 칩이 붙어 있는지. 언바인딩해도 uid는 남으므로 bound와 함께 봐야 한다.
+  ntag_uid?: string | null;
+  ntag_bound?: boolean;
+  // 서버가 CMAC 검증에 성공한 횟수. 실제로 쓰이는 태그인지 보여준다.
+  ntag_last_ctr?: number | null;
 };
 
 function getAssetStatusLabel(status: string) {
@@ -70,17 +71,6 @@ function formatRegisteredAt(createdAt: number | null | undefined) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function formatAgo(updatedAt: number | null) {
-  if (!updatedAt) return '미수신';
-  const now = Math.floor(Date.now() / 1000);
-  const diff = Math.max(0, now - updatedAt);
-  if (diff < 5) return '방금';
-  if (diff < 60) return `${diff}초 전`;
-  const min = Math.floor(diff / 60);
-  if (min < 60) return `${min}분 전`;
-  return `${Math.floor(min / 60)}시간 전`;
 }
 
 type MappingFilters = {
@@ -730,8 +720,17 @@ export default function NfcMapping() {
                             </div>
                             <div className="text-sm text-muted-foreground">{formatTagIdentity(item.tag_id)}</div>
                             <div className="text-sm text-muted-foreground">
-                              현재 위치: {item.location ?? '미수신'} · 최근 수신: {formatAgo(item.updated_at)} · 등록:{' '}
-                              {formatRegisteredAt(item.created_at)}
+                              {item.ntag_bound && item.ntag_uid ? (
+                                <>
+                                  칩 {item.ntag_uid} · 탭 {item.ntag_last_ctr ?? 0}회 · 등록:{' '}
+                                  {formatRegisteredAt(item.created_at)}
+                                </>
+                              ) : (
+                                <>
+                                  <Badge variant="outline">미바인딩</Badge> · 등록:{' '}
+                                  {formatRegisteredAt(item.created_at)}
+                                </>
+                              )}
                             </div>
                           </div>
 
