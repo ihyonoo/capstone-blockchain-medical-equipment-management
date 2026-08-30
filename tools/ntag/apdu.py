@@ -13,6 +13,11 @@ PCSC_GET_UID = bytes([0xFF, 0xCA, 0x00, 0x00, 0x00])
 
 # DESFire 계열 GetVersion. 인증이 필요 없고 3프레임으로 나뉘어 오므로,
 # 이게 끝까지 오면 리더가 ISO-DEP 위에서 태그와 실제로 대화한다는 뜻이다.
+# ISO UPDATE BINARY. 공장 상태의 NDEF 파일은 쓰기가 free access라 보안 메시징이 통하지 않는다 —
+# 인증 없이 평문으로 써야 한다(AN12196 §6.8.1).
+ISO_UPDATE_BINARY_INS = 0xD6
+MAX_SHORT_APDU_DATA = 0xFF
+
 GET_VERSION = bytes([0x90, 0x60, 0x00, 0x00, 0x00])
 GET_ADDITIONAL_FRAME = bytes([0x90, 0xAF, 0x00, 0x00, 0x00])
 

@@ -143,4 +143,33 @@ describe('NfcEquipment SDM tap', () => {
     expect(tapReads).toHaveLength(1);
     expect(await screen.findByText('대여 중')).toBeInTheDocument();
   });
+
+  it('keeps the login when a tap is rejected', async () => {
+    // 403은 "이 탭이 무효"라는 뜻이지 로그인이 끊긴 게 아니다.
+    // 3분 지난 탭 때문에 세션을 버리면 사용자는 영문도 모른 채 다시 로그인해야 한다.
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ detail: '유효하지 않은 NFC 태그 인증입니다.' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage(SDM_QUERY);
+
+    expect(await screen.findByText(/유효하지 않은 NFC 태그 인증/)).toBeInTheDocument();
+    expect(sessionStorage.getItem('auth_session')).not.toBeNull();
+  });
+
+  it('still logs out when the session itself expired', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ detail: '인증이 필요합니다.' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage(SDM_QUERY);
+
+    await vi.waitFor(() => expect(sessionStorage.getItem('auth_session')).toBeNull());
+  });
 });

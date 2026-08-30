@@ -7,7 +7,14 @@ transport는 `transmit(apdu: bytes) -> (data: bytes, sw: str)` 하나만 제공�
 import os
 
 try:
-    from tools.ntag.apdu import ISO_SELECT_NDEF_APP, SW_ADDITIONAL_FRAME, SW_ISO_OK, SW_OK
+    from tools.ntag.apdu import (
+        ISO_SELECT_NDEF_APP,
+        ISO_UPDATE_BINARY_INS,
+        MAX_SHORT_APDU_DATA,
+        SW_ADDITIONAL_FRAME,
+        SW_ISO_OK,
+        SW_OK,
+    )
     from tools.ntag.crypto import (
         build_change_key_data,
         command_iv,
@@ -19,7 +26,14 @@ try:
         rotate_left,
     )
 except ModuleNotFoundError:
-    from apdu import ISO_SELECT_NDEF_APP, SW_ADDITIONAL_FRAME, SW_ISO_OK, SW_OK
+    from apdu import (
+        ISO_SELECT_NDEF_APP,
+        ISO_UPDATE_BINARY_INS,
+        MAX_SHORT_APDU_DATA,
+        SW_ADDITIONAL_FRAME,
+        SW_ISO_OK,
+        SW_OK,
+    )
     from crypto import (
         build_change_key_data,
         command_iv,
@@ -33,9 +47,9 @@ except ModuleNotFoundError:
 
 CMD_AUTH_EV2_FIRST = 0x71
 CMD_ADDITIONAL_FRAME = 0xAF
+CMD_GET_FILE_SETTINGS = 0xF5
 CMD_CHANGE_FILE_SETTINGS = 0x5F
 CMD_CHANGE_KEY = 0xC4
-CMD_WRITE_DATA = 0x8D
 
 
 class AuthenticationError(Exception):
@@ -116,6 +130,18 @@ class Ntag424Session:
         self.cmd_ctr += 1
         return data
 
+    def is_sdm_enabled(self, file_no: int) -> bool:
+        """파일 설정을 읽어 SDM이 켜져 있는지 본다. 인증이 필요 없다(AN12196 §6.4).
+
+        비가역인 키 회전을 걸기 전에, SDM 설정이 실제로 태그에 들어갔는지 확인하는 용도다.
+        """
+        data = self._transmit(self._wrap(CMD_GET_FILE_SETTINGS, bytes([file_no])), expected=SW_OK)
+        # 응답은 FileType(1) || FileOption(1) || AccessRights(2) || FileSize(3) || ... 순이다.
+        # 첫 바이트는 FileType이므로, 그걸 FileOption으로 읽으면 SDM이 켜진 태그를 꺼진 것으로 본다.
+        if len(data) < 2:
+            raise CommandError(f"파일 설정 응답이 너무 짧다: {data.hex().upper()}")
+        return bool(data[1] & 0x40)
+
     def change_file_settings(self, file_no: int, cmd_data: bytes) -> None:
         self._send_full(CMD_CHANGE_FILE_SETTINGS, bytes([file_no]), cmd_data)
 
@@ -124,6 +150,15 @@ class Ntag424Session:
         key_data = build_change_key_data(old_key=old_key, new_key=new_key, new_key_version=new_key_version)
         self._send_full(CMD_CHANGE_KEY, bytes([key_no]), key_data, already_padded=True)
 
-    def write_data(self, file_no: int, offset: int, data: bytes) -> None:
-        header = bytes([file_no]) + offset.to_bytes(3, "little") + len(data).to_bytes(3, "little")
-        self._send_full(CMD_WRITE_DATA, header, data)
+    def update_binary(self, data: bytes, offset: int = 0) -> None:
+        """NDEF 파일에 평문으로 쓴다(AN12196 §6.8.1, Cmd.ISOUpdateBinary).
+
+        공장 상태의 NDEF 파일은 쓰기 권한이 free access라 보안 메시징으로 보내면 거부된다.
+        인증도 필요 없다 — 파일 설정을 바꾸기 전에 이 방식으로 먼저 기록한다.
+        """
+        if len(data) > MAX_SHORT_APDU_DATA:
+            raise ValueError(f"짧은 APDU에 담기지 않는다({len(data)}바이트). 나눠 써야 한다.")
+        apdu = (
+            bytes([0x00, ISO_UPDATE_BINARY_INS, (offset >> 8) & 0xFF, offset & 0xFF, len(data)]) + data + bytes([0x00])
+        )
+        self._transmit(apdu, expected=SW_ISO_OK)

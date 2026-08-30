@@ -73,7 +73,9 @@ export default function NfcEquipment() {
           headers: buildAuthHeaders(authToken),
         });
         const payload = await response.json().catch(() => null);
-        if (response.status === 401 || response.status === 403) {
+        // 401만 로그인 만료다. 403은 탭이 무효하다는 뜻이라 세션을 버리면 안 된다 —
+        // 3분 지난 탭 하나 때문에 멀쩡한 로그인이 날아간다.
+        if (response.status === 401) {
           logout();
           return;
         }
@@ -118,7 +120,9 @@ export default function NfcEquipment() {
         }),
       });
       const payload = await response.json().catch(() => null);
-      if (response.status === 401 || response.status === 403) {
+      // 401만 로그인 만료다. 403은 탭이 무효하다는 뜻이라 세션을 버리면 안 된다 —
+      // 3분 지난 탭 하나 때문에 멀쩡한 로그인이 날아간다.
+      if (response.status === 401) {
         logout();
         return;
       }

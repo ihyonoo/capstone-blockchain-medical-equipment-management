@@ -53,7 +53,7 @@ class TestTapVerification:
         assert client.get("/nfc/pump-002", params=query, headers=headers).status_code == 200
         replay = client.get("/nfc/pump-002", params=query, headers=headers)
 
-        assert replay.status_code == 401
+        assert replay.status_code == 403
         assert _counter(db_conn, "pump-002") == 7
         assert ("rejected", "counter_replay") in _audit_rows(db_conn)
 
@@ -65,7 +65,7 @@ class TestTapVerification:
         assert client.get("/nfc/pump-003", params=make_sdm_query(uid, 10), headers=headers).status_code == 200
         stale = client.get("/nfc/pump-003", params=make_sdm_query(uid, 4), headers=headers)
 
-        assert stale.status_code == 401
+        assert stale.status_code == 403
 
     def test_a_tampered_cmac_is_rejected_and_audited(self, client, db_conn, seed_tag, seed_user, bind_ntag):
         seed_tag(tag_id="EQ-SDM-0004", equipment_name="수액펌프-004", nfc_tag_uid="pump-004")
@@ -76,7 +76,7 @@ class TestTapVerification:
 
         response = client.get("/nfc/pump-004", params=query, headers=headers)
 
-        assert response.status_code == 401
+        assert response.status_code == 403
         assert ("rejected", "cmac_mismatch") in _audit_rows(db_conn)
 
     def test_a_query_string_moved_onto_another_equipment_is_rejected(
@@ -91,7 +91,7 @@ class TestTapVerification:
 
         response = client.get("/nfc/defib-001", params=make_sdm_query(uid_a, 1), headers=headers)
 
-        assert response.status_code == 401
+        assert response.status_code == 403
         assert ("rejected", "uid_token_mismatch") in _audit_rows(db_conn)
 
     def test_a_tap_without_sdm_parameters_is_404_without_an_audit_row(
@@ -336,6 +336,61 @@ class TestBindingLifecycle:
         )
 
         assert response.status_code == 409
+
+    def test_binding_returns_the_equipment_token_so_the_tool_never_guesses_it(self, client, seed_tag, seed_user):
+        """도구가 토큰을 인자로 받으면 오타 하나로 영영 못 쓰는 태그가 구워진다.
+
+        UID와 토큰이 서로 다른 장비를 가리키면 교차검증(R-3)이 항상 실패하는데,
+        그 사실은 비가역인 키 회전이 끝난 뒤에야 드러난다.
+        """
+        seed_tag(tag_id="EQ-BIND-0005", equipment_name="수액펌프-404", nfc_tag_uid="pump-404")
+        _, admin_headers = seed_user(username="admin-bind-4", role="admin")
+
+        response = client.post(
+            "/admin/ntag-bindings",
+            json={"tag_id": "EQ-BIND-0005", "ntag_uid": "04AABBCCDDEE99"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["nfc_token"] == "pump-404"
+
+    def test_binding_reports_the_counter_so_the_tool_can_gate_key_rotation(
+        self, client, seed_tag, seed_user, bind_ntag
+    ):
+        """카운터가 0보다 크면 서버가 검증에 성공한 탭이 최소 한 번 있었다는 뜻이다.
+
+        SDM이 켜졌다는 사실만으로는 그 태그가 만든 URL이 실제로 통과하는지 알 수 없다.
+        비가역인 키 회전을 걸어도 되는지 판단하려면 이 신호가 필요하다.
+        """
+        seed_tag(tag_id="EQ-BIND-0007", equipment_name="수액펌프-405", nfc_tag_uid="pump-405")
+        uid = bind_ntag("pump-405")
+        _, admin_headers = seed_user(username="admin-bind-6", role="admin")
+        _, staff_headers = seed_user(username="staff-bind-6")
+
+        before = client.post(
+            "/admin/ntag-bindings", json={"tag_id": "EQ-BIND-0007", "ntag_uid": uid}, headers=admin_headers
+        )
+        client.get("/nfc/pump-405", params=make_sdm_query(uid, 3), headers=staff_headers)
+        after = client.post(
+            "/admin/ntag-bindings", json={"tag_id": "EQ-BIND-0007", "ntag_uid": uid}, headers=admin_headers
+        )
+
+        assert before.json()["ntag_last_ctr"] == 0
+        assert after.json()["ntag_last_ctr"] == 3
+
+    def test_binding_is_refused_when_the_equipment_has_no_token(self, client, seed_tag, seed_user):
+        """토큰이 없으면 태그에 구울 URL을 만들 수 없다 — 굽기 전에 막는다."""
+        seed_tag(tag_id="EQ-BIND-0006", equipment_name="토큰없는장비", nfc_tag_uid=None)
+        _, admin_headers = seed_user(username="admin-bind-5", role="admin")
+
+        response = client.post(
+            "/admin/ntag-bindings",
+            json={"tag_id": "EQ-BIND-0006", "ntag_uid": "04AABBCCDDEE98"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
 
     def test_binding_the_same_pair_again_is_idempotent(self, client, seed_tag, seed_user, bind_ntag):
         """개인화 도구가 중간에 실패한 뒤 재실행해도 안전해야 한다."""

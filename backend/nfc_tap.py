@@ -31,7 +31,7 @@ def master_key_missing() -> bool:
 
 
 class TapRejection(Exception):
-    """장비를 특정할 수 있는 검증 실패. 감사 로그를 남기고 401로 끝난다."""
+    """장비를 특정할 수 있는 검증 실패. 감사 로그를 남기고 403으로 끝난다."""
 
     def __init__(self, reason: str, tag_id: str, action: str):
         super().__init__(reason)
@@ -106,7 +106,10 @@ def verify_tap_and_mint_session(token: str, params: SdmParams, user: dict) -> tu
         except TapRejection as rejection:
             _record_rejection(cur, rejection, uid_hex, user.get("user_id"))
             conn.commit()
-            raise HTTPException(401, "유효하지 않은 NFC 태그 인증입니다.")
+            # 401이 아니라 403이다. 401은 "누구인지 모르겠다"는 뜻이라 클라이언트가
+            # 로그인 만료로 해석해 세션을 버린다. 여기서는 사용자가 누구인지 알고 있고
+            # 이 탭만 무효다 — 3분 지난 탭 때문에 멀쩡한 로그인이 날아가면 안 된다.
+            raise HTTPException(403, "유효하지 않은 NFC 태그 인증입니다.")
 
         session_id = secrets.token_urlsafe(32)
         cur.execute(

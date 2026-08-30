@@ -1204,12 +1204,16 @@ def bind_ntag_uid(body: NtagBindingRequest, authorization: str | None = Header(d
             if owner and owner[0] != body.tag_id:
                 raise HTTPException(409, "이미 다른 장비에 바인딩된 태그입니다.")
 
-            cur.execute("SELECT ntag_uid FROM tags WHERE tag_id = %s", (body.tag_id,))
+            cur.execute("SELECT ntag_uid, nfc_tag_uid, ntag_last_ctr FROM tags WHERE tag_id = %s", (body.tag_id,))
             row = cur.fetchone()
             if row is None:
                 raise HTTPException(400, "존재하지 않는 장비입니다.")
-            if row[0] is not None and row[0] != uid:
+            existing_uid, nfc_token, last_ctr = row
+            if existing_uid is not None and existing_uid != uid:
                 raise HTTPException(409, "이 장비에는 이미 다른 태그가 바인딩되어 있습니다.")
+            # 토큰이 없으면 태그에 구울 URL을 만들 수 없다. 굽기 전에 여기서 막는다.
+            if not nfc_token:
+                raise HTTPException(400, "이 장비에는 NFC 토큰이 지정되어 있지 않습니다.")
 
             cur.execute(
                 "UPDATE tags SET ntag_uid = %s, ntag_bound = TRUE, updated_at = now() WHERE tag_id = %s",
@@ -1221,7 +1225,17 @@ def bind_ntag_uid(body: NtagBindingRequest, authorization: str | None = Header(d
     except Exception:
         raise HTTPException(500, "NTAG 바인딩 저장 중 데이터베이스 오류가 발생했습니다.")
 
-    return {"ok": True, "tag_id": body.tag_id, "ntag_uid": uid}
+    # 토큰을 돌려줘야 개인화 도구가 이를 인자로 받지 않아도 된다 — 오타로 UID와 토큰이
+    # 어긋난 태그를 굽는 사고를 원천 차단한다.
+    # 카운터는 도구가 키 회전 여부를 판단하는 근거다. 0보다 크면 이 태그가 만든 URL이
+    # 실제로 검증을 통과한 적이 있다는 뜻이다.
+    return {
+        "ok": True,
+        "tag_id": body.tag_id,
+        "ntag_uid": uid,
+        "nfc_token": nfc_token,
+        "ntag_last_ctr": last_ctr,
+    }
 
 
 @app.delete("/admin/ntag-bindings/{tag_id}")
@@ -1262,7 +1276,8 @@ def get_nfc_equipment(
     params = parse_sdm_params(uid, ctr, cmac)
     if params is None:
         raise HTTPException(404, "매핑되지 않은 NFC 태그입니다.")
-    # 검증·카운터 소비·세션 발급이 한 트랜잭션으로 끝난다. 실패는 여기서 401/404/503으로 나간다.
+    # 검증·카운터 소비·세션 발급이 한 트랜잭션으로 끝난다. 실패는 여기서 403/404/503으로 나간다
+    # (검증 실패가 401이 아닌 이유는 nfc_tap.verify_tap_and_mint_session 주석 참고).
     _tag_id, tap_session = verify_tap_and_mint_session(clean_token, params, actor)
 
     sql = """

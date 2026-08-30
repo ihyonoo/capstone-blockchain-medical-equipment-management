@@ -39,19 +39,26 @@ ISO 7816 wrapped APDU(`90 xx 00 00`)라 표준 PC/SC 경로로 오간다 — 이
 
 ```bash
 export NTAG_MASTER_KEY=$(grep '^NTAG_MASTER_KEY=' .env | cut -d= -f2)
-python -m tools.ntag.personalise --tag-id <tag_id> --token pump-001
+python -m tools.ntag.personalise --tag-id <tag_id>
 ```
 
 기본 실행은 **키를 회전하지 않는다**. UID를 읽고, 바인딩을 등록하고, NDEF와 SDM 설정까지만 한다.
+장비 토큰은 인자로 받지 않는다 — 바인딩 응답으로 서버가 알려준다. 오타 하나로 UID와 토큰이
+어긋난 태그가 구워지는 것을 막기 위해서다.
 이 상태에서 폰으로 태깅해 URL이 `?uid=..&ctr=..&cmac=..`로 채워져 열리는지 직접 확인한다.
 
 확인이 끝나면 회전한다.
 
 ```bash
-python -m tools.ntag.personalise --tag-id <tag_id> --token pump-001 --rotate-key
+python -m tools.ntag.personalise --tag-id <tag_id> --rotate-key
 ```
 
 `--rotate-key`는 **되돌릴 수 없다.** 마스터키를 잃으면 그 태그는 영구히 못 쓴다.
+
+회전은 두 조건이 모두 맞아야 진행된다 — 태그에 SDM이 실제로 켜져 있고, 서버에 그 태그로
+성공한 탭 기록(`ntag_last_ctr > 0`)이 있어야 한다. SDM이 켜졌다는 것만으로는 그 칩이 만든
+URL이 검증을 통과하는지 알 수 없다. 카운터는 서버가 CMAC 검증에 성공했을 때만 올라가므로,
+그 값이 0보다 크다는 것이 곧 "이 태그는 실제로 동작한다"는 증거다.
 
 ### 순서를 이렇게 잡은 이유
 
@@ -65,13 +72,19 @@ python -m tools.ntag.personalise --tag-id <tag_id> --token pump-001 --rotate-key
 
 ### 중간에 실패했다면
 
-그대로 다시 실행하면 된다. 도구가 어느 키로 인증되는지 보고 상태를 판별한다.
+그대로 다시 실행하면 된다. 도구가 태그와 서버에 물어 상태를 판별하고, 남은 일만 한다.
 
 | 판별 | 처리 |
 |---|---|
-| `factory` | 아직 회전 전 — 이어서 진행 |
-| `rotated` | 이미 완료된 태그 — 바인딩만 확인하고 끝 |
-| `unknown` | 공장 키도 파생 키도 아닌 키가 들어 있다. 이 도구로는 복구 불가 |
+| 백지 | 바인딩 → NDEF 기록 → SDM 설정까지 하고 멈춘다 |
+| 설정됨, 탭 기록 없음 | NDEF를 다시 굽지 않는다(설정 후에는 쓰기가 키 0 보호로 바뀐다). 폰으로 태깅하라고 안내한다 |
+| 설정됨, 탭 성공 | `--rotate-key`로 회전하면 끝이라고 안내한다 |
+| 회전 완료 | 더 할 일이 없다 |
+| 다른 장비에 묶인 UID | 중단한다. UID는 재바인딩하지 않는다 |
+| 알 수 없는 키 | 공장 키도 파생 키도 아니다. 이 도구로는 복구 불가 |
+
+상태 판별은 **키 2**로 인증을 시도해 이뤄진다. 키 0은 공장값 그대로 두기 때문에, 키 0으로 물으면
+이미 완성된 태그도 백지로 보인다.
 
 바인딩 등록은 같은 (장비, UID) 쌍이면 몇 번을 보내도 200이라, 재실행이 안전하다.
 
