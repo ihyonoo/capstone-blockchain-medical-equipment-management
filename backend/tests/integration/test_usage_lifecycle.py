@@ -5,20 +5,12 @@ NFC 체크아웃/반납 흐름을 따라 정확히 열리고 닫히는지 검증
 """
 
 
-def _checkout(client, headers, nfc_token):
-    return client.post("/usage/checkout", json={"nfc_token": nfc_token}, headers=headers)
-
-
-def _return(client, headers, nfc_token):
-    return client.post("/usage/return", json={"nfc_token": nfc_token}, headers=headers)
-
-
 class TestCheckout:
-    def test_checkout_marks_tag_checked_out(self, client, seed_tag, seed_user, db_conn):
+    def test_checkout_marks_tag_checked_out(self, client, seed_tag, seed_user, db_conn, checkout):
         tag_id = seed_tag(nfc_tag_uid="NFC-001")
         _user_id, headers = seed_user()
 
-        response = _checkout(client, headers, "NFC-001")
+        response = checkout("NFC-001", headers)
 
         assert response.status_code == 200
         assert response.json()["ok"] is True
@@ -33,12 +25,12 @@ class TestCheckout:
         assert holder_id == _user_id
         assert usage_id is not None
 
-    def test_checkout_rejects_already_checked_out_tag(self, client, seed_tag, seed_user):
+    def test_checkout_rejects_already_checked_out_tag(self, client, seed_tag, seed_user, checkout):
         seed_tag(nfc_tag_uid="NFC-002")
         _user_id, headers = seed_user()
-        _checkout(client, headers, "NFC-002")
+        checkout("NFC-002", headers)
 
-        response = _checkout(client, headers, "NFC-002")
+        response = checkout("NFC-002", headers)
 
         assert response.status_code == 409
 
@@ -51,12 +43,14 @@ class TestCheckout:
 
 
 class TestReturn:
-    def test_return_by_holder_marks_tag_available(self, client, seed_tag, seed_user, db_conn):
+    def test_return_by_holder_marks_tag_available(
+        self, client, seed_tag, seed_user, db_conn, checkout, return_equipment
+    ):
         tag_id = seed_tag(nfc_tag_uid="NFC-010")
         user_id, headers = seed_user(username="holder")
-        _checkout(client, headers, "NFC-010")
+        checkout("NFC-010", headers)
 
-        response = _return(client, headers, "NFC-010")
+        response = return_equipment("NFC-010", headers)
 
         assert response.status_code == 200
         with db_conn.cursor() as cur:
@@ -78,30 +72,32 @@ class TestReturn:
         assert usage_status == "returned"
         assert returned_by == user_id
 
-    def test_return_rejects_when_not_checked_out(self, client, seed_tag, seed_user):
+    def test_return_rejects_when_not_checked_out(self, client, seed_tag, seed_user, return_equipment):
         seed_tag(nfc_tag_uid="NFC-011")
         _user_id, headers = seed_user()
 
-        response = _return(client, headers, "NFC-011")
+        response = return_equipment("NFC-011", headers)
 
         assert response.status_code == 409
 
-    def test_return_by_other_staff_is_allowed(self, client, seed_tag, seed_user):
+    def test_return_by_other_staff_is_allowed(self, client, seed_tag, seed_user, checkout, return_equipment):
         seed_tag(nfc_tag_uid="NFC-012")
         _holder_id, holder_headers = seed_user(username="holder2")
         _other_id, other_headers = seed_user(username="bystander")
-        _checkout(client, holder_headers, "NFC-012")
+        checkout("NFC-012", holder_headers)
 
-        response = _return(client, other_headers, "NFC-012")
+        response = return_equipment("NFC-012", other_headers)
 
         assert response.status_code == 200
 
-    def test_return_by_admin_is_allowed_even_if_not_holder(self, client, seed_tag, seed_user):
+    def test_return_by_admin_is_allowed_even_if_not_holder(
+        self, client, seed_tag, seed_user, checkout, return_equipment
+    ):
         seed_tag(nfc_tag_uid="NFC-013")
         _holder_id, holder_headers = seed_user(username="holder3")
         _admin_id, admin_headers = seed_user(username="admin1", role="admin", position=None)
-        _checkout(client, holder_headers, "NFC-013")
+        checkout("NFC-013", holder_headers)
 
-        response = _return(client, admin_headers, "NFC-013")
+        response = return_equipment("NFC-013", admin_headers)
 
         assert response.status_code == 200

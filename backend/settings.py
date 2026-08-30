@@ -17,6 +17,12 @@ BESU_DEPLOYMENT_PATH = BESU_DIR / "deployments" / "usage-registry.json"
 AUTH_TOKEN_SECRET = os.getenv("AUTH_TOKEN_SECRET", "dev-auth-secret")
 AUTH_TOKEN_TTL_SEC = max(300, int(os.getenv("AUTH_TOKEN_TTL_SEC", "43200")))
 
+# NTAG 424 DNA 마스터키(AES-128, hex 32자). 태그별 키는 여기서 UID로 파생하며 DB에 두지 않는다.
+# 비어 있으면 실물 태그 검증만 닫히고(503) 위치추적·이력·시뮬레이터는 그대로 돈다.
+# 분실하면 개인화된 모든 태그를 영구히 못 쓴다 — 저장소 바깥에 백업해 둘 것.
+NTAG_MASTER_KEY_HEX = os.getenv("NTAG_MASTER_KEY", "").strip()
+NTAG_MASTER_KEY = bytes.fromhex(NTAG_MASTER_KEY_HEX) if re.fullmatch(r"[0-9A-Fa-f]{32}", NTAG_MASTER_KEY_HEX) else None
+
 # 회원가입 없이 둘러보는 데모 로그인 스위치. 끄면 /auth/demo-login이 404가 된다.
 DEMO_LOGIN_ENABLED = os.getenv("DEMO_LOGIN_ENABLED", "true").strip().lower() not in ("0", "false", "no")
 

@@ -72,8 +72,10 @@ describe('NfcMapping guide dialog', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('NFC 매핑 가이드')).toBeInTheDocument();
     // 부모 요소도 같은 텍스트를 품으므로 개수만 확인한다.
-    expect(within(dialog).getAllByText(/NTAG215/).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(/NTAG 424 DNA/).length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText(/nfc\/<token>/).length).toBeGreaterThan(0);
+    // 휴대폰 쓰기 앱으로는 개인화가 불가능하다 — 안내가 도구를 가리켜야 한다.
+    expect(within(dialog).getAllByText(/tools\/ntag/).length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText(/같은 토큰은 한 장비에만/).length).toBeGreaterThan(0);
   });
 

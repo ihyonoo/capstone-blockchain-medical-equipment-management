@@ -182,14 +182,16 @@ function MappingGuideDialog() {
       body: <>오른쪽 목록에서 장비를 찾아 토큰을 입력하고 저장을 누릅니다. 저장하면 태그에 기록할 URL이 나타납니다.</>,
     },
     {
-      title: '3. 태그에 URL 기록',
+      title: '3. 개인화 도구로 태그 굽기',
       body: (
         <>
-          <strong>NTAG215</strong> 태그에 NFC 쓰기 앱(NFC Tools 등)으로 아래 형식의 URL을 <em>URI 레코드</em>로
-          기록합니다.
+          <strong>NTAG 424 DNA</strong> 태그는 휴대폰 쓰기 앱으로 만들 수 없습니다. USB 리더를 연결한 PC에서 저장소의{' '}
+          <code>tools/ntag</code> 도구를 실행하면 칩 UID를 읽어 전용 키를 심고, 아래 형식의 URL을 기록한 뒤 장비에
+          바인딩까지 합니다.
           <span className="mt-2 block border border-border/70 bg-secondary/40 px-3 py-2 font-mono text-xs break-all">
-            {`${PUBLIC_APP_URL}/nfc/<token>`}
+            {`${PUBLIC_APP_URL}/nfc/<token>?uid=..&ctr=..&cmac=..`}
           </span>
+          쿼리스트링은 칩이 태깅할 때마다 직접 계산해 채웁니다. 키를 심는 단계는 되돌릴 수 없습니다.
         </>
       ),
     },

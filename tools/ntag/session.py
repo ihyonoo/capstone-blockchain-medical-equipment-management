@@ -1,0 +1,129 @@
+"""NTAG 424 DNA와의 인증 세션. transport만 갈아끼우면 어떤 리더에도 붙는다.
+
+transport는 `transmit(apdu: bytes) -> (data: bytes, sw: str)` 하나만 제공하면 된다.
+암호 연산은 crypto.py, 명령 상수는 apdu.py에 있다.
+"""
+
+import os
+
+try:
+    from tools.ntag.apdu import ISO_SELECT_NDEF_APP, SW_ADDITIONAL_FRAME, SW_ISO_OK, SW_OK
+    from tools.ntag.crypto import (
+        build_change_key_data,
+        command_iv,
+        command_mac,
+        decrypt_rnd_b,
+        derive_auth_session_keys,
+        encrypt_command_data,
+        response_mac,
+        rotate_left,
+    )
+except ModuleNotFoundError:
+    from apdu import ISO_SELECT_NDEF_APP, SW_ADDITIONAL_FRAME, SW_ISO_OK, SW_OK
+    from crypto import (
+        build_change_key_data,
+        command_iv,
+        command_mac,
+        decrypt_rnd_b,
+        derive_auth_session_keys,
+        encrypt_command_data,
+        response_mac,
+        rotate_left,
+    )
+
+CMD_AUTH_EV2_FIRST = 0x71
+CMD_ADDITIONAL_FRAME = 0xAF
+CMD_CHANGE_FILE_SETTINGS = 0x5F
+CMD_CHANGE_KEY = 0xC4
+CMD_WRITE_DATA = 0x8D
+
+
+class AuthenticationError(Exception):
+    pass
+
+
+class CommandError(Exception):
+    pass
+
+
+def generate_random(length: int) -> bytes:
+    """테스트가 이 함수만 바꿔치기해 인증 흐름을 재현할 수 있게 분리해 둔다."""
+    return os.urandom(length)
+
+
+class Ntag424Session:
+    def __init__(self, transport):
+        self.transport = transport
+        self.ti: bytes | None = None
+        self.ses_enc: bytes | None = None
+        self.ses_mac: bytes | None = None
+        self.cmd_ctr = 0
+
+    # --- 저수준 ---
+
+    def _transmit(self, apdu: bytes, *, expected: str) -> bytes:
+        data, sw = self.transport.transmit(apdu)
+        if sw != expected:
+            raise CommandError(f"기대한 상태워드 {expected}가 아니라 {sw}가 왔다")
+        return data
+
+    @staticmethod
+    def _wrap(cmd: int, payload: bytes) -> bytes:
+        return bytes([0x90, cmd, 0x00, 0x00, len(payload)]) + payload + bytes([0x00])
+
+    def _require_session(self) -> None:
+        if self.ses_mac is None or self.ses_enc is None or self.ti is None:
+            raise AuthenticationError("먼저 authenticate_ev2_first를 호출해야 한다")
+
+    # --- 명령 ---
+
+    def select_ndef_app(self) -> None:
+        self._transmit(ISO_SELECT_NDEF_APP, expected=SW_ISO_OK)
+
+    def authenticate_ev2_first(self, key_no: int, key: bytes) -> None:
+        """AN12196 §6.6. 성공하면 세션키·TI가 서고 명령 카운터가 0으로 초기화된다."""
+        encrypted_rnd_b = self._transmit(
+            self._wrap(CMD_AUTH_EV2_FIRST, bytes([key_no, 0x00])), expected=SW_ADDITIONAL_FRAME
+        )
+        rnd_b = decrypt_rnd_b(key, encrypted_rnd_b)
+        rnd_a = generate_random(16)
+
+        challenge = encrypt_command_data(key, bytes(16), rnd_a + rotate_left(rnd_b), already_padded=True)
+        response = self._transmit(self._wrap(CMD_ADDITIONAL_FRAME, challenge), expected=SW_OK)
+
+        plain = decrypt_rnd_b(key, response)
+        ti, rnd_a_echo = plain[0:4], plain[4:20]
+        # 태그가 RndA를 한 바이트 왼쪽으로 돌려 돌려준다. 다르면 상대가 키를 모른다는 뜻이다.
+        if rotate_left(rnd_a) != rnd_a_echo:
+            raise AuthenticationError("태그가 돌려준 RndA가 맞지 않는다 — 키가 다르다")
+
+        self.ti = ti
+        self.ses_enc, self.ses_mac = derive_auth_session_keys(key, rnd_a, rnd_b)
+        self.cmd_ctr = 0
+
+    def _send_full(self, cmd: int, header: bytes, plain_data: bytes, *, already_padded: bool = False) -> bytes:
+        """CommMode.FULL로 한 명령을 보낸다 — 데이터는 암호화하고 CMAC을 붙인다."""
+        self._require_session()
+        iv = command_iv(self.ses_enc, self.ti, self.cmd_ctr)
+        encrypted = encrypt_command_data(self.ses_enc, iv, plain_data, already_padded=already_padded)
+        mact = command_mac(self.ses_mac, cmd, self.cmd_ctr, self.ti, header, encrypted)
+
+        data = self._transmit(self._wrap(cmd, header + encrypted + mact), expected=SW_OK)
+
+        # 응답 CMAC까지 확인해야 중간자가 응답을 바꿔치기하는 경우를 잡는다.
+        if data and data[-8:] != response_mac(self.ses_mac, self.cmd_ctr, self.ti, data[:-8]):
+            raise CommandError("응답 CMAC이 맞지 않는다")
+        self.cmd_ctr += 1
+        return data
+
+    def change_file_settings(self, file_no: int, cmd_data: bytes) -> None:
+        self._send_full(CMD_CHANGE_FILE_SETTINGS, bytes([file_no]), cmd_data)
+
+    def change_key(self, *, key_no: int, old_key: bytes, new_key: bytes, new_key_version: int) -> None:
+        """되돌릴 수 없다. 여기서 잘못된 키를 쓰면 태그를 영구히 못 쓴다."""
+        key_data = build_change_key_data(old_key=old_key, new_key=new_key, new_key_version=new_key_version)
+        self._send_full(CMD_CHANGE_KEY, bytes([key_no]), key_data, already_padded=True)
+
+    def write_data(self, file_no: int, offset: int, data: bytes) -> None:
+        header = bytes([file_no]) + offset.to_bytes(3, "little") + len(data).to_bytes(3, "little")
+        self._send_full(CMD_WRITE_DATA, header, data)

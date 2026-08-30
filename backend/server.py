@@ -28,6 +28,8 @@ try:
         send_reset_email,
         send_verification_email,
     )
+    from backend.nfc_tap import consume_tap_session, master_key_missing, verify_tap_and_mint_session
+    from backend.ntag424 import UID_RE, parse_sdm_params
     from backend.rtls_utils import (
         cache_location_updates,
         filter_registered_tag_ids,
@@ -55,6 +57,7 @@ try:
         LoginRequest,
         NfcMappingUpsertRequest,
         NfcUsageActionRequest,
+        NtagBindingRequest,
         Payload,
         RegisterRequest,
         ResendVerificationRequest,
@@ -109,6 +112,8 @@ except ModuleNotFoundError as exc:
         send_reset_email,
         send_verification_email,
     )
+    from nfc_tap import consume_tap_session, master_key_missing, verify_tap_and_mint_session
+    from ntag424 import UID_RE, parse_sdm_params
     from rtls_utils import (
         cache_location_updates,
         filter_registered_tag_ids,
@@ -136,6 +141,7 @@ except ModuleNotFoundError as exc:
         LoginRequest,
         NfcMappingUpsertRequest,
         NfcUsageActionRequest,
+        NtagBindingRequest,
         Payload,
         RegisterRequest,
         ResendVerificationRequest,
@@ -217,7 +223,8 @@ def fetch_tag_by_nfc_token(cur, token: str):
       t.current_holder_user_id,
       COALESCE(u.display_name, u.username) AS current_holder_name,
       t.current_usage_id,
-      t.is_active
+      t.is_active,
+      t.is_real_hardware
     FROM tags t
     LEFT JOIN users u ON u.user_id = t.current_holder_user_id
     WHERE t.nfc_tag_uid = %s
@@ -1174,10 +1181,89 @@ def remove_nfc_mapping(tag_id: str, authorization: str | None = Header(default=N
     }
 
 
+@app.post("/admin/ntag-bindings")
+def bind_ntag_uid(body: NtagBindingRequest, authorization: str | None = Header(default=None)):
+    """칩 UID를 장비에 바인딩한다. 개인화 도구만 호출하는 경로다.
+
+    같은 (장비, UID) 쌍을 다시 보내면 200으로 끝난다 — 도구가 중간에 실패하고
+    재실행됐을 때 이어서 진행할 수 있어야 하기 때문이다.
+    """
+    actor = require_authenticated_user(authorization, allowed_roles={"admin"})
+    _reject_demo_account(actor)
+
+    uid = body.ntag_uid.strip().upper()
+    if not UID_RE.match(uid):
+        raise HTTPException(400, "NTAG UID는 14자리 16진수여야 합니다.")
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute("SELECT tag_id FROM tags WHERE ntag_uid = %s", (uid,))
+            owner = cur.fetchone()
+            # UID는 한 번 쓰이면 다른 장비로 옮기지 않는다. 옮기는 순간 그 UID로 캡처된
+            # 옛 URL이 새 장비에서 되살아난다.
+            if owner and owner[0] != body.tag_id:
+                raise HTTPException(409, "이미 다른 장비에 바인딩된 태그입니다.")
+
+            cur.execute("SELECT ntag_uid FROM tags WHERE tag_id = %s", (body.tag_id,))
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(400, "존재하지 않는 장비입니다.")
+            if row[0] is not None and row[0] != uid:
+                raise HTTPException(409, "이 장비에는 이미 다른 태그가 바인딩되어 있습니다.")
+
+            cur.execute(
+                "UPDATE tags SET ntag_uid = %s, ntag_bound = TRUE, updated_at = now() WHERE tag_id = %s",
+                (uid, body.tag_id),
+            )
+            conn.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(500, "NTAG 바인딩 저장 중 데이터베이스 오류가 발생했습니다.")
+
+    return {"ok": True, "tag_id": body.tag_id, "ntag_uid": uid}
+
+
+@app.delete("/admin/ntag-bindings/{tag_id}")
+def unbind_ntag_uid(tag_id: str, authorization: str | None = Header(default=None)):
+    """바인딩을 해제한다. UID와 카운터는 지우지 않는다 — 지우면 옛 URL이 되살아난다."""
+    actor = require_authenticated_user(authorization, allowed_roles={"admin"})
+    _reject_demo_account(actor)
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE tags SET ntag_bound = FALSE, updated_at = now() WHERE tag_id = %s RETURNING tag_id",
+                (tag_id,),
+            )
+            row = cur.fetchone()
+            conn.commit()
+    except Exception:
+        raise HTTPException(500, "NTAG 바인딩 해제 중 데이터베이스 오류가 발생했습니다.")
+
+    if row is None:
+        raise HTTPException(404, "존재하지 않는 장비입니다.")
+    return {"ok": True, "tag_id": tag_id}
+
+
 @app.get("/nfc/{token}")
-def get_nfc_equipment(token: str, authorization: str | None = Header(default=None)):
-    require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
+def get_nfc_equipment(
+    token: str,
+    uid: str | None = None,
+    ctr: str | None = None,
+    cmac: str | None = None,
+    authorization: str | None = Header(default=None),
+):
+    actor = require_authenticated_user(authorization, allowed_roles={"admin", "staff"})
     clean_token = normalize_nfc_token(token)
+
+    # SDM 파라미터가 없거나 형식이 틀리면 조회 화면조차 열지 않는다 — 즐겨찾기나
+    # URL 복사만으로는 장비 상태를 볼 수 없어야 한다.
+    params = parse_sdm_params(uid, ctr, cmac)
+    if params is None:
+        raise HTTPException(404, "매핑되지 않은 NFC 태그입니다.")
+    # 검증·카운터 소비·세션 발급이 한 트랜잭션으로 끝난다. 실패는 여기서 401/404/503으로 나간다.
+    _tag_id, tap_session = verify_tap_and_mint_session(clean_token, params, actor)
 
     sql = """
     SELECT
@@ -1208,6 +1294,7 @@ def get_nfc_equipment(token: str, authorization: str | None = Header(default=Non
     location_snapshot = resolve_tag_location_snapshot(row[0])
     return {
         "ok": True,
+        "tap_session": tap_session,
         "item": {
             "tag_id": row[0],
             "equipment_name": row[1],
@@ -1247,7 +1334,17 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
                 current_holder_name,
                 current_usage_id,
                 _is_active,
+                is_real_hardware,
             ) = tag_row
+
+            # 실물 태그는 유효한 탭 없이 움직일 수 없다. 면제 기준은 오직 is_real_hardware이며
+            # 역할이나 계정으로 우회할 수 없다. 세션 소비는 이 트랜잭션 안에서 일어나므로
+            # 아래 로직이 실패하면 함께 롤백되어 세션이 다시 쓸 수 있는 상태로 남는다.
+            if is_real_hardware:
+                if master_key_missing():
+                    raise HTTPException(503, "NFC 태그 검증이 설정되지 않았습니다.")
+                if not consume_tap_session(cur, body.tap_session, tag_id, actor["user_id"]):
+                    raise HTTPException(403, "유효한 NFC 태그 인증이 필요합니다.")
 
             location_snapshot = resolve_tag_location_snapshot(tag_id)
             reader_id = location_snapshot["reader_id"] if location_snapshot else None
@@ -1338,6 +1435,19 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
         "asset_status": "checked_out",
         "current_holder_user_id": actor["user_id"],
         "current_holder_name": actor["display_name"],
+        # 탭한 URL은 이미 소비돼 다시 조회할 수 없다. 갱신된 상태를 여기서 실어 보낸다.
+        "item": {
+            "tag_id": tag_id,
+            "equipment_name": equipment_name,
+            "equipment_type": equipment_type,
+            "nfc_token": nfc_uid,
+            "asset_status": "checked_out",
+            "current_holder_user_id": actor["user_id"],
+            "current_holder_name": actor["display_name"],
+            "current_usage_id": usage_id,
+            "reader_id": reader_id,
+            "location": location_name,
+        },
     }
 
 
@@ -1357,15 +1467,23 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
 
             (
                 tag_id,
-                _equipment_name,
-                _equipment_type,
+                equipment_name,
+                equipment_type,
                 nfc_uid,
                 asset_status,
                 current_holder_user_id,
                 current_holder_name,
                 current_usage_id,
                 _is_active,
+                is_real_hardware,
             ) = tag_row
+
+            # 대여와 같은 규칙 — 실물 태그의 반납도 유효한 탭을 요구한다.
+            if is_real_hardware:
+                if master_key_missing():
+                    raise HTTPException(503, "NFC 태그 검증이 설정되지 않았습니다.")
+                if not consume_tap_session(cur, body.tap_session, tag_id, actor["user_id"]):
+                    raise HTTPException(403, "유효한 NFC 태그 인증이 필요합니다.")
 
             location_snapshot = resolve_tag_location_snapshot(tag_id)
             reader_id = location_snapshot["reader_id"] if location_snapshot else None
@@ -1471,6 +1589,19 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
         "current_holder_user_id": None,
         "current_holder_name": None,
         "blockchain": blockchain_result,
+        # 대여와 같은 이유 — 탭 URL이 소비된 뒤라 화면이 재조회할 수 없다.
+        "item": {
+            "tag_id": tag_id,
+            "equipment_name": equipment_name,
+            "equipment_type": equipment_type,
+            "nfc_token": nfc_uid,
+            "asset_status": "available",
+            "current_holder_user_id": None,
+            "current_holder_name": None,
+            "current_usage_id": None,
+            "reader_id": reader_id,
+            "location": location_name,
+        },
     }
 
 

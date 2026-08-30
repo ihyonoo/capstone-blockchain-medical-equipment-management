@@ -89,5 +89,12 @@ class NfcMappingUpsertRequest(BaseModel):
     nfc_token: str
 
 
+class NtagBindingRequest(BaseModel):
+    tag_id: str
+    ntag_uid: str
+
+
 class NfcUsageActionRequest(BaseModel):
     nfc_token: str
+    # 실물 태그에서는 필수다. 시뮬레이터는 물리 태그가 없어 보내지 않으므로 옵셔널로 둔다.
+    tap_session: str | None = None
