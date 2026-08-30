@@ -1,11 +1,21 @@
 import pytest
 
-from tools.ntag.apdu import GET_VERSION, ISO_SELECT_NDEF_APP, parse_uid_from_version
+from tools.ntag.apdu import (
+    GET_VERSION,
+    ISO_SELECT_NDEF_APP,
+    ISO_SELECT_NDEF_FILE,
+    parse_uid_from_version,
+)
 
 
 class TestCommandBytes:
     def test_select_carries_the_ndef_aid_with_a_correct_length_byte(self):
         assert ISO_SELECT_NDEF_APP.hex().upper() == "00A4040C07D276000085010100"
+
+    def test_selecting_the_ndef_file_is_separate_from_the_application(self):
+        """앱을 골랐다고 그 안의 EF가 선택되지는 않는다. 파일을 안 고르면 쓰기가 6985로 거부된다."""
+        assert ISO_SELECT_NDEF_FILE.hex().upper() == "00A4000C02E10400"
+        assert ISO_SELECT_NDEF_FILE != ISO_SELECT_NDEF_APP
 
     def test_get_version_is_a_short_apdu(self):
         # 확장 APDU면 ACR122U 같은 리더에서 막힐 수 있다. 5바이트를 넘지 않아야 한다.

@@ -8,7 +8,9 @@ import os
 
 try:
     from tools.ntag.apdu import (
+        ISO_READ_BINARY_INS,
         ISO_SELECT_NDEF_APP,
+        ISO_SELECT_NDEF_FILE,
         ISO_UPDATE_BINARY_INS,
         MAX_SHORT_APDU_DATA,
         SW_ADDITIONAL_FRAME,
@@ -27,7 +29,9 @@ try:
     )
 except ModuleNotFoundError:
     from apdu import (
+        ISO_READ_BINARY_INS,
         ISO_SELECT_NDEF_APP,
+        ISO_SELECT_NDEF_FILE,
         ISO_UPDATE_BINARY_INS,
         MAX_SHORT_APDU_DATA,
         SW_ADDITIONAL_FRAME,
@@ -93,6 +97,14 @@ class Ntag424Session:
 
     def select_ndef_app(self) -> None:
         self._transmit(ISO_SELECT_NDEF_APP, expected=SW_ISO_OK)
+
+    def select_ndef_file(self) -> None:
+        """NDEF 파일을 EF로 선택한다. 애플리케이션 선택만으로는 EF가 잡히지 않는다.
+
+        ISOUpdateBinary의 P1P2는 오프셋이라 대상 파일을 실을 자리가 없다.
+        선택을 건너뛰면 쓰기가 6985(conditions of use not satisfied)로 거부된다.
+        """
+        self._transmit(ISO_SELECT_NDEF_FILE, expected=SW_ISO_OK)
 
     def authenticate_ev2_first(self, key_no: int, key: bytes) -> None:
         """AN12196 §6.6. 성공하면 세션키·TI가 서고 명령 카운터가 0으로 초기화된다."""
@@ -162,3 +174,15 @@ class Ntag424Session:
             bytes([0x00, ISO_UPDATE_BINARY_INS, (offset >> 8) & 0xFF, offset & 0xFF, len(data)]) + data + bytes([0x00])
         )
         self._transmit(apdu, expected=SW_ISO_OK)
+
+    def read_binary(self, length: int, offset: int = 0) -> bytes:
+        """선택된 EF를 평문으로 읽는다(ISOReadBinary).
+
+        SDM이 켜진 뒤에 읽으면 태그가 UID·카운터·CMAC을 채워 넣은 상태로 돌려준다.
+        키 회전 전에 CMAC 구성이 서버와 맞는지 확인할 수 있는 유일한 경로다 —
+        회전 전에는 태그가 공장 키로 CMAC을 만들므로 서버 검증은 통과할 수 없다.
+        """
+        if not 0 < length <= MAX_SHORT_APDU_DATA:
+            raise ValueError(f"짧은 APDU로 읽을 수 있는 길이가 아니다: {length}")
+        apdu = bytes([0x00, ISO_READ_BINARY_INS, (offset >> 8) & 0xFF, offset & 0xFF, length])
+        return self._transmit(apdu, expected=SW_ISO_OK)

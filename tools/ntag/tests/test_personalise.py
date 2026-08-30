@@ -75,3 +75,83 @@ class TestDetectState:
         detect_state(transport, tag_key=DERIVED)
 
         assert len([a for a in transport.sent if a[1] == 0x71]) == 2
+
+
+class TestLoginPayload:
+    def test_payload_satisfies_the_server_schema(self):
+        """도구가 보내는 로그인 본문이 서버 스키마를 만족해야 한다.
+
+        필드 하나가 빠지면 서버는 422로 거절하는데, 그 사실은 태그를 리더에 올려두고
+        비밀번호까지 입력한 뒤에야 드러난다.
+        """
+        from backend.schemas import LoginRequest
+        from tools.ntag.personalise import login_payload
+
+        LoginRequest(**login_payload("admin", "secret"))
+
+    def test_requests_the_admin_role(self):
+        """관리자 API를 쓰므로 staff로 로그인하면 뒤에서 403이 난다."""
+        from tools.ntag.personalise import login_payload
+
+        assert login_payload("admin", "secret")["role"] == "admin"
+
+
+class TestVerifySdmMirror:
+    """키 회전 전에 CMAC 구성을 확인하는 유일한 경로.
+
+    회전 전에는 태그가 공장 키로 CMAC을 만들고 서버는 파생 키로 검증하므로,
+    서버를 통한 확인은 원리상 통과할 수 없다. 리더로 직접 읽어서 확인해야 한다.
+    """
+
+    @staticmethod
+    def _tag_filled_ndef(key: bytes, uid_hex: str, read_ctr: int) -> tuple[bytes, dict]:
+        """SDM이 켜진 태그가 돌려줄 NDEF를 흉내낸다."""
+        from cryptography.hazmat.primitives.ciphers import algorithms
+        from cryptography.hazmat.primitives.cmac import CMAC
+
+        from backend.ntag424 import derive_sdm_session_mac_key
+        from tools.ntag.ndef import build_sdm_ndef_file
+
+        blank, offsets = build_sdm_ndef_file("https://mediledger.xyz", "pump-001")
+        ctx = CMAC(algorithms.AES(derive_sdm_session_mac_key(key, bytes.fromhex(uid_hex), read_ctr)))
+        ctx.update(b"")
+        cmac_hex = ctx.finalize()[1::2].hex().upper()
+
+        filled = bytearray(blank)
+        filled[offsets["uid"] : offsets["uid"] + 14] = uid_hex.encode()
+        filled[offsets["ctr"] : offsets["ctr"] + 6] = f"{read_ctr:06X}".encode()
+        filled[offsets["cmac"] : offsets["cmac"] + 16] = cmac_hex.encode()
+        return bytes(filled), offsets
+
+    def test_accepts_a_mirror_the_tag_actually_produced(self):
+        from tools.ntag.personalise import verify_sdm_mirror
+
+        key = bytes(16)
+        ndef, offsets = self._tag_filled_ndef(key, "04B07F1A8F1E90", 1)
+
+        ok, uid, ctr = verify_sdm_mirror(ndef, offsets, key)
+
+        assert ok is True
+        assert uid == "04B07F1A8F1E90"
+        assert ctr == 1
+
+    def test_rejects_a_mirror_signed_with_a_different_key(self):
+        """도구와 서버의 키 파생이 어긋나면 여기서 잡혀야 한다 — 회전 뒤에는 늦다."""
+        from tools.ntag.personalise import verify_sdm_mirror
+
+        ndef, offsets = self._tag_filled_ndef(bytes(16), "04B07F1A8F1E90", 1)
+
+        ok, _, _ = verify_sdm_mirror(ndef, offsets, bytes(range(16)))
+
+        assert ok is False
+
+    def test_rejects_an_unfilled_mirror(self):
+        """SDM이 실제로 동작하지 않으면 플레이스홀더(0)가 그대로 남는다."""
+        from tools.ntag.ndef import build_sdm_ndef_file
+        from tools.ntag.personalise import verify_sdm_mirror
+
+        blank, offsets = build_sdm_ndef_file("https://mediledger.xyz", "pump-001")
+
+        ok, _, _ = verify_sdm_mirror(blank, offsets, bytes(16))
+
+        assert ok is False

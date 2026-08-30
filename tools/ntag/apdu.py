@@ -13,6 +13,16 @@ PCSC_GET_UID = bytes([0xFF, 0xCA, 0x00, 0x00, 0x00])
 
 # DESFire 계열 GetVersion. 인증이 필요 없고 3프레임으로 나뉘어 오므로,
 # 이게 끝까지 오면 리더가 ISO-DEP 위에서 태그와 실제로 대화한다는 뜻이다.
+# NDEF 파일(E104)을 EF로 선택한다. 애플리케이션 선택(위)과는 별개다 —
+# ISOUpdateBinary의 P1P2는 오프셋이라 대상 파일을 담지 못하므로, 먼저 EF를 선택해야 한다.
+# AN12196 §6.11이 proprietary file(E105)을 같은 형식으로 선택한다.
+NDEF_FILE_ID = bytes.fromhex("E104")
+ISO_SELECT_NDEF_FILE = bytes([0x00, 0xA4, 0x00, 0x0C, len(NDEF_FILE_ID)]) + NDEF_FILE_ID + bytes([0x00])
+
+# ISO READ BINARY. 태그가 SDM 미러를 채워 넣은 NDEF를 그대로 읽어온다 —
+# 키 회전 전에 CMAC 구성이 맞는지 확인하는 유일한 방법이다(회전 전에는 서버 검증이 통과할 수 없다).
+ISO_READ_BINARY_INS = 0xB0
+
 # ISO UPDATE BINARY. 공장 상태의 NDEF 파일은 쓰기가 free access라 보안 메시징이 통하지 않는다 —
 # 인증 없이 평문으로 써야 한다(AN12196 §6.8.1).
 ISO_UPDATE_BINARY_INS = 0xD6
