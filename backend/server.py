@@ -1068,7 +1068,10 @@ def list_nfc_mappings(authorization: str | None = Header(default=None)):
       t.asset_status,
       t.is_active,
       t.is_real_hardware,
-      EXTRACT(EPOCH FROM t.created_at)::BIGINT AS created_at_epoch
+      EXTRACT(EPOCH FROM t.created_at)::BIGINT AS created_at_epoch,
+      t.ntag_uid,
+      t.ntag_bound,
+      t.ntag_last_ctr
     FROM tags t
     WHERE t.is_active = TRUE
     ORDER BY t.equipment_name ASC, t.tag_id ASC
@@ -1080,29 +1083,27 @@ def list_nfc_mappings(authorization: str | None = Header(default=None)):
     except Exception:
         raise HTTPException(500, "NFC 매핑 목록 조회 중 데이터베이스 오류가 발생했습니다.")
 
-    now = int(time.time())
-    reader_locations = load_reader_location_map()
-    items = []
-    for row in rows:
-        location_snapshot = resolve_tag_location_snapshot(row[0], now=now, reader_locations=reader_locations)
-        items.append(
-            {
-                "tag_id": row[0],
-                "equipment_name": row[1],
-                "equipment_type": row[2],
-                "nfc_token": row[3],
-                "asset_status": row[4],
-                "is_active": row[5],
-                # 관리자 화면에서 모의 데이터를 숨길 수 있게 실물 여부를 함께 내려준다.
-                "is_real_hardware": row[6],
-                # 등록 시각. 매핑 화면의 "최신순" 정렬 기준이다.
-                "created_at": row[7],
-                "reader_id": location_snapshot["reader_id"] if location_snapshot else None,
-                "location": location_snapshot["location"] if location_snapshot else None,
-                "updated_at": location_snapshot["updated_at"] if location_snapshot else None,
-                "is_stale": location_snapshot["is_stale"] if location_snapshot else True,
-            }
-        )
+    # 위치·최근 수신은 더 이상 내려주지 않는다. 매핑 화면의 관심사가 아니고
+    # (/admin/devices가 전담한다), 태그마다 위치 스냅샷을 조회하던 비용도 사라진다.
+    items = [
+        {
+            "tag_id": row[0],
+            "equipment_name": row[1],
+            "equipment_type": row[2],
+            "nfc_token": row[3],
+            "asset_status": row[4],
+            "is_active": row[5],
+            # 관리자 화면에서 모의 데이터를 숨길 수 있게 실물 여부를 함께 내려준다.
+            "is_real_hardware": row[6],
+            # 등록 시각. 매핑 화면의 "최신순" 정렬 기준이다.
+            "created_at": row[7],
+            # 어떤 칩이 붙어 있고 몇 번 탭됐는지. 카운터는 서버가 CMAC 검증에 성공했을 때만 오른다.
+            "ntag_uid": row[8],
+            "ntag_bound": row[9],
+            "ntag_last_ctr": row[10],
+        }
+        for row in rows
+    ]
 
     return {
         "ok": True,

@@ -31,3 +31,47 @@ class TestListNfcMappings:
         item = response.json()["items"][0]
         assert isinstance(item["created_at"], int)
         assert item["created_at"] > 0
+
+
+class TestNfcMappingsNtagBinding:
+    """매핑 화면이 칩 바인딩 현황을 보여주려면 목록이 그 값을 실어와야 한다."""
+
+    def test_reports_the_chip_uid_and_tap_count_for_a_bound_tag(
+        self, client, seed_tag, seed_user, bind_ntag, tap_session
+    ):
+        seed_tag(tag_id="EQ-MAP-0001", equipment_name="수액펌프-501", nfc_token="pump-501")
+        _, staff_headers = seed_user(username="staff-map-1")
+        uid = bind_ntag("pump-501")
+        tap_session("pump-501", staff_headers)  # 카운터를 1 올린다
+        _, admin_headers = seed_user(username="admin-map-1", role="admin")
+
+        body = client.get("/admin/nfc-mappings", headers=admin_headers).json()
+        item = next(i for i in body["items"] if i["tag_id"] == "EQ-MAP-0001")
+
+        assert item["ntag_uid"] == uid
+        assert item["ntag_bound"] is True
+        assert item["ntag_last_ctr"] == 1
+
+    def test_marks_an_unbound_tag_so_the_admin_can_tell_it_apart(self, client, seed_tag, seed_user):
+        """UID가 비어 있는 것과 바인딩이 해제된 것은 화면에서 구분돼야 한다."""
+        seed_tag(tag_id="EQ-MAP-0002", equipment_name="제세동기-501", nfc_token="defib-501")
+        _, admin_headers = seed_user(username="admin-map-2", role="admin")
+
+        body = client.get("/admin/nfc-mappings", headers=admin_headers).json()
+        item = next(i for i in body["items"] if i["tag_id"] == "EQ-MAP-0002")
+
+        assert item["ntag_uid"] is None
+        assert item["ntag_bound"] is False
+        assert item["ntag_last_ctr"] == 0
+
+    def test_drops_the_rtls_snapshot_the_screen_no_longer_shows(self, client, seed_tag, seed_user):
+        """위치·최근 수신은 /admin/devices의 관심사다. 태그마다 위치를 조회하던 비용도 사라진다."""
+        seed_tag(tag_id="EQ-MAP-0003", equipment_name="수액펌프-502", nfc_token="pump-502")
+        _, admin_headers = seed_user(username="admin-map-3", role="admin")
+
+        body = client.get("/admin/nfc-mappings", headers=admin_headers).json()
+        item = next(i for i in body["items"] if i["tag_id"] == "EQ-MAP-0003")
+
+        assert "location" not in item
+        assert "updated_at" not in item
+        assert "is_stale" not in item

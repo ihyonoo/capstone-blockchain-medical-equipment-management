@@ -96,7 +96,7 @@ describe('NfcMapping search sidebar', () => {
     expect(panel.getByLabelText('NFC 토큰')).toBeInTheDocument();
     expect(panel.getByRole('combobox', { name: '장비 유형' })).toBeInTheDocument();
     expect(panel.getByRole('combobox', { name: '매핑 상태' })).toBeInTheDocument();
-    // 위치는 매핑 작업의 판단 근거가 아니라 빼둔다 — 목록 카드에 현재 위치가 이미 적혀 있다.
+    // 위치는 매핑 작업의 판단 근거가 아니다 — 장비가 어디 있는지는 /admin/devices가 답한다.
     expect(panel.queryByRole('combobox', { name: '위치' })).not.toBeInTheDocument();
   });
 
