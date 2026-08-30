@@ -50,7 +50,7 @@ class TestNamingConvention:
             assert same == expected, slug
 
     def test_pump_naming_never_collides_with_the_registered_real_hardware_token(self):
-        # 로컬 개발 DB에 is_real_hardware=TRUE로 등록된 실물 태그가 nfc_tag_uid='pump-001'을
+        # 로컬 개발 DB에 is_real_hardware=TRUE로 등록된 실물 태그가 nfc_token='pump-001'을
         # 이미 쓰고 있다 — 시뮬레이션 카탈로그가 이 값을 다시 만들면 재시드가 DB
         # UniqueViolation으로 깨진다.
         tokens = {item.nfc_token for item in equipment.EQUIPMENT}

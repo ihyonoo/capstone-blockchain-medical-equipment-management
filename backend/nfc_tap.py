@@ -43,7 +43,7 @@ class TapRejection(Exception):
 def _record_rejection(cur, rejection: TapRejection, ntag_uid: str, user_id: int | None):
     cur.execute(
         """
-        INSERT INTO usage_nfc_events (tag_id, user_id, equipment_nfc_uid, action, result, reason, occurred_at)
+        INSERT INTO usage_nfc_events (tag_id, user_id, equipment_nfc_token, action, result, reason, occurred_at)
         VALUES (%s, %s, %s, %s, 'rejected', %s, now())
         """,
         (rejection.tag_id, user_id, ntag_uid, rejection.action, rejection.reason),
@@ -63,7 +63,7 @@ def verify_tap_and_mint_session(token: str, params: SdmParams, user: dict) -> tu
     with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT tag_id, nfc_tag_uid, asset_status
+            SELECT tag_id, nfc_token, asset_status
             FROM tags
             WHERE ntag_uid = %s AND ntag_bound = TRUE AND is_active = TRUE
             """,

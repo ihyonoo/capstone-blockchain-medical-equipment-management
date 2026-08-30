@@ -218,7 +218,7 @@ def fetch_tag_by_nfc_token(cur, token: str):
       t.tag_id,
       t.equipment_name,
       t.equipment_type,
-      t.nfc_tag_uid,
+      t.nfc_token,
       t.asset_status,
       t.current_holder_user_id,
       COALESCE(u.display_name, u.username) AS current_holder_name,
@@ -227,7 +227,7 @@ def fetch_tag_by_nfc_token(cur, token: str):
       t.is_real_hardware
     FROM tags t
     LEFT JOIN users u ON u.user_id = t.current_holder_user_id
-    WHERE t.nfc_tag_uid = %s
+    WHERE t.nfc_token = %s
     FOR UPDATE OF t
     """
     cur.execute(sql, (token,))
@@ -240,7 +240,7 @@ def insert_nfc_event(
     usage_id: int | None,
     tag_id: str,
     user_id: int | None,
-    equipment_nfc_uid: str,
+    equipment_nfc_token: str,
     action: str,
     result: str,
     reader_id: str | None,
@@ -249,13 +249,13 @@ def insert_nfc_event(
 ):
     sql = """
     INSERT INTO usage_nfc_events (
-      usage_id, tag_id, user_id, equipment_nfc_uid, action, result, reader_id, location_name, reason, occurred_at
+      usage_id, tag_id, user_id, equipment_nfc_token, action, result, reader_id, location_name, reason, occurred_at
     )
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
     """
     cur.execute(
         sql,
-        (usage_id, tag_id, user_id, equipment_nfc_uid, action, result, reader_id, location_name, reason),
+        (usage_id, tag_id, user_id, equipment_nfc_token, action, result, reader_id, location_name, reason),
     )
 
 
@@ -1064,7 +1064,7 @@ def list_nfc_mappings(authorization: str | None = Header(default=None)):
       t.tag_id,
       t.equipment_name,
       t.equipment_type,
-      t.nfc_tag_uid,
+      t.nfc_token,
       t.asset_status,
       t.is_active,
       t.is_real_hardware,
@@ -1124,9 +1124,9 @@ def upsert_nfc_mapping(
 
     sql = """
     UPDATE tags
-    SET nfc_tag_uid = %s, updated_at = now()
+    SET nfc_token = %s, updated_at = now()
     WHERE tag_id = %s
-    RETURNING tag_id, equipment_name, equipment_type, nfc_tag_uid, asset_status
+    RETURNING tag_id, equipment_name, equipment_type, nfc_token, asset_status
     """
     try:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
@@ -1161,7 +1161,7 @@ def remove_nfc_mapping(tag_id: str, authorization: str | None = Header(default=N
 
     sql = """
     UPDATE tags
-    SET nfc_tag_uid = NULL, updated_at = now()
+    SET nfc_token = NULL, updated_at = now()
     WHERE tag_id = %s
     RETURNING tag_id
     """
@@ -1204,7 +1204,7 @@ def bind_ntag_uid(body: NtagBindingRequest, authorization: str | None = Header(d
             if owner and owner[0] != body.tag_id:
                 raise HTTPException(409, "이미 다른 장비에 바인딩된 태그입니다.")
 
-            cur.execute("SELECT ntag_uid, nfc_tag_uid, ntag_last_ctr FROM tags WHERE tag_id = %s", (body.tag_id,))
+            cur.execute("SELECT ntag_uid, nfc_token, ntag_last_ctr FROM tags WHERE tag_id = %s", (body.tag_id,))
             row = cur.fetchone()
             if row is None:
                 raise HTTPException(400, "존재하지 않는 장비입니다.")
@@ -1285,14 +1285,14 @@ def get_nfc_equipment(
       t.tag_id,
       t.equipment_name,
       t.equipment_type,
-      t.nfc_tag_uid,
+      t.nfc_token,
       t.asset_status,
       t.current_holder_user_id,
       COALESCE(u.display_name, u.username) AS current_holder_name,
       t.current_usage_id
     FROM tags t
     LEFT JOIN users u ON u.user_id = t.current_holder_user_id
-    WHERE t.nfc_tag_uid = %s
+    WHERE t.nfc_token = %s
       AND t.is_active = TRUE
     LIMIT 1
     """
@@ -1343,7 +1343,7 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
                 tag_id,
                 equipment_name,
                 equipment_type,
-                nfc_uid,
+                nfc_token,
                 asset_status,
                 current_holder_user_id,
                 current_holder_name,
@@ -1382,7 +1382,7 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
                   tag_id,
                   equipment_name,
                   equipment_type,
-                  equipment_nfc_uid,
+                  equipment_nfc_token,
                   checkout_method,
                   checkout_reader_id,
                   checkout_location,
@@ -1402,7 +1402,7 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
                     tag_id,
                     equipment_name,
                     equipment_type,
-                    nfc_uid,
+                    nfc_token,
                     "nfc",
                     reader_id,
                     location_name,
@@ -1430,7 +1430,7 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
                 usage_id=usage_id,
                 tag_id=tag_id,
                 user_id=actor["user_id"],
-                equipment_nfc_uid=nfc_uid,
+                equipment_nfc_token=nfc_token,
                 action="checkout",
                 result="accepted",
                 reader_id=reader_id,
@@ -1455,7 +1455,7 @@ def usage_checkout(body: NfcUsageActionRequest, authorization: str | None = Head
             "tag_id": tag_id,
             "equipment_name": equipment_name,
             "equipment_type": equipment_type,
-            "nfc_token": nfc_uid,
+            "nfc_token": nfc_token,
             "asset_status": "checked_out",
             "current_holder_user_id": actor["user_id"],
             "current_holder_name": actor["display_name"],
@@ -1484,7 +1484,7 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
                 tag_id,
                 equipment_name,
                 equipment_type,
-                nfc_uid,
+                nfc_token,
                 asset_status,
                 current_holder_user_id,
                 current_holder_name,
@@ -1572,7 +1572,7 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
                 usage_id=current_usage_id,
                 tag_id=tag_id,
                 user_id=actor["user_id"],
-                equipment_nfc_uid=nfc_uid,
+                equipment_nfc_token=nfc_token,
                 action="return",
                 result="accepted",
                 reader_id=reader_id,
@@ -1609,7 +1609,7 @@ def usage_return(body: NfcUsageActionRequest, authorization: str | None = Header
             "tag_id": tag_id,
             "equipment_name": equipment_name,
             "equipment_type": equipment_type,
-            "nfc_token": nfc_uid,
+            "nfc_token": nfc_token,
             "asset_status": "available",
             "current_holder_user_id": None,
             "current_holder_name": None,

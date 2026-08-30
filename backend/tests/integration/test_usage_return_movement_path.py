@@ -35,7 +35,7 @@ class TestReturnMovementPath:
     def test_persists_intermediate_movements_in_order(
         self, client, seed_tag, seed_user, seed_reader, db_conn, checkout, return_equipment
     ):
-        tag_id = seed_tag(nfc_tag_uid="NFC-040")
+        tag_id = seed_tag(nfc_token="NFC-040")
         _user_id, headers = seed_user(username="mover")
         seed_reader(reader_id="M701", location_name="수술실")
         seed_reader(reader_id="M702", location_name="회복실")
@@ -62,7 +62,7 @@ class TestReturnMovementPath:
     def test_empty_when_no_intermediate_movement(
         self, client, seed_tag, seed_user, db_conn, checkout, return_equipment
     ):
-        tag_id = seed_tag(nfc_tag_uid="NFC-041")
+        tag_id = seed_tag(nfc_token="NFC-041")
         _user_id, headers = seed_user(username="stationary")
 
         assert checkout("NFC-041", headers).status_code == 200

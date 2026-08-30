@@ -17,7 +17,7 @@ import getpass
 import os
 import sys
 
-from backend.ntag424 import derive_tag_key
+from backend.ntag424 import derive_sdm_session_mac_key, derive_tag_key, parse_sdm_params, verify_cmac
 
 try:
     from tools.ntag.apdu import GET_ADDITIONAL_FRAME, GET_VERSION, SW_ADDITIONAL_FRAME, SW_OK, parse_uid_from_version
@@ -42,6 +42,29 @@ NEW_KEY_VERSION = 0x01
 def derive_key_for(master_key: bytes, uid_hex: str) -> bytes:
     """서버와 같은 파생을 쓴다 — 복제하지 않고 backend.ntag424를 그대로 부른다."""
     return derive_tag_key(master_key, bytes.fromhex(uid_hex))
+
+
+def verify_sdm_mirror(ndef_bytes: bytes, offsets: dict[str, int], sdm_file_read_key: bytes) -> tuple[bool, str, int]:
+    """태그가 채워 넣은 미러를 뜯어 CMAC이 맞는지 확인한다.
+
+    서버와 같은 함수(backend.ntag424)로 검증한다 — 복제하면 여기서 통과한 태그가
+    서버에서 거부되는 상황이 생긴다.
+
+    회전 전에 이 확인이 필요한 이유: 그 시점의 태그는 공장 키로 CMAC을 만들고
+    서버는 파생 키로 검증하므로, 서버를 통한 확인은 원리상 통과할 수 없다.
+    """
+
+    def field(name: str, length: int) -> str:
+        return ndef_bytes[offsets[name] : offsets[name] + length].decode("ascii", errors="replace")
+
+    uid_hex, ctr_hex, cmac_hex = field("uid", 14), field("ctr", 6), field("cmac", 16)
+    params = parse_sdm_params(uid_hex, ctr_hex, cmac_hex)
+    if params is None:
+        # 플레이스홀더(0)가 그대로면 SDM이 실제로 동작하지 않은 것이다.
+        return False, uid_hex, 0
+
+    session_key = derive_sdm_session_mac_key(sdm_file_read_key, params.uid, params.read_ctr)
+    return verify_cmac(session_key, b"", params.cmac), uid_hex, params.read_ctr
 
 
 class PcscTransport:
@@ -81,21 +104,30 @@ def detect_state(transport, tag_key: bytes) -> str:
     return "unknown"
 
 
-def _login(api_base: str, username: str) -> str:
-    import requests
-
-    password = getpass.getpass(f"{username} 비밀번호: ")
-    response = requests.post(f"{api_base}/auth/login", json={"username": username, "password": password}, timeout=10)
-    response.raise_for_status()
-    return response.json()["token"]
-
-
 def _detail_of(response) -> str:
     """오류 응답에서 사람이 읽을 메시지를 꺼낸다. JSON이 아닐 수도 있다."""
     try:
         return str(response.json().get("detail", response.text))
     except ValueError:
         return response.text[:200]
+
+
+def login_payload(username: str, password: str) -> dict:
+    """서버의 LoginRequest 스키마를 그대로 만족해야 한다. role은 관리자 API를 쓰므로 admin이다."""
+    return {"username": username, "password": password, "role": "admin"}
+
+
+def _login(api_base: str, username: str) -> str:
+    import requests
+
+    password = getpass.getpass(f"{username} 비밀번호: ")
+    response = requests.post(f"{api_base}/auth/login", json=login_payload(username, password), timeout=10)
+    if response.status_code >= 400:
+        raise SystemExit(f"로그인 실패({response.status_code}): {_detail_of(response)}")
+    try:
+        return str(response.json()["token"])
+    except (ValueError, TypeError, KeyError):
+        raise SystemExit(f"로그인 응답을 이해할 수 없다: {response.text[:200]}") from None
 
 
 def _bind(api_base: str, auth_token: str, tag_id: str, uid: str) -> tuple[str, int]:
@@ -176,7 +208,7 @@ def main() -> int:
 
     auth_token = _login(args.api, args.admin)
     nfc_token, last_ctr = _bind(args.api, auth_token, args.tag_id, uid)
-    print(f"바인딩 완료: {args.tag_id} ↔ {uid} (토큰 {nfc_token})")
+    print(f"바인딩 완료: {args.tag_id} ↔ {uid} (토큰 {nfc_token}, 서버 카운터 {last_ctr})")
 
     if state == "rotated":
         print("이미 키가 회전된 태그다. 더 할 일이 없다.")
@@ -190,15 +222,28 @@ def main() -> int:
         if not sdm_ready:
             print("SDM이 아직 설정되지 않았다. --rotate-key 없이 먼저 실행할 것.", file=sys.stderr)
             return 1
-        # SDM이 켜졌다는 것과 그 태그가 만든 URL이 실제로 통과한다는 것은 다르다.
-        # 카운터가 0보다 커야 서버가 검증에 성공한 탭이 최소 한 번 있었다는 뜻이고,
-        # 그때에야 비가역인 회전을 걸어도 된다.
-        if last_ctr == 0:
+
+        # 태그가 실제로 채워 넣은 미러를 읽어 CMAC 구성을 확인한다.
+        # 이 시점의 태그는 아직 공장 키로 CMAC을 만들므로 공장 키로 검증해야 한다 —
+        # 서버를 통한 확인은 회전 전에는 원리상 통과할 수 없다.
+        expected_ndef, offsets = build_sdm_ndef_file(args.base_url, nfc_token)
+        reader = Ntag424Session(transport)
+        reader.select_ndef_app()
+        reader.select_ndef_file()
+        mirrored = reader.read_binary(len(expected_ndef))
+
+        ok, mirrored_uid, mirrored_ctr = verify_sdm_mirror(mirrored, offsets, FACTORY_KEY)
+        if not ok:
             print(
-                "이 태그로 성공한 탭 기록이 없다. 폰으로 태깅해 URL이 열리는지 먼저 확인할 것.",
+                "태그가 만든 CMAC이 계산과 맞지 않는다. 회전하면 못 쓰는 태그가 된다.\n"
+                f"  읽은 UID: {mirrored_uid}  카운터: {mirrored_ctr}",
                 file=sys.stderr,
             )
             return 1
+        if mirrored_uid != uid:
+            print(f"읽은 UID({mirrored_uid})가 이 태그의 UID({uid})와 다르다.", file=sys.stderr)
+            return 1
+        print(f"CMAC 구성 확인됨 (카운터 {mirrored_ctr}). 서버와 같은 함수로 검증했다.")
 
         session = Ntag424Session(transport)
         session.select_ndef_app()
@@ -210,22 +255,22 @@ def main() -> int:
             new_key_version=NEW_KEY_VERSION,
         )
         print("키 회전 완료. 이 태그는 이제 이 서버의 마스터키로만 검증된다.")
+        print()
+        print("이제 폰으로 태깅하면 대여 화면이 열려야 한다. 그것으로 끝이다.")
         return 0
 
     if sdm_ready:
         # SDM 설정이 들어가면 NDEF 쓰기가 키 0 보호로 바뀌어 평문 재기록이 거부된다.
         # 이미 준비된 태그를 다시 굽지 않고, 다음에 할 일만 알려준다.
         print("이 태그는 이미 NDEF와 SDM 설정이 끝나 있다.")
-        if last_ctr == 0:
-            print("아직 성공한 탭이 없다. 폰으로 태깅해 URL이 열리는지 확인할 것.")
-        else:
-            print(f"성공한 탭이 확인된다(카운터 {last_ctr}). --rotate-key로 회전하면 끝난다.")
+        print("--rotate-key를 붙여 다시 실행하면 CMAC 구성을 확인한 뒤 회전한다.")
         return 0
 
     ndef_file, offsets = build_sdm_ndef_file(args.base_url, nfc_token)
     # 공장 상태의 NDEF 파일은 쓰기가 free access라 인증 없이 평문으로 쓴다.
     session = Ntag424Session(transport)
     session.select_ndef_app()
+    session.select_ndef_file()
     session.update_binary(ndef_file)
     print(f"NDEF 기록 완료 ({len(ndef_file)}바이트), 미러 오프셋 {offsets}")
 
@@ -236,8 +281,9 @@ def main() -> int:
     )
     print("SDM 설정 완료.")
     print()
-    print("이제 폰으로 태그를 태깅해 URL이 ?uid=..&ctr=..&cmac=.. 로 채워져 열리는지 확인할 것.")
-    print("확인이 끝나면 --rotate-key를 붙여 다시 실행한다. 회전은 되돌릴 수 없다.")
+    print("다음: --rotate-key를 붙여 다시 실행한다.")
+    print("도구가 태그를 읽어 CMAC 구성을 먼저 확인하고, 통과할 때만 회전한다. 회전은 되돌릴 수 없다.")
+    print("(지금 폰으로 태깅하면 아직 공장 키라 서버 검증에서 거부된다 — 정상이다.)")
     return 0
 
 

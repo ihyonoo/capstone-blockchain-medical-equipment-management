@@ -96,6 +96,14 @@ class TestAuthenticateEv2First:
 
 
 class TestSelect:
+    def test_selects_the_ndef_file_separately_from_the_application(self):
+        transport = FakeTransport()
+        session = Ntag424Session(transport)
+
+        session.select_ndef_file()
+
+        assert transport.sent[-1].hex().upper() == "00A4000C02E10400"
+
     def test_selects_the_ndef_application(self):
         transport = FakeTransport()
         session = Ntag424Session(transport)

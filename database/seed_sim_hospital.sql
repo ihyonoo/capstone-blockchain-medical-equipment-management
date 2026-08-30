@@ -70,7 +70,7 @@ ON CONFLICT (reader_id) DO UPDATE SET
   is_real_hardware = EXCLUDED.is_real_hardware;
 
 -- 태그 50개. 시뮬레이션 시작 시점에는 전부 사용 가능 상태다.
-INSERT INTO tags (tag_id, equipment_name, equipment_type, nfc_tag_uid,
+INSERT INTO tags (tag_id, equipment_name, equipment_type, nfc_token,
                   asset_status, is_active, is_real_hardware) VALUES
     ('a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:2:001', '이동형 환자모니터-001', '이동형 환자모니터', 'monitor-001', 'available', TRUE, FALSE),
     ('a83f2c9e-6b1d-4e2a-9c77-51f8d20b6a44:2:002', '제세동기-001', '제세동기', 'defib-001', 'available', TRUE, FALSE),
