@@ -29,6 +29,14 @@ CREATE TABLE IF NOT EXISTS tags (
     equipment_name TEXT NOT NULL,
     equipment_type TEXT,
     nfc_tag_uid TEXT,
+    -- NTAG 424 DNA 칩의 7바이트 UID(14자리 hex). nfc_tag_uid와 헷갈리지 말 것 —
+    -- 그쪽은 URL 경로에 들어가는 장비 토큰(pump-001)이고 이쪽이 실제 칩 UID다.
+    ntag_uid TEXT,
+    -- 마지막으로 받아들인 SDM 읽기 카운터. 언바인딩해도 절대 되돌리지 않는다 —
+    -- 0으로 리셋하면 그 이전에 캡처된 URL이 전부 다시 유효해진다.
+    ntag_last_ctr BIGINT NOT NULL DEFAULT 0,
+    -- 현재 이 UID로 탭을 받는지 여부. 해제는 UID를 지우는 대신 이 값을 FALSE로 내린다.
+    ntag_bound BOOLEAN NOT NULL DEFAULT FALSE,
     asset_status TEXT NOT NULL DEFAULT 'available',
     current_holder_user_id BIGINT REFERENCES users(user_id) ON UPDATE CASCADE,
     current_usage_id BIGINT,
@@ -39,6 +47,8 @@ CREATE TABLE IF NOT EXISTS tags (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT tags_asset_status_valid
         CHECK (asset_status IN ('available', 'checked_out', 'inactive')),
+    CONSTRAINT tags_ntag_binding_consistent
+        CHECK (ntag_bound = FALSE OR ntag_uid IS NOT NULL),
     CONSTRAINT tags_checkout_state_consistent
         CHECK (
             (asset_status = 'checked_out'
@@ -140,6 +150,21 @@ CREATE TABLE IF NOT EXISTS usage_nfc_events (
         CHECK (result IN ('accepted', 'rejected', 'ignored'))
 );
 
+-- SDM 탭 1회로 발급되는 단발성 세션. 실물 태그의 대여/반납은 이 세션을 요구한다.
+-- 탭 1회가 만드는 유효한 CMAC은 하나뿐인데 실제 흐름은 조회(GET)와 실행(POST)으로
+-- 요청이 두 번이라, 조회에서 카운터를 소비하며 발급한 세션이 실행 권한을 나른다.
+-- Redis가 아니라 Postgres에 두는 이유는 두 가지다 — 카운터 소비와 같은 트랜잭션에
+-- 묶을 수 있고, Redis는 이 저장소에서 fail-soft라 죽어도 되는 부가 의존성이다.
+CREATE TABLE IF NOT EXISTS nfc_tap_sessions (
+    session_id TEXT PRIMARY KEY,
+    tag_id TEXT NOT NULL REFERENCES tags(tag_id) ON UPDATE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(user_id) ON UPDATE CASCADE,
+    read_ctr BIGINT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS user_oauth_identities (
     identity_id      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id          BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -227,7 +252,18 @@ ALTER TABLE tags
     ADD COLUMN IF NOT EXISTS last_checkout_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS last_returned_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    ADD COLUMN IF NOT EXISTS is_real_hardware BOOLEAN NOT NULL DEFAULT TRUE;
+    ADD COLUMN IF NOT EXISTS is_real_hardware BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS ntag_uid TEXT,
+    ADD COLUMN IF NOT EXISTS ntag_last_ctr BIGINT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS ntag_bound BOOLEAN NOT NULL DEFAULT FALSE;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tags_ntag_binding_consistent') THEN
+        ALTER TABLE tags ADD CONSTRAINT tags_ntag_binding_consistent
+            CHECK (ntag_bound = FALSE OR ntag_uid IS NOT NULL);
+    END IF;
+END $$;
 
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS is_real_hardware BOOLEAN NOT NULL DEFAULT TRUE;
@@ -431,6 +467,13 @@ END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_nfc_tag_uid동
     ON tags (nfc_tag_uid)
     WHERE nfc_tag_uid IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_ntag_uid
+    ON tags (ntag_uid)
+    WHERE ntag_uid IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_nfc_tap_sessions_expires_at
+    ON nfc_tap_sessions (expires_at);
 
 CREATE INDEX IF NOT EXISTS idx_tags_asset_status
     ON tags (asset_status);

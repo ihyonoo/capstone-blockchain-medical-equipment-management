@@ -39,6 +39,7 @@ export default function NfcEquipment() {
   const params = useParams();
   const token = params.token ?? '';
   const [item, setItem] = useState<NfcEquipmentItem | null>(null);
+  const [tapSession, setTapSession] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -66,13 +67,15 @@ export default function NfcEquipment() {
           logout();
           return;
         }
-        const response = await fetch(`${API_BASE_URL}/nfc/${encodeURIComponent(nfcToken)}`, {
+        const response = await fetch(`${API_BASE_URL}/nfc/${encodeURIComponent(nfcToken)}${location.search}`, {
           method: 'GET',
           cache: 'no-store',
           headers: buildAuthHeaders(authToken),
         });
         const payload = await response.json().catch(() => null);
-        if (response.status === 401 || response.status === 403) {
+        // 401만 로그인 만료다. 403은 탭이 무효하다는 뜻이라 세션을 버리면 안 된다 —
+        // 3분 지난 탭 하나 때문에 멀쩡한 로그인이 날아간다.
+        if (response.status === 401) {
           logout();
           return;
         }
@@ -80,6 +83,7 @@ export default function NfcEquipment() {
           throw new Error(payload?.detail ?? 'NFC 장비 정보를 불러오지 못했습니다.');
         }
         setItem((payload.item as NfcEquipmentItem) ?? null);
+        setTapSession((payload.tap_session as string | null) ?? null);
       } catch (err) {
         setItem(null);
         if (err instanceof Error) setError(err.message);
@@ -88,7 +92,7 @@ export default function NfcEquipment() {
         setIsLoading(false);
       }
     },
-    [logout],
+    [logout, location.search],
   );
 
   const runFetchItem = useCallback(() => {
@@ -112,10 +116,13 @@ export default function NfcEquipment() {
         headers: buildAuthHeaders(authToken, { 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           nfc_token: token,
+          tap_session: tapSession,
         }),
       });
       const payload = await response.json().catch(() => null);
-      if (response.status === 401 || response.status === 403) {
+      // 401만 로그인 만료다. 403은 탭이 무효하다는 뜻이라 세션을 버리면 안 된다 —
+      // 3분 지난 탭 하나 때문에 멀쩡한 로그인이 날아간다.
+      if (response.status === 401) {
         logout();
         return;
       }
@@ -125,7 +132,10 @@ export default function NfcEquipment() {
       setNotice(
         action === 'checkout' ? '장비 상태가 대여 중으로 변경되었습니다.' : '장비 상태가 사용 가능으로 변경되었습니다.',
       );
-      await fetchItem(token);
+      // 탭한 URL은 카운터가 소비돼 다시 읽을 수 없다. 응답이 실어 온 상태로 갱신한다.
+      if (payload.item) setItem(payload.item as NfcEquipmentItem);
+      // 탭 세션은 1회용이다 — 다음 동작을 하려면 태그를 다시 태깅해야 한다.
+      setTapSession(null);
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError('장비 상태 변경 중 오류가 발생했습니다.');
@@ -216,7 +226,7 @@ export default function NfcEquipment() {
                     <Button
                       className="w-full sm:w-auto"
                       onClick={() => handleUsageAction('checkout')}
-                      disabled={!canCheckout || isSubmitting}
+                      disabled={!canCheckout || isSubmitting || !tapSession}
                     >
                       {isSubmitting && canCheckout ? '처리 중...' : '사용 시작'}
                     </Button>
@@ -224,7 +234,7 @@ export default function NfcEquipment() {
                       className="w-full sm:w-auto"
                       variant="outline"
                       onClick={() => handleUsageAction('return')}
-                      disabled={!canReturn || isSubmitting}
+                      disabled={!canReturn || isSubmitting || !tapSession}
                     >
                       {isSubmitting && canReturn ? '처리 중...' : '사용 종료'}
                     </Button>

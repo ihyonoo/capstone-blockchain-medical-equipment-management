@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from pathlib import Path
@@ -16,6 +17,18 @@ BESU_DIR = Path(__file__).resolve().parents[1] / "blockchain" / "besu"
 BESU_DEPLOYMENT_PATH = BESU_DIR / "deployments" / "usage-registry.json"
 AUTH_TOKEN_SECRET = os.getenv("AUTH_TOKEN_SECRET", "dev-auth-secret")
 AUTH_TOKEN_TTL_SEC = max(300, int(os.getenv("AUTH_TOKEN_TTL_SEC", "43200")))
+
+# NTAG 424 DNA 마스터키(AES-128, hex 32자). 태그별 키는 여기서 UID로 파생하며 DB에 두지 않는다.
+# 비어 있으면 실물 태그 검증만 닫히고(503) 위치추적·이력·시뮬레이터는 그대로 돈다.
+# 분실하면 개인화된 모든 태그를 영구히 못 쓴다 — 저장소 바깥에 백업해 둘 것.
+NTAG_MASTER_KEY_HEX = os.getenv("NTAG_MASTER_KEY", "").strip()
+NTAG_MASTER_KEY = bytes.fromhex(NTAG_MASTER_KEY_HEX) if re.fullmatch(r"[0-9A-Fa-f]{32}", NTAG_MASTER_KEY_HEX) else None
+if NTAG_MASTER_KEY is None:
+    # 조용히 넘어가면 실물 태그가 전부 503으로 거부되는 이유를 아무도 모른 채 운영된다.
+    logging.getLogger(__name__).warning(
+        "NTAG_MASTER_KEY가 없거나 형식이 잘못됐다(hex 32자). 실물 NFC 태그 검증이 비활성화된다 "
+        "— 위치추적·이력·시뮬레이터는 정상 동작한다."
+    )
 
 # 회원가입 없이 둘러보는 데모 로그인 스위치. 끄면 /auth/demo-login이 404가 된다.
 DEMO_LOGIN_ENABLED = os.getenv("DEMO_LOGIN_ENABLED", "true").strip().lower() not in ("0", "false", "no")
